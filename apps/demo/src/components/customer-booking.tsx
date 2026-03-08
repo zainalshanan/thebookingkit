@@ -28,7 +28,7 @@ interface FormData {
   responses: Record<string, string>;
 }
 
-export function CustomerBooking() {
+export function CustomerBooking({ onApiCall }: { onApiCall?: (call: string) => void }) {
   const [step, setStep] = useState<Step>("service");
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -58,6 +58,9 @@ export function CustomerBooking() {
     const dayEnd = new Date(dayStart);
     dayEnd.setHours(23, 59, 59, 999);
 
+    onApiCall?.(
+      `getAvailableSlots(rules, overrides, bookings, { start, end }, "${timezone}", { duration: ${selectedService.duration}, bufferBefore: 5, bufferAfter: 5 })`,
+    );
     fetchSlots(selectedService.slug, dayStart.toISOString(), dayEnd.toISOString(), timezone).then(
       (result) => {
         if (!cancelled) {
@@ -111,6 +114,7 @@ export function CustomerBooking() {
   const handleConfirm = async () => {
     if (!selectedService || !selectedSlot) return;
     setSubmitting(true);
+    onApiCall?.(`isSlotAvailable(rules, overrides, bookings, startTime, endTime, 5, 5) → createBooking(...)`);
     const result = await createBooking(
       selectedService.slug,
       selectedSlot.startTime,
