@@ -99,6 +99,9 @@ export type {
   CalendarConflict,
   JobAdapter,
   StorageAdapter,
+  SmsAdapter,
+  SendSmsOptions,
+  SmsResult,
   PaymentAdapter,
   CreatePaymentIntentOptions,
   CreatePaymentIntentResult,
@@ -198,3 +201,27 @@ export {
   type MemberEventTypeOverride,
   type ResolvedManagedEventType,
 } from "./team-scheduling.js";
+
+// Workflows
+export {
+  resolveTemplateVariables,
+  evaluateConditions,
+  validateWorkflow,
+  matchWorkflows,
+  DEFAULT_TEMPLATES,
+  TEMPLATE_VARIABLES,
+  WorkflowValidationError,
+  type WorkflowTrigger,
+  type WorkflowActionType,
+  type ConditionOperator,
+  type WorkflowCondition,
+  type EmailActionConfig,
+  type SmsActionConfig,
+  type WebhookActionConfig,
+  type StatusUpdateActionConfig,
+  type CalendarEventActionConfig,
+  type WorkflowAction,
+  type WorkflowDefinition,
+  type WorkflowContext,
+  type WorkflowLogEntry,
+} from "./workflows.js";

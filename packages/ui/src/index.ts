@@ -22,6 +22,9 @@ export { ProviderAuth, type ProviderAuthProps } from "./components/provider-auth
 export { PaymentGate, type PaymentGateProps } from "./components/payment-gate.js";
 export { PaymentHistory, type PaymentHistoryProps, type PaymentDisplayRecord } from "./components/payment-history.js";
 
+// Workflow Components
+export { WorkflowBuilder, type WorkflowBuilderProps, type WorkflowFormValues, type WorkflowLogDisplay, type TriggerOption, type ActionTypeOption } from "./components/workflow-builder.js";
+
 // Routing Components
 export { RoutingForm, type RoutingFormProps, type RoutingFormField } from "./components/routing-form.js";
 

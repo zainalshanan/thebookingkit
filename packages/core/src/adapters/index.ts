@@ -20,6 +20,12 @@ export { JOB_NAMES } from "./job-adapter.js";
 export type { StorageAdapter } from "./storage-adapter.js";
 
 export type {
+  SmsAdapter,
+  SendSmsOptions,
+  SmsResult,
+} from "./sms-adapter.js";
+
+export type {
   PaymentAdapter,
   CreatePaymentIntentOptions,
   CreatePaymentIntentResult,
