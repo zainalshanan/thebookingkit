@@ -30,7 +30,7 @@ import { generateThebookingkitConfig, generateEnvTemplate } from "./config.js";
 
 const MANIFEST_FILE = ".thebookingkit-manifest.json";
 const DEFAULT_COMPONENTS_DIR = "src/components/thebookingkit";
-const REGISTRY_BASE_URL = "https://thebookingkit.dev/registry";
+const REGISTRY_BASE_URL = "https://docs.thebookingkit.dev/registry";
 
 const program = new Command();
 

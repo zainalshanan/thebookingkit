@@ -6,7 +6,7 @@ Framework-agnostic scheduling math engine for building booking systems.
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
 
-Part of [The Booking Kit](https://thebookingkit.dev) — The Headless Booking Primitive.
+Part of [The Booking Kit](https://docs.thebookingkit.dev) — The Headless Booking Primitive.
 
 ## Install
 
@@ -48,7 +48,7 @@ const check = isSlotAvailable(rules, overrides, bookings, startTime, endTime);
 
 ## Documentation
 
-[**Full Documentation**](https://thebookingkit.dev/core-concepts/slot-engine/)
+[**Full Documentation**](https://docs.thebookingkit.dev/core-concepts/slot-engine/)
 
 ## License
 

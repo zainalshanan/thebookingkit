@@ -42,7 +42,7 @@ export function HeroSection() {
               See Live Demo
             </a>
             <a
-              href="https://thebookingkit.dev"
+              href="https://docs.thebookingkit.dev"
               target="_blank"
               rel="noopener noreferrer"
               className="btn-hero-secondary"
@@ -61,7 +61,7 @@ export function HeroSection() {
               GitHub
             </a>
             <a
-              href="https://thebookingkit.dev/docs"
+              href="https://docs.thebookingkit.dev"
               target="_blank"
               rel="noopener noreferrer"
               className="hero-link"
@@ -69,7 +69,7 @@ export function HeroSection() {
               Documentation
             </a>
             <a
-              href="https://thebookingkit.dev/changelog"
+              href="https://docs.thebookingkit.dev/changelog"
               target="_blank"
               rel="noopener noreferrer"
               className="hero-link"

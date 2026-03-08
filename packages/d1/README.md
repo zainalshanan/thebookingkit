@@ -6,7 +6,7 @@ Cloudflare D1/SQLite adapter for building booking systems on the edge.
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
 
-Part of [The Booking Kit](https://thebookingkit.dev) — The Headless Booking Primitive.
+Part of [The Booking Kit](https://docs.thebookingkit.dev) — The Headless Booking Primitive.
 
 ## Install
 
@@ -45,7 +45,7 @@ await lock.withLock(`${barberId}:${date}`, async () => { /* insert */ });
 
 ## Documentation
 
-[**Full Documentation**](https://thebookingkit.dev/database/adapters/)
+[**Full Documentation**](https://docs.thebookingkit.dev/database/adapters/)
 
 ## License
 

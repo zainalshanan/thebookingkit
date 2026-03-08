@@ -7,7 +7,7 @@
 [![Tests](https://img.shields.io/badge/Tests-434%20passing-brightgreen)]()
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15%2B-336791)](https://www.postgresql.org/)
 
-**[Documentation](https://thebookingkit.dev)** | **[Live Demo](https://demo.thebookingkit.dev)** | **[GitHub](https://github.com/thebookingkit/thebookingkit)**
+**[Documentation](https://docs.thebookingkit.dev)** | **[Live Demo](https://thebookingkit.dev)** | **[GitHub](https://github.com/thebookingkit/thebookingkit)**
 
 ---
 
@@ -405,14 +405,14 @@ The Booking Kit uses a `JobAdapter` interface. With Inngest (recommended):
 | **Walk-In Queue** | Hybrid appointment + walk-in scheduling for physical locations |
 | **Kiosk Mode** | Full-screen drag-and-drop calendar for reception desks and tablets |
 
-See the [full documentation](https://thebookingkit.dev) and the [live demo](https://demo.thebookingkit.dev) for more.
+See the [full documentation](https://docs.thebookingkit.dev) and the [live demo](https://thebookingkit.dev) for more.
 
 ---
 
 ## Links
 
-- **Documentation:** [thebookingkit.dev](https://thebookingkit.dev)
-- **Live Demo:** [demo.thebookingkit.dev](https://demo.thebookingkit.dev)
+- **Documentation:** [docs.thebookingkit.dev](https://docs.thebookingkit.dev)
+- **Live Demo:** [thebookingkit.dev](https://thebookingkit.dev)
 
 ---
 

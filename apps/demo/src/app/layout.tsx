@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     title: "SlotKit — The Headless Booking Primitive",
     description:
       "Production-grade scheduling infrastructure. Slot engine, Drizzle schema, and copy-paste React components.",
-    url: "https://demo.thebookingkit.dev",
+    url: "https://thebookingkit.dev",
     siteName: "TheBookingKit",
   },
 };

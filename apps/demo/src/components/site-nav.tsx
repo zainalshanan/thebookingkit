@@ -56,7 +56,7 @@ export function SiteNav() {
             GitHub
           </a>
           <a
-            href="https://thebookingkit.dev/docs"
+            href="https://docs.thebookingkit.dev"
             target="_blank"
             rel="noopener noreferrer"
             className="nav-btn-accent"

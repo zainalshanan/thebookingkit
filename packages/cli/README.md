@@ -6,7 +6,7 @@ CLI for scaffolding UI components and managing migrations in Booking Kit project
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
 
-Part of [The Booking Kit](https://thebookingkit.dev) — The Headless Booking Primitive.
+Part of [The Booking Kit](https://docs.thebookingkit.dev) — The Headless Booking Primitive.
 
 ## Install
 
@@ -43,7 +43,7 @@ thebookingkit migrate
 
 ## Documentation
 
-[**Full Documentation**](https://thebookingkit.dev/components/overview/)
+[**Full Documentation**](https://docs.thebookingkit.dev/components/overview/)
 
 ## License
 
