@@ -18,7 +18,7 @@ export {
 
 // Config
 export {
-  generateSlotkitConfig,
+  generateThebookingkitConfig,
   generateEnvTemplate,
   type SlotKitConfig,
 } from "./config.js";
