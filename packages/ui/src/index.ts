@@ -38,5 +38,8 @@ export { TeamAssignmentEditor, type TeamAssignmentEditorProps, type TeamMemberDi
 export { RecurringBookingPicker, type RecurringBookingPickerProps, type OccurrenceDisplay } from "./components/recurring-booking-picker.js";
 export { SeatsPicker, type SeatsPickerProps } from "./components/seats-picker.js";
 
+// Embed Components
+export { EmbedConfigurator, type EmbedConfiguratorProps, type EmbedEventTypeOption, type EmbedModeOption } from "./components/embed-configurator.js";
+
 // Utilities
 export { cn } from "./utils/cn.js";

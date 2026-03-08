@@ -280,3 +280,16 @@ export {
   type SeatAvailability,
   type GroupEventSummary,
 } from "./seats.js";
+
+// Embed
+export {
+  validateEmbedConfig,
+  generateEmbedSnippet,
+  generateAllSnippets,
+  buildEmbedUrl,
+  EmbedConfigError,
+  type EmbedMode,
+  type EmbedBranding,
+  type EmbedConfig,
+  type EmbedSnippet,
+} from "./embed.js";
