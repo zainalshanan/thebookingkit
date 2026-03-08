@@ -428,6 +428,57 @@ Contributions are welcome!
 
 ---
 
+## Publishing (Maintainers Only)
+
+> **These steps are for the repository owner only.** Contributors do not need to publish packages.
+
+### 1. Bump versions
+
+Update `version` in each package's `package.json`:
+
+```bash
+# packages/core/package.json
+# packages/server/package.json
+# packages/d1/package.json
+# packages/cli/package.json
+# Also update the version in packages/cli/src/bin.ts (.version("x.x.x"))
+```
+
+### 2. Build all packages
+
+```bash
+turbo build --filter='./packages/*'
+```
+
+### 3. Run tests
+
+```bash
+turbo test
+```
+
+### 4. Publish to npm
+
+Publish each package separately (2FA browser prompt per package):
+
+```bash
+npm -w @thebookingkit/core publish
+npm -w @thebookingkit/server publish
+npm -w @thebookingkit/d1 publish
+npm -w @thebookingkit/cli publish
+```
+
+> `@thebookingkit/db` is private and not published to npm.
+
+### 5. Commit and push
+
+```bash
+git add -A
+git commit -m "chore: release v0.x.x"
+git push
+```
+
+---
+
 ## License
 
 [MIT](LICENSE) — use The Booking Kit in personal and commercial projects.
