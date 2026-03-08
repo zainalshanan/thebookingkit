@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 SlotKit ("The Headless Booking Primitive") is an open-source, MIT-licensed developer toolkit for building production-grade booking systems. It provides a Drizzle ORM database schema, scheduling math engine, and copy-paste UI components (shadcn/ui convention) for Next.js applications backed by any Postgres 15+ instance.
 
-Philosophy: **"Hide the Math, Expose the UI."** The scheduling logic is encapsulated in `@slotkit/core`; UI components are copy-paste source code developers own entirely.
+Philosophy: **"Hide the Math, Expose the UI."** The scheduling logic is encapsulated in `@thebookingkit/core`; UI components are copy-paste source code developers own entirely.
 
 ## Architecture
 
@@ -14,17 +14,17 @@ Philosophy: **"Hide the Math, Expose the UI."** The scheduling logic is encapsul
 
 | Package | Path | Purpose |
 |---|---|---|
-| `@slotkit/core` | `packages/core/` | Slot engine, timezone utils, RRULE parser, team scheduling algorithms |
-| `@slotkit/db` | `packages/db/` | Drizzle ORM schema, migrations, type exports |
-| `@slotkit/cli` | `packages/cli/` | Scaffolding CLI: init, add, migrate, generate, diff, update |
-| `@slotkit/embed` | `packages/embed/` | Lightweight embed script for non-Next.js sites |
+| `@thebookingkit/core` | `packages/core/` | Slot engine, timezone utils, RRULE parser, team scheduling algorithms |
+| `@thebookingkit/db` | `packages/db/` | Drizzle ORM schema, migrations, type exports |
+| `@thebookingkit/cli` | `packages/cli/` | Scaffolding CLI: init, add, migrate, generate, diff, update |
+| `@thebookingkit/embed` | `packages/embed/` | Lightweight embed script for non-Next.js sites |
 | UI Components | `registry/ui/` | 17+ React components (shadcn convention) |
 | Documentation | `apps/docs/` | Astro Starlight documentation site |
 | Barber Shop Demo | `apps/demo/` | Full working example application |
 
 ### Three System Layers
 
-1. **Logic Package (`@slotkit/core`)** — Framework-agnostic scheduling math. Key APIs: `useAvailability`, `getAvailableSlots`, `getTeamSlots`, `assignHost`, `isSlotAvailable`. Uses `date-fns`/`date-fns-tz` for time, `rrule` for recurrence.
+1. **Logic Package (`@thebookingkit/core`)** — Framework-agnostic scheduling math. Key APIs: `useAvailability`, `getAvailableSlots`, `getTeamSlots`, `assignHost`, `isSlotAvailable`. Uses `date-fns`/`date-fns-tz` for time, `rrule` for recurrence.
 2. **UI Components (copy-paste)** — React components built on shadcn/ui, react-day-picker, react-big-calendar, react-hook-form. Developers own the source.
 3. **Backend (Postgres + Next.js + Inngest)** — Drizzle ORM schema, Next.js API routes, Inngest background jobs. Middleware-based auth via pluggable `AuthAdapter` (NextAuth.js default).
 
@@ -87,7 +87,7 @@ npx drizzle-kit migrate # Run migration files
 turbo dev --filter=demo
 
 # Add a UI component (CLI)
-npx @slotkit/cli add <component-name>
+npx @thebookingkit/cli add <component-name>
 ```
 
 ## Key Conventions

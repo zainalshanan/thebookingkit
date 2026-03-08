@@ -13,7 +13,7 @@
 
 SlotKit gives you the database schema, scheduling math, and UI components to build a booking system — without locking you into a SaaS platform. It's designed for developers building with Next.js and Postgres who want full control over their booking flow.
 
-**Philosophy: "Hide the Math, Expose the UI."** The hard parts (timezone-aware slot computation, RRULE expansion, double-booking prevention, team scheduling algorithms) are encapsulated in `@slotkit/core`. The UI components are copy-paste source code you own entirely, following the [shadcn/ui](https://ui.shadcn.com/) convention.
+**Philosophy: "Hide the Math, Expose the UI."** The hard parts (timezone-aware slot computation, RRULE expansion, double-booking prevention, team scheduling algorithms) are encapsulated in `@thebookingkit/core`. The UI components are copy-paste source code you own entirely, following the [shadcn/ui](https://ui.shadcn.com/) convention.
 
 ### Who is it for?
 
@@ -74,15 +74,15 @@ SlotKit gives you the database schema, scheduling math, and UI components to bui
 
 | Package | Path | Description |
 |---|---|---|
-| `@slotkit/core` | `packages/core/` | Framework-agnostic scheduling engine, business logic, and adapter interfaces |
-| `@slotkit/db` | `packages/db/` | Drizzle ORM schema (23 tables), migrations, and type exports for PostgreSQL 15+ |
-| `@slotkit/ui` | `registry/ui/` | 21 React components (shadcn/ui convention) — booking calendar, slot picker, admin views |
+| `@thebookingkit/core` | `packages/core/` | Framework-agnostic scheduling engine, business logic, and adapter interfaces |
+| `@thebookingkit/db` | `packages/db/` | Drizzle ORM schema (23 tables), migrations, and type exports for PostgreSQL 15+ |
+| `@thebookingkit/ui` | `registry/ui/` | 21 React components (shadcn/ui convention) — booking calendar, slot picker, admin views |
 
 ### Framework Agnostic
 
-- **`@slotkit/core`** is pure TypeScript with zero framework dependencies. It runs in Node.js, Deno, Bun, and edge runtimes.
-- **`@slotkit/db`** uses standard Postgres via Drizzle ORM. The database-level constraints work regardless of your backend framework.
-- **`@slotkit/ui`** provides React components. If you use Svelte, Vue, or Solid, use `@slotkit/core` for the math and build your own UI.
+- **`@thebookingkit/core`** is pure TypeScript with zero framework dependencies. It runs in Node.js, Deno, Bun, and edge runtimes.
+- **`@thebookingkit/db`** uses standard Postgres via Drizzle ORM. The database-level constraints work regardless of your backend framework.
+- **`@thebookingkit/ui`** provides React components. If you use Svelte, Vue, or Solid, use `@thebookingkit/core` for the math and build your own UI.
 
 ---
 
@@ -96,7 +96,7 @@ SlotKit gives you the database schema, scheduling math, and UI components to bui
 ### 1. Install
 
 ```bash
-npm install @slotkit/core @slotkit/db
+npm install @thebookingkit/core @thebookingkit/db
 ```
 
 ### 2. Set up the database
@@ -115,7 +115,7 @@ npx tsx packages/db/src/migrate.ts
 ### 3. Compute available slots
 
 ```typescript
-import { getAvailableSlots } from "@slotkit/core";
+import { getAvailableSlots } from "@thebookingkit/core";
 
 const slots = getAvailableSlots({
   rules: [
@@ -176,15 +176,15 @@ function BookingPage() {
 ┌─────────────────────────────────────────────────────┐
 │                   Your Next.js App                   │
 ├──────────┬──────────────────┬────────────────────────┤
-│  @slotkit/ui               │     API Routes          │
+│  @thebookingkit/ui               │     API Routes          │
 │  21 React components       │     (your code)         │
 │  Copy-paste, you own them  │                         │
 ├──────────┴──────────────────┤                        │
-│        @slotkit/core        │                        │
+│        @thebookingkit/core        │                        │
 │  Slot engine, scheduling    │                        │
 │  math, business logic       │                        │
 ├─────────────────────────────┼────────────────────────┤
-│        @slotkit/db          │    Adapter Interfaces   │
+│        @thebookingkit/db          │    Adapter Interfaces   │
 │  Drizzle schema, 23 tables  │    Auth · Email · Jobs  │
 │  PostgreSQL 15+             │    Calendar · Payment   │
 └─────────────────────────────┴────────────────────────┘
@@ -301,7 +301,7 @@ npm run db:seed       # Seed sample data
 ```
 slotkit/
 ├── packages/
-│   ├── core/                 # @slotkit/core
+│   ├── core/                 # @thebookingkit/core
 │   │   └── src/
 │   │       ├── slot-engine.ts          # Three-step slot computation
 │   │       ├── rrule-parser.ts         # RRULE expansion with EXDATE
@@ -321,7 +321,7 @@ slotkit/
 │   │       ├── auth.ts                 # Auth middleware
 │   │       ├── adapters/               # Interface definitions
 │   │       └── __tests__/              # 434 tests
-│   ├── db/                   # @slotkit/db
+│   ├── db/                   # @thebookingkit/db
 │   │   └── src/
 │   │       ├── schema/
 │   │       │   ├── tables.ts           # 23 Postgres tables
@@ -329,7 +329,7 @@ slotkit/
 │   │       ├── migrations/             # Custom SQL migrations
 │   │       ├── client.ts               # Database connection
 │   │       └── seed.ts                 # Sample data
-│   └── ui/                   # @slotkit/ui
+│   └── ui/                   # @thebookingkit/ui
 │       └── src/
 │           ├── components/             # 21 React components
 │           ├── hooks/                  # useAvailability, useProvider
