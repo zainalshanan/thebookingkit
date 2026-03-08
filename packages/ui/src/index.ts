@@ -25,6 +25,9 @@ export { PaymentHistory, type PaymentHistoryProps, type PaymentDisplayRecord } f
 // Workflow Components
 export { WorkflowBuilder, type WorkflowBuilderProps, type WorkflowFormValues, type WorkflowLogDisplay, type TriggerOption, type ActionTypeOption } from "./components/workflow-builder.js";
 
+// Webhook Components
+export { WebhookManager, type WebhookManagerProps, type WebhookDisplay, type WebhookDeliveryLog } from "./components/webhook-manager.js";
+
 // Routing Components
 export { RoutingForm, type RoutingFormProps, type RoutingFormField } from "./components/routing-form.js";
 

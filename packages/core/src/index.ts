@@ -225,3 +225,29 @@ export {
   type WorkflowContext,
   type WorkflowLogEntry,
 } from "./workflows.js";
+
+// Webhooks
+export {
+  signWebhookPayload,
+  verifyWebhookSignature,
+  createWebhookEnvelope,
+  resolvePayloadTemplate,
+  matchWebhookSubscriptions,
+  getRetryDelay,
+  isSuccessResponse,
+  validateWebhookSubscription,
+  WebhookValidationError,
+  DEFAULT_RETRY_CONFIG,
+  WEBHOOK_TRIGGERS,
+  SIGNATURE_HEADER,
+  TIMESTAMP_HEADER,
+  DEFAULT_TOLERANCE_SECONDS,
+  type WebhookTrigger,
+  type WebhookAttendee,
+  type WebhookPayload,
+  type WebhookEnvelope,
+  type WebhookSubscription,
+  type WebhookDeliveryResult,
+  type WebhookRetryConfig,
+  type WebhookVerificationResult,
+} from "./webhooks.js";
