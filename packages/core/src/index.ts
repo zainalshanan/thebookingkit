@@ -99,6 +99,13 @@ export type {
   CalendarConflict,
   JobAdapter,
   StorageAdapter,
+  PaymentAdapter,
+  CreatePaymentIntentOptions,
+  CreatePaymentIntentResult,
+  CreateSetupIntentOptions,
+  CreateSetupIntentResult,
+  CaptureResult,
+  RefundResult,
 } from "./adapters/index.js";
 export { generateICSAttachment, JOB_NAMES } from "./adapters/index.js";
 
@@ -133,6 +140,46 @@ export {
   RESCHEDULE_EMAIL_HTML,
   type EmailTemplateVars,
 } from "./email-templates.js";
+
+// Routing Forms
+export {
+  validateRoutingForm,
+  evaluateRoutingRules,
+  validateRoutingResponses,
+  computeRoutingAnalytics,
+  RoutingFormValidationError,
+  type RoutingFieldType,
+  type RoutingField,
+  type RoutingOperator,
+  type RoutingCondition,
+  type RoutingLogic,
+  type RoutingRule,
+  type RoutingFormDefinition,
+  type RoutingResponses,
+  type RoutingResult,
+  type RoutingAnalytics,
+  type RoutingSubmission,
+} from "./routing-forms.js";
+
+// Payments
+export {
+  evaluateCancellationFee,
+  validateCancellationPolicy,
+  computePaymentSummary,
+  requiresPayment,
+  hasNoShowFee,
+  validatePaymentAmount,
+  validateCurrency,
+  formatPaymentAmount,
+  PaymentValidationError,
+  type CancellationPolicy,
+  type CancellationPolicyTier,
+  type CancellationFeeResult,
+  type PaymentRecord,
+  type PaymentSummary,
+  type PaymentType,
+  type HoldStatus,
+} from "./payments.js";
 
 // Team Scheduling
 export {

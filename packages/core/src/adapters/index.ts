@@ -18,3 +18,13 @@ export type { JobAdapter } from "./job-adapter.js";
 export { JOB_NAMES } from "./job-adapter.js";
 
 export type { StorageAdapter } from "./storage-adapter.js";
+
+export type {
+  PaymentAdapter,
+  CreatePaymentIntentOptions,
+  CreatePaymentIntentResult,
+  CreateSetupIntentOptions,
+  CreateSetupIntentResult,
+  CaptureResult,
+  RefundResult,
+} from "./payment-adapter.js";

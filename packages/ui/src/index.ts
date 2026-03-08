@@ -18,6 +18,13 @@ export { BookingLifecycleActions, type BookingLifecycleActionsProps } from "./co
 export { ManualBookingForm, type ManualBookingFormProps, type ManualBookingFormValues, type EventTypeOption } from "./components/manual-booking-form.js";
 export { ProviderAuth, type ProviderAuthProps } from "./components/provider-auth.js";
 
+// Payment Components
+export { PaymentGate, type PaymentGateProps } from "./components/payment-gate.js";
+export { PaymentHistory, type PaymentHistoryProps, type PaymentDisplayRecord } from "./components/payment-history.js";
+
+// Routing Components
+export { RoutingForm, type RoutingFormProps, type RoutingFormField } from "./components/routing-form.js";
+
 // Team Components
 export { TeamAssignmentEditor, type TeamAssignmentEditorProps, type TeamMemberDisplay } from "./components/team-assignment-editor.js";
 

@@ -27,10 +27,12 @@ export const bookingEventTypeEnum = pgEnum("booking_event_type", [
 /** Payment status */
 export const paymentStatusEnum = pgEnum("payment_status", [
   "pending",
+  "authorized",
   "succeeded",
   "failed",
   "refunded",
   "partially_refunded",
+  "released",
 ]);
 
 /** Payment type */

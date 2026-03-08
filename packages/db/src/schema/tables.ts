@@ -96,6 +96,7 @@ export const providers = pgTable(
     timezone: varchar("timezone", { length: 100 })
       .notNull()
       .default("America/New_York"),
+    stripeAccountId: text("stripe_account_id"),
     metadata: jsonb("metadata").default({}),
     ...timestamps(),
   },
@@ -134,6 +135,8 @@ export const eventTypes = pgTable(
       .default(false),
     isRecurring: boolean("is_recurring").notNull().default(false),
     maxSeats: integer("max_seats").notNull().default(1),
+    noShowFeeCents: integer("no_show_fee_cents").default(0),
+    cancellationPolicy: jsonb("cancellation_policy").default([]),
     customQuestions: jsonb("custom_questions").default([]),
     minimumNoticeMinutes: integer("minimum_notice_minutes").default(0),
     maxFutureDays: integer("max_future_days").default(60),
