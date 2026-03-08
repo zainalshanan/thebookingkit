@@ -1,0 +1,50 @@
+---
+title: Introduction
+description: What is SlotKit and why use it?
+---
+
+SlotKit is an open-source TypeScript toolkit for building production-grade booking and scheduling systems. It provides the database schema, scheduling math, and UI components — without locking you into a SaaS platform.
+
+## Philosophy
+
+**"Hide the Math, Expose the UI."**
+
+The hard parts — timezone-aware slot computation, RRULE recurrence expansion, double-booking prevention, team scheduling algorithms — are encapsulated in `@slotkit/core`. The UI components are copy-paste source code you own entirely, following the [shadcn/ui](https://ui.shadcn.com/) convention.
+
+## Who is SlotKit for?
+
+- **SaaS builders** adding booking to their platform (clinics, salons, studios, tutoring)
+- **Agencies** building custom scheduling for clients
+- **Solo developers** who need Cal.com-level features without the Cal.com codebase
+
+## What's included?
+
+| Package | Description |
+|---|---|
+| `@slotkit/core` | Framework-agnostic scheduling engine, business logic, and adapter interfaces |
+| `@slotkit/db` | Drizzle ORM schema (23 tables), migrations, and type exports for PostgreSQL 15+ |
+| `@slotkit/ui` | 21 React components — booking calendar, slot picker, admin views |
+
+## Key capabilities
+
+- **Slot computation** with RRULE expansion, override masking, and booking/buffer filtering
+- **Timezone-safe** math — all computation in UTC, display in any IANA timezone
+- **Double-booking prevention** at the database level via Postgres `EXCLUDE USING gist`
+- **Team scheduling** — round-robin, collective, managed, fixed assignment
+- **Payments** — Stripe integration with cancellation policies and no-show fees
+- **Workflow automation** — trigger-condition-action engine for booking events
+- **Webhooks** — HMAC-SHA256 signed, replay-protected, with exponential backoff retry
+- **Multi-tenancy** — Organization isolation, RBAC, cascading settings
+- **21 React components** — customer booking flow, admin dashboard, payments, workflows
+
+## Framework agnostic
+
+- **`@slotkit/core`** is pure TypeScript. Runs in Node.js, Deno, Bun, and edge runtimes.
+- **`@slotkit/db`** uses standard Postgres via Drizzle ORM. Database constraints work regardless of your backend.
+- **`@slotkit/ui`** provides React components. Use `@slotkit/core` with any frontend framework.
+
+## Next steps
+
+- [Installation](/getting-started/installation) — Add SlotKit to your project
+- [Quick Start](/getting-started/quick-start) — Compute your first available slots
+- [Architecture](/getting-started/architecture) — Understand how the pieces fit together

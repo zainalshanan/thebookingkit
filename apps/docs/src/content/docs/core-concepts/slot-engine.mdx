@@ -1,0 +1,125 @@
+---
+title: Slot Engine
+description: How the three-step slot computation pipeline works.
+---
+
+The slot engine is the core of SlotKit. It takes availability rules, overrides, and existing bookings and produces a list of available time slots.
+
+## API
+
+### `getAvailableSlots()`
+
+```typescript
+function getAvailableSlots(
+  rules: AvailabilityRuleInput[],
+  overrides: AvailabilityOverrideInput[],
+  existingBookings: BookingInput[],
+  dateRange: DateRange,
+  customerTimezone: string,
+  options?: SlotComputeOptions,
+): Slot[]
+```
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `rules` | `AvailabilityRuleInput[]` | Provider's recurring availability rules |
+| `overrides` | `AvailabilityOverrideInput[]` | Date-specific overrides (block or extend hours) |
+| `existingBookings` | `BookingInput[]` | Non-cancelled bookings in the date range |
+| `dateRange` | `DateRange` | `{ start: Date, end: Date }` to compute slots for |
+| `customerTimezone` | `string` | IANA timezone for `localStart`/`localEnd` formatting |
+| `options` | `SlotComputeOptions` | Duration, buffer, and interval config |
+
+**Options:**
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `duration` | `number` | `30` | Slot duration in minutes |
+| `bufferBefore` | `number` | `0` | Minutes of padding before each slot |
+| `bufferAfter` | `number` | `0` | Minutes of padding after each slot |
+| `slotInterval` | `number` | same as duration | Minutes between slot start times |
+
+**Returns:** `Slot[]` sorted by start time.
+
+```typescript
+interface Slot {
+  startTime: string;   // UTC ISO-8601
+  endTime: string;     // UTC ISO-8601
+  localStart: string;  // Formatted in customer timezone
+  localEnd: string;    // Formatted in customer timezone
+}
+```
+
+### `isSlotAvailable()`
+
+Check if a specific time slot is available without computing all slots:
+
+```typescript
+function isSlotAvailable(
+  rules: AvailabilityRuleInput[],
+  overrides: AvailabilityOverrideInput[],
+  existingBookings: BookingInput[],
+  slotStart: Date,
+  slotEnd: Date,
+): SlotAvailabilityResult
+```
+
+**Returns:**
+
+```typescript
+type SlotAvailabilityResult =
+  | { available: true }
+  | { available: false; reason: "outside_availability" | "already_booked" | "blocked_date" | "buffer_conflict" }
+```
+
+## Three-step pipeline
+
+### Step 1: Base Layer (RRULE expansion)
+
+Each availability rule contains an RRULE string, start/end times, and a timezone. The engine expands these into concrete time windows for the requested date range.
+
+```typescript
+// A rule for Mon-Fri 9am-5pm Eastern
+{
+  rrule: "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+  startTime: "09:00",
+  endTime: "17:00",
+  timezone: "America/New_York",
+}
+```
+
+The RRULE parser supports:
+- All standard frequencies (DAILY, WEEKLY, MONTHLY, YEARLY)
+- BYDAY, BYMONTH, BYMONTHDAY, BYHOUR constraints
+- COUNT and UNTIL limits
+- EXDATE exclusions (iCalendar format)
+- `validFrom` / `validUntil` bounds on each rule
+
+### Step 2: Mask Layer (overrides)
+
+Overrides modify the base windows for specific dates:
+
+```typescript
+// Block a specific day
+{ date: new Date("2026-03-11"), isUnavailable: true }
+
+// Shorten hours on a specific day
+{ date: new Date("2026-03-12"), startTime: "09:00", endTime: "12:00", isUnavailable: false }
+```
+
+When `isUnavailable: true`, all windows on that date are removed. When `isUnavailable: false` with custom times, the override replaces the base windows.
+
+### Step 3: Filter Layer (bookings + buffer)
+
+Existing bookings and their buffer time are subtracted from the available windows. Buffer time is applied symmetrically — `bufferBefore` minutes before the booking start, `bufferAfter` minutes after the booking end.
+
+The remaining windows are sliced into individual slots of the configured `duration` at the configured `slotInterval`.
+
+## Pure computation
+
+The slot engine is a pure function — it takes data in and returns slots out. It makes no database calls. Your application is responsible for:
+
+1. Fetching rules, overrides, and bookings from the database
+2. Calling `getAvailableSlots()` with the data
+3. Presenting the results to the customer

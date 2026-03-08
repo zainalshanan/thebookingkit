@@ -2,7 +2,9 @@
   "name": "slotkit",
   "private": true,
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "registry/*",
+    "apps/*"
   ],
   "scripts": {
     "build": "turbo build",

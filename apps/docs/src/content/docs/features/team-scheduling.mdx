@@ -1,0 +1,115 @@
+---
+title: Team Scheduling
+description: Distribute bookings across team members with round-robin, collective, managed, and fixed strategies.
+---
+
+Team scheduling enables organizations with multiple providers to manage bookings across a team.
+
+## Assignment strategies
+
+### Round-robin
+
+Distributes bookings evenly across team members. Considers each member's existing booking count to maintain balance.
+
+```typescript
+import { assignHost } from "@slotkit/core";
+
+const result = assignHost(
+  teamMembers,
+  bookingCounts,    // { [memberId]: count }
+  "round_robin"
+);
+// Returns: { memberId, memberName }
+```
+
+### Collective
+
+All team members must be available for the slot. Used for group interviews, panel discussions, or meetings requiring all participants.
+
+```typescript
+import { getTeamSlots } from "@slotkit/core";
+
+const slots = getTeamSlots(
+  teamMembers,      // Each member's rules, overrides, bookings
+  dateRange,
+  timezone,
+  { strategy: "collective", duration: 60 }
+);
+// Returns only slots where ALL members are free
+```
+
+### Managed
+
+Organization-level event type templates with field locking. Admins create templates; members get auto-generated event types with locked fields.
+
+```typescript
+import { resolveManagedEventType, isFieldLocked } from "@slotkit/core";
+
+const resolved = resolveManagedEventType(template, memberOverrides);
+// Template fields marked as locked cannot be overridden
+
+isFieldLocked(template, "durationMinutes"); // true — member can't change
+isFieldLocked(template, "description");     // false — member can customize
+```
+
+### Fixed
+
+Direct booking with a specific team member. No automatic assignment.
+
+## Team slots
+
+```typescript
+import { getTeamSlots } from "@slotkit/core";
+
+const slots = getTeamSlots(
+  [
+    {
+      memberId: "alice",
+      memberName: "Alice",
+      rules: aliceRules,
+      overrides: aliceOverrides,
+      bookings: aliceBookings,
+    },
+    {
+      memberId: "bob",
+      memberName: "Bob",
+      rules: bobRules,
+      overrides: bobOverrides,
+      bookings: bobBookings,
+    },
+  ],
+  { start: new Date("2026-03-09"), end: new Date("2026-03-14") },
+  "America/New_York",
+  { strategy: "round_robin", duration: 30 }
+);
+
+// Returns: TeamSlot[]
+// { startTime, endTime, localStart, localEnd, availableMembers[] }
+```
+
+## Template propagation
+
+When an admin updates a managed template, changes propagate to all member event types:
+
+```typescript
+import { propagateTemplateChanges } from "@slotkit/core";
+
+const updates = propagateTemplateChanges(template, memberEventTypes);
+// Returns changes to apply to each member's event type
+// Only locked fields are updated; unlocked fields keep member's values
+```
+
+## UI component
+
+The `<TeamAssignmentEditor />` component lets admins configure team members and strategies:
+
+```tsx
+import { TeamAssignmentEditor } from "./components/team-assignment-editor";
+
+<TeamAssignmentEditor
+  members={teamMembers}
+  strategy={currentStrategy}
+  onStrategyChange={handleStrategyChange}
+  onMembersChange={handleMembersChange}
+/>
+```

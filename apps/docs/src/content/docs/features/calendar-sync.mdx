@@ -1,0 +1,85 @@
+---
+title: Calendar Sync
+description: Two-way sync with Google Calendar and other providers via CalendarAdapter.
+---
+
+SlotKit syncs bookings with external calendars through the `CalendarAdapter` interface.
+
+## CalendarAdapter interface
+
+```typescript
+interface CalendarAdapter {
+  createEvent(options: CalendarEventOptions): Promise<CalendarEventResult>;
+  updateEvent(eventId: string, options: CalendarEventOptions): Promise<CalendarEventResult>;
+  deleteEvent(eventId: string): Promise<void>;
+  getConflicts(start: Date, end: Date): Promise<CalendarConflict[]>;
+}
+```
+
+## How sync works
+
+1. **Booking created** → `syncBookingToCalendar()` creates an event in the provider's calendar
+2. **Booking rescheduled** → Updates the existing calendar event with new times
+3. **Booking cancelled** → `deleteBookingFromCalendar()` removes the calendar event
+
+```typescript
+import { syncBookingToCalendar, deleteBookingFromCalendar } from "@slotkit/core";
+
+// In your booking creation handler
+await syncBookingToCalendar({
+  bookingId: booking.id,
+  title: `${booking.customerName} - ${eventType.title}`,
+  start: booking.startsAt,
+  end: booking.endsAt,
+  description: "Booking via SlotKit",
+  location: eventType.location,
+  attendees: [booking.customerEmail],
+}, calendarAdapter);
+
+// On cancellation
+await deleteBookingFromCalendar({
+  calendarEventId: booking.calendarEventId,
+}, calendarAdapter);
+```
+
+## Conflict checking
+
+External calendar events (personal appointments, meetings from other sources) can block SlotKit availability:
+
+```typescript
+const conflicts = await calendarAdapter.getConflicts(
+  new Date("2026-03-10T00:00:00Z"),
+  new Date("2026-03-10T23:59:59Z"),
+);
+
+// Feed conflicts into getAvailableSlots as additional bookings
+const externalBlockers = conflicts.map(c => ({
+  startsAt: c.start,
+  endsAt: c.end,
+  status: "confirmed",
+}));
+```
+
+## Default: Google Calendar
+
+The default `CalendarAdapter` implementation uses Google Calendar OAuth:
+
+- Requires `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` environment variables
+- Provider connects their Google account during onboarding
+- OAuth tokens are stored securely via `StorageAdapter`
+
+## ICS generation
+
+For email-based calendar integration (works with any calendar app):
+
+```typescript
+import { generateICSAttachment } from "@slotkit/core";
+
+const ics = generateICSAttachment({
+  title: "Consultation",
+  start: booking.startsAt,
+  end: booking.endsAt,
+  location: "123 Main St",
+});
+// Attach to confirmation email
+```

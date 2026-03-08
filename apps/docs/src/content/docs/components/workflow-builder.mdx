@@ -1,0 +1,49 @@
+---
+title: WorkflowBuilder
+description: Visual editor for creating trigger-condition-action workflows.
+---
+
+A form-based workflow editor for creating and editing automation workflows. Providers can configure triggers, conditions, and actions without writing code.
+
+## Usage
+
+```tsx
+import { WorkflowBuilder } from "./components/workflow-builder";
+
+<WorkflowBuilder
+  triggers={availableTriggers}
+  actionTypes={availableActionTypes}
+  onSave={handleSaveWorkflow}
+  defaultValues={existingWorkflow}
+/>
+```
+
+## Props
+
+```typescript
+interface WorkflowBuilderProps {
+  /** Available trigger options */
+  triggers: TriggerOption[];
+  /** Available action type options */
+  actionTypes: ActionTypeOption[];
+  /** Callback with the completed workflow definition */
+  onSave: (workflow: WorkflowFormValues) => void;
+  /** Pre-filled values for editing */
+  defaultValues?: WorkflowFormValues;
+  /** Recent workflow execution logs */
+  logs?: WorkflowLogDisplay[];
+  /** Additional CSS classes */
+  className?: string;
+}
+```
+
+## Sections
+
+1. **Trigger selection** — dropdown of available triggers (booking.created, booking.confirmed, etc.)
+2. **Conditions** — add/remove conditions with field, operator, and value inputs
+3. **Actions** — add/remove actions with type-specific configuration:
+   - Send email: to, subject, body with template variable insertion
+   - Send SMS: to, message
+   - Fire webhook: URL, method, headers
+   - Update status: new status selection
+4. **Logs** — recent execution history showing trigger, result, and timestamps

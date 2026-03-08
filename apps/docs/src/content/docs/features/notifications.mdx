@@ -1,0 +1,95 @@
+---
+title: Notifications & Email
+description: Transactional email templates for booking lifecycle events.
+---
+
+SlotKit includes email templates and notification job helpers for the booking lifecycle.
+
+## Email functions
+
+```typescript
+import {
+  sendConfirmationEmail,
+  sendReminderEmail,
+  sendCancellationEmail,
+  sendRescheduleEmail,
+} from "@slotkit/core";
+
+// Each function takes a payload and an EmailAdapter
+await sendConfirmationEmail(
+  {
+    bookingId: "...",
+    customerName: "Alice",
+    customerEmail: "alice@example.com",
+    eventTitle: "30-Min Consultation",
+    startsAt: new Date("2026-03-10T14:00:00Z"),
+    endsAt: new Date("2026-03-10T14:30:00Z"),
+    timezone: "America/New_York",
+    providerName: "Dr. Smith",
+    location: "123 Main St",
+  },
+  emailAdapter,
+);
+```
+
+## Built-in templates
+
+| Template | When sent |
+|---|---|
+| `CONFIRMATION_EMAIL_HTML/TEXT` | After booking is confirmed |
+| `REMINDER_EMAIL_HTML` | Before appointment (configurable hours) |
+| `CANCELLATION_EMAIL_HTML` | When booking is cancelled |
+| `RESCHEDULE_EMAIL_HTML` | When booking is rescheduled |
+
+### Template interpolation
+
+```typescript
+import { interpolateTemplate } from "@slotkit/core";
+
+const html = interpolateTemplate(CONFIRMATION_EMAIL_HTML, {
+  customerName: "Alice",
+  eventTitle: "Consultation",
+  date: "March 10, 2026",
+  time: "2:00 PM",
+  providerName: "Dr. Smith",
+  // ...
+});
+```
+
+## Calendar sync
+
+```typescript
+import { syncBookingToCalendar, deleteBookingFromCalendar } from "@slotkit/core";
+
+// Create a calendar event for a booking
+await syncBookingToCalendar(bookingPayload, calendarAdapter);
+
+// Remove calendar event on cancellation
+await deleteBookingFromCalendar(deletePayload, calendarAdapter);
+```
+
+## ICS attachments
+
+```typescript
+import { generateICSAttachment } from "@slotkit/core";
+
+const ics = generateICSAttachment({
+  title: "Consultation with Dr. Smith",
+  start: new Date("2026-03-10T14:00:00Z"),
+  end: new Date("2026-03-10T14:30:00Z"),
+  location: "123 Main St",
+});
+// Returns an ICS file string for email attachment
+```
+
+## Formatting helpers
+
+```typescript
+import { formatDateTimeForEmail, formatDurationForEmail } from "@slotkit/core";
+
+formatDateTimeForEmail(new Date("2026-03-10T14:00:00Z"), "America/New_York");
+// "Tuesday, March 10, 2026 at 9:00 AM EST"
+
+formatDurationForEmail(30);  // "30 minutes"
+formatDurationForEmail(90);  // "1 hour 30 minutes"
+```

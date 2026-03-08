@@ -1,0 +1,81 @@
+---
+title: Installation
+description: How to install and configure SlotKit in your project.
+---
+
+## Prerequisites
+
+- **Node.js** 20+
+- **PostgreSQL** 15+ (local, Neon, Supabase, Railway, Vercel Postgres, AWS RDS)
+
+## Install packages
+
+```bash
+npm install @slotkit/core @slotkit/db
+```
+
+The UI components follow the shadcn/ui convention — you copy them into your project rather than installing via npm. See the [Components overview](/components/overview) for details.
+
+## Database setup
+
+### 1. Configure connection
+
+Create a `.env` file with your Postgres connection string:
+
+```bash
+DATABASE_URL="postgresql://user:pass@localhost:5432/slotkit"
+```
+
+### 2. Push schema
+
+```bash
+# Create tables, enums, and indexes
+npx drizzle-kit push
+
+# Apply custom SQL migrations (btree_gist extension, audit triggers, GDPR functions)
+npx tsx packages/db/src/migrate.ts
+```
+
+### 3. Seed sample data (optional)
+
+```bash
+npm run db:seed -w @slotkit/db
+```
+
+## Local development with Docker
+
+If you don't have a Postgres instance, use the included `docker-compose.yml`:
+
+```bash
+docker compose up -d
+```
+
+This starts Postgres 15 on port 5432 with a `slotkit` database.
+
+## Monorepo development
+
+If you're working on SlotKit itself:
+
+```bash
+git clone https://github.com/your-org/slotkit.git
+cd slotkit
+npm install
+
+# Run all tests
+turbo test
+
+# Build all packages
+turbo build
+
+# Type check
+turbo typecheck
+```
+
+## Verify installation
+
+```typescript
+import { getAvailableSlots, isSlotAvailable } from "@slotkit/core";
+
+console.log(typeof getAvailableSlots); // "function"
+console.log(typeof isSlotAvailable);   // "function"
+```

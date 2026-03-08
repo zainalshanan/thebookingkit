@@ -1,0 +1,117 @@
+---
+title: Background Jobs
+description: Configure background jobs for reminders, auto-reject, and calendar sync.
+---
+
+SlotKit uses background jobs for tasks that shouldn't block the request/response cycle: sending emails, syncing calendars, auto-rejecting overdue bookings.
+
+## JobAdapter interface
+
+```typescript
+interface JobAdapter {
+  enqueue(jobName: string, payload: unknown, options?: { delay?: number }): Promise<void>;
+  scheduleAt(jobName: string, payload: unknown, runAt: Date): Promise<void>;
+}
+```
+
+## Built-in job types
+
+| Job name | Purpose |
+|---|---|
+| `send-confirmation-email` | Send booking confirmation email |
+| `send-reminder-email` | Send pre-appointment reminder |
+| `send-cancellation-email` | Send cancellation notice |
+| `send-reschedule-email` | Send reschedule notice |
+| `auto-reject-pending` | Reject pending bookings past deadline |
+| `sync-to-calendar` | Create/update calendar event |
+| `delete-from-calendar` | Remove cancelled calendar event |
+
+## Inngest (recommended)
+
+### Setup
+
+```bash
+npm install inngest
+```
+
+Create the API route at `app/api/inngest/route.ts`:
+
+```typescript
+import { serve } from "inngest/next";
+import { inngest } from "@/lib/inngest/client";
+import { bookingFunctions } from "@/lib/inngest/functions";
+
+export const { GET, POST, PUT } = serve({
+  client: inngest,
+  functions: bookingFunctions,
+});
+```
+
+### Example function
+
+```typescript
+import { inngest } from "./client";
+import { sendConfirmationEmail } from "@slotkit/core";
+
+export const handleBookingCreated = inngest.createFunction(
+  { id: "send-confirmation" },
+  { event: "booking/created" },
+  async ({ event, step }) => {
+    await step.run("send-email", async () => {
+      await sendConfirmationEmail(event.data, emailAdapter);
+    });
+
+    await step.run("sync-calendar", async () => {
+      await syncBookingToCalendar(event.data, calendarAdapter);
+    });
+  },
+);
+```
+
+### Environment variables
+
+```
+INNGEST_EVENT_KEY=your-event-key
+INNGEST_SIGNING_KEY=your-signing-key  # Production only
+```
+
+## Alternative: BullMQ
+
+```typescript
+import { Queue, Worker } from "bullmq";
+
+const bookingQueue = new Queue("bookings", { connection: redis });
+
+// JobAdapter implementation
+const bullMqAdapter: JobAdapter = {
+  async enqueue(jobName, payload, options) {
+    await bookingQueue.add(jobName, payload, {
+      delay: options?.delay,
+    });
+  },
+  async scheduleAt(jobName, payload, runAt) {
+    const delay = runAt.getTime() - Date.now();
+    await bookingQueue.add(jobName, payload, { delay });
+  },
+};
+```
+
+## Alternative: Vercel Cron
+
+For simpler setups, use Vercel Cron for scheduled tasks:
+
+```json
+// vercel.json
+{
+  "crons": [
+    {
+      "path": "/api/cron/auto-reject",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/send-reminders",
+      "schedule": "0 * * * *"
+    }
+  ]
+}
+```

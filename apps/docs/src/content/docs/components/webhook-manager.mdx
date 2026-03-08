@@ -1,0 +1,47 @@
+---
+title: WebhookManager
+description: Webhook subscription management with delivery logs.
+---
+
+Admin component for creating, managing, and monitoring webhook subscriptions.
+
+## Usage
+
+```tsx
+import { WebhookManager } from "./components/webhook-manager";
+
+<WebhookManager
+  webhooks={subscriptions}
+  deliveryLogs={recentDeliveries}
+  onCreateWebhook={handleCreate}
+  onDeleteWebhook={handleDelete}
+  onTestWebhook={handleTest}
+/>
+```
+
+## Props
+
+```typescript
+interface WebhookManagerProps {
+  /** Existing webhook subscriptions */
+  webhooks: WebhookDisplay[];
+  /** Recent delivery logs */
+  deliveryLogs?: WebhookDeliveryLog[];
+  /** Create a new subscription */
+  onCreateWebhook: (webhook: { url: string; triggers: string[]; secret: string }) => void;
+  /** Delete a subscription */
+  onDeleteWebhook: (webhookId: string) => void;
+  /** Send a test payload */
+  onTestWebhook?: (webhookId: string) => void;
+  /** Additional CSS classes */
+  className?: string;
+}
+```
+
+## Features
+
+- **Subscription list** — URL, active triggers, status, created date
+- **Create form** — URL input, trigger checkboxes, auto-generated secret
+- **Delivery logs** — response status, latency, payload preview, retry count
+- **Test button** — send a sample payload to verify the endpoint
+- **Delete** with confirmation dialog

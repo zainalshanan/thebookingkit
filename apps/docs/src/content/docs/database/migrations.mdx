@@ -1,0 +1,98 @@
+---
+title: Migrations
+description: Database migration strategy with Drizzle and custom SQL.
+---
+
+SlotKit uses two types of migrations: Drizzle-managed schema migrations and custom SQL migrations for advanced Postgres features.
+
+## Drizzle migrations
+
+Drizzle ORM handles table creation, column changes, and index management:
+
+```bash
+# Generate a migration from schema changes
+npx drizzle-kit generate
+
+# Apply migrations to the database
+npx drizzle-kit migrate
+
+# Push schema directly (development)
+npx drizzle-kit push
+
+# Open Drizzle Studio (visual DB browser)
+npx drizzle-kit studio
+```
+
+## Custom SQL migrations
+
+Custom migrations handle Postgres features that Drizzle doesn't manage natively:
+
+```
+packages/db/src/migrations/
+├── 0001_setup_extensions.sql     # btree_gist extension + EXCLUDE constraint
+├── 0002_booking_audit_trigger.sql # Auto audit trail on booking changes
+└── 0003_gdpr_anonymize.sql       # PII anonymization function
+```
+
+Apply custom migrations with:
+
+```bash
+npx tsx packages/db/src/migrate.ts
+```
+
+### 0001: btree_gist + double-booking constraint
+
+```sql
+CREATE EXTENSION IF NOT EXISTS btree_gist;
+
+ALTER TABLE bookings
+ADD CONSTRAINT bookings_no_overlap
+EXCLUDE USING gist (
+  provider_id WITH =,
+  tstzrange(starts_at, ends_at) WITH &&
+) WHERE (status NOT IN ('cancelled', 'rejected'));
+```
+
+### 0002: Booking audit trigger
+
+Automatically creates `booking_events` entries when a booking's status changes:
+
+```sql
+CREATE OR REPLACE FUNCTION audit_booking_change()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF OLD.status IS DISTINCT FROM NEW.status THEN
+    INSERT INTO booking_events (booking_id, event_type, old_status, new_status)
+    VALUES (NEW.id, 'status_change', OLD.status, NEW.status);
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+```
+
+### 0003: GDPR anonymization
+
+A SQL function to anonymize customer PII while preserving booking records for analytics:
+
+```sql
+SELECT anonymize_customer_data('customer@email.com');
+-- Replaces name, email, phone with anonymized values
+-- Preserves booking dates, statuses, and financial records
+```
+
+## Configuration
+
+Drizzle config is at `packages/db/drizzle.config.ts`:
+
+```typescript
+import { defineConfig } from "drizzle-kit";
+
+export default defineConfig({
+  schema: "./src/schema/index.ts",
+  out: "./src/migrations",
+  dialect: "postgresql",
+  dbCredentials: {
+    url: process.env.DATABASE_URL!,
+  },
+});
+```

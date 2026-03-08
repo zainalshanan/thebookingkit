@@ -1,0 +1,106 @@
+---
+title: Timezone Handling
+description: How SlotKit handles timezones safely across the computation pipeline.
+---
+
+Timezone handling is one of the hardest parts of scheduling software. SlotKit follows a simple principle: **store and compute in UTC, display in local time.**
+
+## Core utilities
+
+```typescript
+import {
+  normalizeToUTC,
+  utcToLocal,
+  isValidTimezone,
+  getTimezoneOffset,
+  InvalidTimezoneError,
+} from "@slotkit/core";
+```
+
+### `normalizeToUTC(localTime, timezone)`
+
+Converts a local time string to a UTC Date:
+
+```typescript
+const utc = normalizeToUTC("2026-03-10T09:00:00", "America/New_York");
+// Date: 2026-03-10T14:00:00.000Z (EST is UTC-5)
+```
+
+### `utcToLocal(utcDate, timezone)`
+
+Converts a UTC Date to a local time string:
+
+```typescript
+const local = utcToLocal(new Date("2026-03-10T14:00:00Z"), "America/New_York");
+// "2026-03-10T09:00:00"
+```
+
+### `isValidTimezone(timezone)`
+
+Validates an IANA timezone string:
+
+```typescript
+isValidTimezone("America/New_York");  // true
+isValidTimezone("US/Eastern");        // true
+isValidTimezone("EST");               // false (abbreviation, not IANA)
+isValidTimezone("Invalid/Zone");      // false
+```
+
+### `getTimezoneOffset(timezone, date)`
+
+Returns the UTC offset in minutes for a timezone at a specific date:
+
+```typescript
+getTimezoneOffset("America/New_York", new Date("2026-03-10")); // -300 (EST)
+getTimezoneOffset("America/New_York", new Date("2026-07-10")); // -240 (EDT)
+```
+
+## How timezones flow through the system
+
+### 1. Rules are defined in provider timezone
+
+```typescript
+{
+  rrule: "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+  startTime: "09:00",
+  endTime: "17:00",
+  timezone: "America/New_York",  // Provider's timezone
+}
+```
+
+### 2. Slots are computed in UTC
+
+The slot engine converts rule times to UTC before computing availability. All overlap checks, buffer calculations, and booking comparisons happen in UTC.
+
+### 3. Slots are displayed in customer timezone
+
+The `customerTimezone` parameter controls the `localStart` and `localEnd` fields on each slot:
+
+```typescript
+const slots = getAvailableSlots(rules, overrides, bookings, dateRange, "Asia/Tokyo");
+
+// slots[0].startTime  → "2026-03-10T14:00:00.000Z" (UTC)
+// slots[0].localStart → "11:00 PM"                  (JST, UTC+9)
+```
+
+### 4. Bookings are stored in UTC
+
+The `bookings` table stores `starts_at` and `ends_at` as UTC timestamps. This ensures correct behavior regardless of DST changes between booking creation and the appointment date.
+
+## DST transitions
+
+SlotKit handles DST transitions correctly:
+
+- **Spring forward:** If a provider is available 9am-5pm Eastern and DST springs forward on March 8, slots on March 9 correctly map to UTC-4 instead of UTC-5
+- **Fall back:** The extra hour during fall-back does not create duplicate slots
+- **Recurring bookings:** Weekly series maintain the same local time across DST boundaries (e.g., "every Monday at 9am" stays at 9am local time)
+
+## Libraries used
+
+SlotKit uses `date-fns` and `date-fns-tz` for all date/time operations:
+
+- `fromZonedTime()` — Convert local time to UTC
+- `toZonedTime()` — Convert UTC to local time
+- `format()` — Format dates in a specific timezone
+
+These are peer dependencies of `@slotkit/core`.

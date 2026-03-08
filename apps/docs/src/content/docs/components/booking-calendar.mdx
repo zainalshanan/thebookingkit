@@ -1,0 +1,53 @@
+---
+title: BookingCalendar
+description: Date picker component with available date highlighting.
+---
+
+A calendar component for selecting booking dates. Built on `react-day-picker`. Highlights dates that have available slots and disables dates with no availability.
+
+## Usage
+
+```tsx
+import { BookingCalendar } from "./components/booking-calendar";
+
+function DateStep() {
+  const [selected, setSelected] = useState<Date | null>(null);
+
+  return (
+    <BookingCalendar
+      availableDates={["2026-03-10", "2026-03-11", "2026-03-12"]}
+      selectedDate={selected}
+      onDateSelect={setSelected}
+      timezone="America/New_York"
+    />
+  );
+}
+```
+
+## Props
+
+```typescript
+interface BookingCalendarProps {
+  /** Array of available date strings (YYYY-MM-DD) or Date objects */
+  availableDates: (string | Date)[];
+  /** Currently selected date */
+  selectedDate: Date | null;
+  /** Callback when a date is selected */
+  onDateSelect: (date: Date) => void;
+  /** IANA timezone for display */
+  timezone?: string;
+  /** Additional CSS classes */
+  className?: string;
+  /** Inline styles */
+  style?: React.CSSProperties;
+}
+```
+
+## Behavior
+
+- Dates with availability are highlighted and clickable
+- Dates without availability are visually muted and disabled
+- Past dates are disabled
+- Month navigation with previous/next arrows
+- Current month displayed by default
+- Selected date is visually distinguished

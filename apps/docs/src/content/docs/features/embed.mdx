@@ -1,0 +1,79 @@
+---
+title: Embed Modes
+description: Embed booking flows into any website with inline, popup, or floating widgets.
+---
+
+SlotKit can generate embed snippets for adding booking flows to any website — WordPress, Squarespace, static HTML, or any CMS.
+
+## Embed modes
+
+| Mode | Description |
+|---|---|
+| `inline` | Renders directly in the page at a specific element |
+| `popup` | Opens in a modal/overlay triggered by a button |
+| `float` | Floating action button in the corner of the page |
+
+## Configuration
+
+```typescript
+import { validateEmbedConfig, type EmbedConfig } from "@slotkit/core";
+
+const config: EmbedConfig = {
+  mode: "popup",
+  eventTypeSlug: "30-min-consultation",
+  providerSlug: "dr-smith",
+  baseUrl: "https://booking.example.com",
+  branding: {
+    primaryColor: "#2563eb",
+    buttonText: "Book Now",
+    hideHeader: false,
+  },
+};
+
+validateEmbedConfig(config);
+// Throws EmbedConfigError if invalid
+```
+
+## Snippet generation
+
+```typescript
+import { generateEmbedSnippet, generateAllSnippets, buildEmbedUrl } from "@slotkit/core";
+
+// Generate a snippet for a specific mode
+const snippet = generateEmbedSnippet(config);
+// Returns: EmbedSnippet { html, script }
+
+// Generate snippets for all three modes
+const all = generateAllSnippets(config);
+// Returns: { inline: EmbedSnippet, popup: EmbedSnippet, float: EmbedSnippet }
+
+// Build just the embed URL
+const url = buildEmbedUrl(config);
+// "https://booking.example.com/embed/dr-smith/30-min-consultation?color=2563eb"
+```
+
+### Example output (popup mode)
+
+```html
+<button onclick="SlotKit.open()">Book Now</button>
+<script src="https://booking.example.com/embed.js"
+  data-slotkit-event="30-min-consultation"
+  data-slotkit-provider="dr-smith"
+  data-slotkit-mode="popup"
+  data-slotkit-color="#2563eb">
+</script>
+```
+
+## UI component
+
+The `<EmbedConfigurator />` component lets providers generate embed code with a live preview:
+
+```tsx
+import { EmbedConfigurator } from "./components/embed-configurator";
+
+<EmbedConfigurator
+  eventTypes={eventTypes}
+  baseUrl="https://booking.example.com"
+  onSnippetGenerated={(snippet) => copyToClipboard(snippet.html)}
+/>
+```

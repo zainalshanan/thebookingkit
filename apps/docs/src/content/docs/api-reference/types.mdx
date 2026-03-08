@@ -1,0 +1,160 @@
+---
+title: Type Reference
+description: Key TypeScript types exported from @slotkit/core.
+---
+
+## Core types
+
+```typescript
+/** A computed time slot */
+interface Slot {
+  startTime: string;   // UTC ISO-8601
+  endTime: string;     // UTC ISO-8601
+  localStart: string;  // Formatted in customer timezone
+  localEnd: string;
+}
+
+/** Date range for queries */
+interface DateRange {
+  start: Date;
+  end: Date;
+}
+
+/** Availability rule input */
+interface AvailabilityRuleInput {
+  rrule: string;
+  startTime: string;    // "HH:mm"
+  endTime: string;      // "HH:mm"
+  timezone: string;     // IANA timezone
+  validFrom?: Date | null;
+  validUntil?: Date | null;
+}
+
+/** Availability override input */
+interface AvailabilityOverrideInput {
+  date: Date;
+  startTime?: string | null;
+  endTime?: string | null;
+  isUnavailable: boolean;
+}
+
+/** Existing booking input */
+interface BookingInput {
+  startsAt: Date;
+  endsAt: Date;
+  status: string;
+}
+
+/** Slot computation options */
+interface SlotComputeOptions {
+  duration?: number;       // Default: 30
+  bufferBefore?: number;   // Default: 0
+  bufferAfter?: number;    // Default: 0
+  slotInterval?: number;   // Default: same as duration
+  eventTypeId?: string;
+}
+
+/** Slot availability check result */
+type SlotAvailabilityResult =
+  | { available: true }
+  | { available: false; reason: "outside_availability" | "already_booked" | "blocked_date" | "buffer_conflict" }
+```
+
+## Team types
+
+```typescript
+type AssignmentStrategy = "round_robin" | "collective" | "managed" | "fixed";
+
+interface TeamMemberInput {
+  memberId: string;
+  memberName: string;
+  rules: AvailabilityRuleInput[];
+  overrides: AvailabilityOverrideInput[];
+  bookings: BookingInput[];
+}
+
+interface TeamSlot extends Slot {
+  availableMembers: { memberId: string; memberName: string }[];
+}
+
+interface AssignmentResult {
+  memberId: string;
+  memberName: string;
+}
+```
+
+## Payment types
+
+```typescript
+interface CancellationPolicy {
+  tiers: CancellationPolicyTier[];
+  noShowFeePercent: number;
+}
+
+interface CancellationPolicyTier {
+  hoursBeforeStart: number;
+  feePercent: number;
+}
+
+interface CancellationFeeResult {
+  feeCents: number;
+  feePercent: number;
+  tier: CancellationPolicyTier;
+}
+
+type PaymentType = "booking" | "cancellation_fee" | "no_show_fee" | "refund";
+```
+
+## Webhook types
+
+```typescript
+interface WebhookSubscription {
+  id: string;
+  url: string;
+  triggers: WebhookTrigger[];
+  secret: string;
+  isActive: boolean;
+}
+
+interface WebhookEnvelope {
+  id: string;
+  trigger: WebhookTrigger;
+  payload: WebhookPayload;
+  signature: string;
+  timestamp: number;
+  subscriptionId: string;
+}
+```
+
+## Workflow types
+
+```typescript
+type WorkflowTrigger = "booking.created" | "booking.confirmed" | "booking.cancelled" | "booking.rescheduled" | "booking.completed" | "booking.no_show" | "booking.reminder";
+
+type WorkflowActionType = "send_email" | "send_sms" | "fire_webhook" | "update_status" | "sync_calendar";
+
+interface WorkflowDefinition {
+  name: string;
+  trigger: WorkflowTrigger;
+  conditions: WorkflowCondition[];
+  actions: WorkflowAction[];
+}
+```
+
+## Multi-tenancy types
+
+```typescript
+type OrgRole = "owner" | "admin" | "member";
+
+interface ResolvedSettings {
+  defaultTimezone: string;
+  defaultCurrency: string;
+  defaultBufferBefore: number;
+  defaultBufferAfter: number;
+  requiresConfirmation: boolean;
+  maxAdvanceDays: number;
+  minimumNoticeMinutes: number;
+}
+```
+
+See the full type definitions in `packages/core/src/` source files.

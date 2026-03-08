@@ -1,0 +1,109 @@
+---
+title: REST API
+description: API key authentication, rate limiting, cursor pagination, and response formatting.
+---
+
+SlotKit provides utilities for building a REST API layer on top of the core logic.
+
+## API key management
+
+```typescript
+import { generateApiKey, hashApiKey, verifyApiKey, hasScope, isKeyExpired } from "@slotkit/core";
+
+// Generate a new API key
+const key = generateApiKey();
+// Returns: GeneratedApiKey { key: "sk_live_...", hashedKey: "sha256:..." }
+
+// Hash for storage (never store the raw key)
+const hashed = hashApiKey(key.key);
+
+// Verify a key from a request
+const valid = verifyApiKey(rawKey, storedHashedKey);
+
+// Check scopes
+hasScope(apiKeyRecord, "bookings:read");   // true/false
+hasScope(apiKeyRecord, "bookings:write");  // true/false
+
+// Check expiry
+isKeyExpired(apiKeyRecord); // true if past expiresAt
+```
+
+### Key scopes
+
+| Scope | Description |
+|---|---|
+| `bookings:read` | Read booking data |
+| `bookings:write` | Create, update, cancel bookings |
+| `availability:read` | Read available slots |
+| `event_types:read` | Read event type configuration |
+| `event_types:write` | Modify event types |
+| `webhooks:manage` | Create and manage webhook subscriptions |
+
+## Rate limiting
+
+Token bucket algorithm with configurable limits:
+
+```typescript
+import { checkRateLimit } from "@slotkit/core";
+
+const result = checkRateLimit(currentState, {
+  maxTokens: 120,       // 120 requests
+  refillRate: 2,        // 2 tokens per second (120/min)
+  refillInterval: 1000, // Refill every 1 second
+});
+
+// Returns: RateLimitResult
+// { allowed: true, remaining: 119, resetAt: Date, state: RateLimitState }
+```
+
+## Cursor-based pagination
+
+```typescript
+import { encodeCursor, decodeCursor } from "@slotkit/core";
+
+// Encode the last item's ID and timestamp into a cursor
+const cursor = encodeCursor({ id: "abc123", createdAt: new Date() });
+// Returns: base64 string
+
+// Decode a cursor from a request
+const { id, createdAt } = decodeCursor(cursorString);
+```
+
+## Response formatting
+
+```typescript
+import {
+  createSuccessResponse,
+  createErrorResponse,
+  createPaginatedResponse,
+  API_ERROR_CODES,
+} from "@slotkit/core";
+
+// Success
+createSuccessResponse(booking);
+// { data: booking }
+
+// Error
+createErrorResponse("not_found", "Booking not found");
+// { error: { code: "not_found", message: "Booking not found" } }
+
+// Paginated
+createPaginatedResponse(bookings, { cursor: nextCursor, hasMore: true, total: 42 });
+// { data: bookings, meta: { cursor, hasMore, total } }
+```
+
+## Query validation
+
+```typescript
+import { validateSlotQueryParams, parseSortParam } from "@slotkit/core";
+
+const params = validateSlotQueryParams({
+  date: "2026-03-10",
+  timezone: "America/New_York",
+  duration: "30",
+});
+// Returns validated and parsed params, or throws with validation details
+
+const sort = parseSortParam("-createdAt,title");
+// Returns: [{ field: "createdAt", direction: "desc" }, { field: "title", direction: "asc" }]
+```

@@ -1,0 +1,40 @@
+{
+  "name": "@slotkit/cli",
+  "version": "0.1.0",
+  "description": "CLI for adding SlotKit components and running migrations",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "slotkit": "./dist/bin.js"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "commander": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "slotkit",
+    "booking",
+    "scheduling",
+    "cli"
+  ],
+  "license": "MIT"
+}

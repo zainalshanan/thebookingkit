@@ -1,0 +1,147 @@
+---
+title: Quick Start
+description: Go from zero to available slots in 5 minutes.
+---
+
+This guide walks you through computing available time slots, checking slot availability, and rendering a basic booking UI.
+
+## 1. Define availability rules
+
+Availability rules use RRULE syntax to define recurring schedules:
+
+```typescript
+import type { AvailabilityRuleInput } from "@slotkit/core";
+
+const rules: AvailabilityRuleInput[] = [
+  {
+    rrule: "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+    startTime: "09:00",
+    endTime: "17:00",
+    timezone: "America/New_York",
+  },
+];
+```
+
+This creates a Monday-Friday, 9am-5pm schedule in Eastern time.
+
+## 2. Compute available slots
+
+```typescript
+import { getAvailableSlots } from "@slotkit/core";
+
+const slots = getAvailableSlots(
+  rules,
+  [],              // no overrides
+  [],              // no existing bookings
+  {
+    start: new Date("2026-03-09"),
+    end: new Date("2026-03-14"),
+  },
+  "America/New_York",
+  {
+    duration: 30,      // 30-minute slots
+    bufferBefore: 0,
+    bufferAfter: 15,   // 15-minute gap between appointments
+  }
+);
+
+console.log(slots[0]);
+// {
+//   startTime: "2026-03-09T14:00:00.000Z",  // UTC
+//   endTime: "2026-03-09T14:30:00.000Z",
+//   localStart: "9:00 AM",                   // Eastern
+//   localEnd: "9:30 AM",
+// }
+```
+
+## 3. Check if a specific slot is available
+
+```typescript
+import { isSlotAvailable } from "@slotkit/core";
+
+const result = isSlotAvailable(
+  rules,
+  [],
+  existingBookings,
+  new Date("2026-03-10T15:00:00.000Z"),  // slot start (UTC)
+  new Date("2026-03-10T15:30:00.000Z"),  // slot end (UTC)
+);
+
+if (result.available) {
+  // Proceed with booking
+} else {
+  console.log(result.reason);
+  // "outside_availability" | "already_booked" | "blocked_date" | "buffer_conflict"
+}
+```
+
+## 4. Add overrides and bookings
+
+Real-world usage includes overrides (blocked days, extra hours) and existing bookings:
+
+```typescript
+import type { AvailabilityOverrideInput, BookingInput } from "@slotkit/core";
+
+// Block a specific day
+const overrides: AvailabilityOverrideInput[] = [
+  {
+    date: new Date("2026-03-11"),
+    isUnavailable: true,     // March 11 is blocked
+  },
+  {
+    date: new Date("2026-03-12"),
+    startTime: "09:00",
+    endTime: "12:00",        // March 12 shortened to morning only
+    isUnavailable: false,
+  },
+];
+
+// Existing bookings reduce available slots
+const bookings: BookingInput[] = [
+  {
+    startsAt: new Date("2026-03-10T15:00:00.000Z"),
+    endsAt: new Date("2026-03-10T15:30:00.000Z"),
+    status: "confirmed",
+  },
+];
+
+const slots = getAvailableSlots(rules, overrides, bookings, dateRange, timezone, options);
+```
+
+## 5. Render the booking UI
+
+Copy the UI components from `registry/ui/src/components/` into your project:
+
+```tsx
+import { BookingCalendar } from "./components/booking-calendar";
+import { TimeSlotPicker } from "./components/time-slot-picker";
+
+function BookingPage() {
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
+
+  return (
+    <div>
+      <BookingCalendar
+        availableDates={dates}
+        selectedDate={selectedDate}
+        onDateSelect={setSelectedDate}
+      />
+
+      {selectedDate && (
+        <TimeSlotPicker
+          slots={slotsForDate}
+          selectedSlot={selectedSlot}
+          onSlotSelect={setSelectedSlot}
+        />
+      )}
+    </div>
+  );
+}
+```
+
+## Next steps
+
+- [Architecture](/getting-started/architecture) — Understand the three-layer model
+- [Slot Engine](/core-concepts/slot-engine) — Deep dive into slot computation
+- [Event Types](/features/event-types) — Configure duration, questions, and limits

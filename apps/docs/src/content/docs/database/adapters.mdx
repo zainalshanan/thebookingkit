@@ -1,0 +1,142 @@
+---
+title: Adapters
+description: Pluggable interfaces for auth, email, calendar, jobs, payments, and more.
+---
+
+SlotKit uses the adapter pattern to abstract external dependencies. Each adapter is a TypeScript interface — implement it for your preferred provider.
+
+## Available adapters
+
+### AuthAdapter
+
+```typescript
+interface AuthAdapter {
+  getSession(request: Request): Promise<AuthSession | null>;
+  getUser(userId: string): Promise<AuthUser | null>;
+}
+```
+
+**Default:** NextAuth.js 5.x
+**Alternatives:** Supabase Auth, Clerk, Lucia, custom JWT
+
+### EmailAdapter
+
+```typescript
+interface EmailAdapter {
+  sendEmail(options: SendEmailOptions): Promise<EmailResult>;
+}
+
+interface SendEmailOptions {
+  to: string;
+  subject: string;
+  html: string;
+  text?: string;
+  from?: string;
+  replyTo?: string;
+  attachments?: EmailAttachment[];
+}
+```
+
+**Default:** Resend
+**Alternatives:** SendGrid, AWS SES, Postmark, Nodemailer
+
+### CalendarAdapter
+
+```typescript
+interface CalendarAdapter {
+  createEvent(options: CalendarEventOptions): Promise<CalendarEventResult>;
+  updateEvent(eventId: string, options: CalendarEventOptions): Promise<CalendarEventResult>;
+  deleteEvent(eventId: string): Promise<void>;
+  getConflicts(start: Date, end: Date): Promise<CalendarConflict[]>;
+}
+```
+
+**Default:** Google Calendar (OAuth)
+**Alternatives:** Microsoft Outlook, CalDAV
+
+### JobAdapter
+
+```typescript
+interface JobAdapter {
+  enqueue(jobName: string, payload: unknown, options?: { delay?: number }): Promise<void>;
+  scheduleAt(jobName: string, payload: unknown, runAt: Date): Promise<void>;
+}
+```
+
+**Default:** Inngest 3.x
+**Alternatives:** Trigger.dev, BullMQ, Vercel Cron, pg-boss
+
+### PaymentAdapter
+
+```typescript
+interface PaymentAdapter {
+  createPaymentIntent(options: CreatePaymentIntentOptions): Promise<CreatePaymentIntentResult>;
+  createSetupIntent(options: CreateSetupIntentOptions): Promise<CreateSetupIntentResult>;
+  capturePayment(paymentIntentId: string): Promise<CaptureResult>;
+  refundPayment(paymentIntentId: string, amountCents?: number): Promise<RefundResult>;
+}
+```
+
+**Default:** Stripe
+**Alternatives:** Implement for your payment provider
+
+### StorageAdapter
+
+```typescript
+interface StorageAdapter {
+  encrypt(plaintext: string): Promise<string>;
+  decrypt(ciphertext: string): Promise<string>;
+}
+```
+
+**Default:** Env var encryption key (AES-256)
+**Alternatives:** HashiCorp Vault, AWS KMS, Azure Key Vault
+
+### SmsAdapter
+
+```typescript
+interface SmsAdapter {
+  sendSms(options: SendSmsOptions): Promise<SmsResult>;
+}
+```
+
+**Default:** Not implemented (optional)
+**Alternatives:** Twilio, MessageBird, Vonage
+
+## Implementing an adapter
+
+```typescript
+// Example: Custom email adapter using SendGrid
+import sgMail from "@sendgrid/mail";
+
+const sendGridAdapter: EmailAdapter = {
+  async sendEmail(options) {
+    sgMail.setApiKey(process.env.SENDGRID_API_KEY!);
+
+    const [response] = await sgMail.send({
+      to: options.to,
+      from: options.from || "noreply@example.com",
+      subject: options.subject,
+      html: options.html,
+      text: options.text,
+    });
+
+    return {
+      messageId: response.headers["x-message-id"],
+      status: "sent" as const,
+    };
+  },
+};
+```
+
+## Using adapters
+
+Pass adapters to the functions that need them:
+
+```typescript
+import { sendConfirmationEmail } from "@slotkit/core";
+
+await sendConfirmationEmail(bookingPayload, sendGridAdapter);
+```
+
+Adapters are injected at the call site, not globally configured. This makes testing easy — pass a mock adapter in tests.

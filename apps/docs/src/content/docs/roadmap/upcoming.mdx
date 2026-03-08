@@ -1,0 +1,97 @@
+---
+title: Upcoming Features
+description: Features planned for future releases of SlotKit.
+---
+
+SlotKit has completed 16 epics covering the full booking system lifecycle. These features are planned for upcoming releases.
+
+---
+
+## Slot Waitlist (E-17)
+
+> **Release R6 · 26 story points · 5 user stories**
+
+When a slot is fully booked, customers can join a waitlist instead of seeing "unavailable." On cancellation, the first person in the queue receives a time-limited offer to claim the slot.
+
+### Planned features
+
+- **Waitlist data model** — `waitlist_entries` table with queue position, status tracking (`waiting`, `offered`, `claimed`, `expired`, `cancelled`), and configurable offer expiry
+- **Core queue logic** — `joinWaitlist()`, `offerSlotToNext()`, `claimWaitlistOffer()`, `expireOverdueOffers()`, `reorderQueue()`
+- **Cancellation-triggered offers** — When a booking is cancelled, the system automatically offers the freed slot to the next person in the queue with a time-limited claim link
+- **Cascading offers** — If an offer expires, the system automatically moves to the next person
+- **UI components** — `<WaitlistButton />` on the slot picker, `<WaitlistStatus />` for queue position, `<WaitlistClaimPage />` for the claim flow, `<WaitlistAdminList />` for provider management
+- **Notifications** — Offer email with claim link, confirmation on join, notification on claim, expiry notice
+
+### Configuration
+
+Per event type: `waitlist_enabled` (boolean), `waitlist_max_size` (integer), `waitlist_offer_minutes` (default: 30 minutes to claim).
+
+---
+
+## Dynamic & Peak/Off-Peak Pricing (E-18)
+
+> **Release R6 · 21 story points · 4 user stories**
+
+Enable providers to charge different prices based on time of day, day of week, and booking lead time. Designed for service businesses like barber shops that charge more for after-hours or weekend appointments.
+
+### Planned features
+
+- **Pricing rules data model** — `pricing_rules` table with rule types: `time_of_day`, `day_of_week`, `lead_time`, `surge`. Each rule has priority ordering, absolute price override or percentage modifier, and JSONB conditions
+- **Price computation engine** — `computeSlotPrice()` evaluates rules in priority order against slot time, day, and lead time. `computePriceRange()` returns min/max across all combinations. Pure functions, no DB calls
+- **Slot engine integration** — `Slot` type gains `priceCents` and `appliedPricingRules` fields. Price is recalculated at booking time to prevent gaming
+- **Surge pricing** — Automatic price increase when available slots drop below a threshold
+- **Display modes** — `show_range` ("$80-$120"), `show_exact` (per-slot price), `show_from` ("From $80")
+- **UI components** — `<PricingRuleEditor />` for rule creation, `<PricingRuleList />` with drag-to-reorder priority, `<SlotPriceTag />` for the time slot picker, `<PricingSummary />` for booking confirmation
+
+### Rule examples
+
+```
+After 5pm weekdays: +25% surcharge
+Weekends: $120 flat rate (vs $80 base)
+Booked 7+ days ahead: 10% early bird discount
+Last 3 slots this week: +15% surge
+```
+
+---
+
+## Walk-In Queue & Hybrid Scheduling (E-19)
+
+> **Release R7 · 34 story points · 7 user stories**
+
+Enable providers to accept walk-in customers alongside scheduled appointments. The provider or receptionist adds walk-ins on behalf of customers, selecting the service and provider. Walk-ins fill gaps between existing bookings.
+
+### Planned features
+
+- **Walk-in data model** — `booking_source` enum (`online`, `walk_in`, `phone`, `admin`), `walk_in_queue` table with queue position, estimated wait, service timestamps, and status tracking
+- **Core logic** — `addWalkIn()` auto-finds the next gap in the schedule. `estimateWaitTime()` calculates wait based on queue length and in-progress services. `startService()`, `completeService()`, `markNoShow()`, `reorderQueue()`
+- **Admin entry form** — `<WalkInEntryForm />` for adding walk-ins: customer name, service selector, provider selector, optional notes. Remembers recent customers
+- **Live queue display** — `<QueueDisplay />` public-facing auto-refreshing queue. `<QueueTicket />` with QR code for tracking. `<QueueManager />` with drag-to-reorder
+- **Walk-in toggle** — `<WalkInToggle />` for providers to start/stop accepting. Auto-disables at end of working hours
+- **QR code check-in** — Customers scan a QR code at the location, fill in name and service, and join the queue without interacting with staff
+- **Analytics** — Walk-in metrics: average wait time, peak hours, no-show rate, walk-in vs appointment ratio
+
+### Designed for
+
+Barber shops, salons, clinics, restaurants — any business that serves both scheduled and walk-in customers.
+
+---
+
+## Kiosk Mode & Interactive Schedule Management (E-20)
+
+> **Release R7 · 34 story points · 7 user stories**
+
+A full-screen, Google Calendar-style interactive view for providers to manage their entire schedule from a single screen. Supports drag-and-drop rescheduling, configurable event detail display, inline break/block creation, and integrated walk-in queue management.
+
+### Planned features
+
+- **Kiosk calendar view** — `<KioskCalendar />` built on `react-big-calendar` with `react-dnd` for drag-and-drop. Day, week, and 3-day views. Dragging a booking to a new time triggers a reschedule. Resizing adjusts end time. Double-click opens quick-add
+- **Configurable detail display** — `<KioskSettingsPanel />` to choose which fields show on calendar blocks (name, email, phone, service, status, price, notes). Three density modes: compact, standard, detailed. Settings persisted per provider
+- **Break & block management** — `<BreakBlockForm />` for adding breaks, personal blocks, meetings, and closures. Stored as availability overrides. "Block rest of day" and "Add non-working day" quick actions. Break/booking overlap validation
+- **Drag-and-drop rescheduling** — Ghost preview on drag, confirmation dialog with original/new time, conflict validation, undo toast. `validateReschedule()` pure function for checking conflicts and availability
+- **Walk-in integration** — Collapsible sidebar showing the walk-in queue from E-19. Walk-ins appear as distinct calendar blocks. Toggle walk-in acceptance from the toolbar
+- **Multi-provider kiosk** — Side-by-side provider columns (resource view). Dragging between columns reassigns the booking. Provider toggle and team filter
+- **Full-screen & touch mode** — `<KioskShell />` wrapper with full-screen toggle. Touch-optimized targets (44px minimum), swipe navigation, long-press context menus. `<KioskPinLock />` for idle auto-lock. Wake Lock API support
+
+### Designed for
+
+Tablets at reception desks, wall-mounted displays, and desktop use. Optimized for 10"+ tablets in landscape and smaller screens in portrait.

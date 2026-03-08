@@ -1,0 +1,62 @@
+---
+title: Vercel Deployment
+description: Deploy your SlotKit application to Vercel.
+---
+
+## Prerequisites
+
+- A Next.js application using SlotKit packages
+- A PostgreSQL 15+ database (Neon recommended for Vercel)
+- Vercel account
+
+## Steps
+
+### 1. Connect your repository
+
+Link your GitHub repository to Vercel. If using the monorepo, set the root directory to your Next.js app folder.
+
+### 2. Environment variables
+
+Set these in the Vercel dashboard:
+
+| Variable | Required | Description |
+|---|---|---|
+| `DATABASE_URL` | Yes | Postgres connection string |
+| `NEXTAUTH_SECRET` | Yes | NextAuth.js secret |
+| `NEXTAUTH_URL` | Yes | Your app URL |
+| `RESEND_API_KEY` | If using email | Resend API key |
+| `STRIPE_SECRET_KEY` | If using payments | Stripe secret key |
+| `STRIPE_WEBHOOK_SECRET` | If using payments | Stripe webhook signing secret |
+| `INNGEST_EVENT_KEY` | If using Inngest | Inngest event key |
+| `GOOGLE_CLIENT_ID` | If using calendar sync | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | If using calendar sync | Google OAuth client secret |
+
+### 3. Build settings
+
+For a monorepo, configure the build command:
+
+```
+Build Command: turbo build --filter=your-app
+Output Directory: .next
+Install Command: npm install
+```
+
+### 4. Run migrations
+
+Migrations need to run against your production database. Add a build step or run manually:
+
+```bash
+# In CI or as a post-deploy script
+npx drizzle-kit migrate --config=packages/db/drizzle.config.ts
+npx tsx packages/db/src/migrate.ts
+```
+
+### 5. Deploy
+
+Push to your main branch or trigger a deployment from the Vercel dashboard.
+
+## Serverless considerations
+
+- Use a **pooled connection string** for the `DATABASE_URL` to handle serverless connection limits
+- Set a **direct connection URL** (`DIRECT_URL`) for migrations
+- SlotKit's `SERIALIZABLE` transactions work correctly with connection pooling

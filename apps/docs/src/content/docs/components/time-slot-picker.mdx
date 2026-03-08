@@ -1,0 +1,48 @@
+---
+title: TimeSlotPicker
+description: Grid of available time slots for a selected date.
+---
+
+Displays available time slots as a selectable grid or list for a chosen date.
+
+## Usage
+
+```tsx
+import { TimeSlotPicker } from "./components/time-slot-picker";
+
+function TimeStep({ slots }) {
+  const [selected, setSelected] = useState<Slot | null>(null);
+
+  return (
+    <TimeSlotPicker
+      slots={slots}
+      selectedSlot={selected}
+      onSlotSelect={setSelected}
+    />
+  );
+}
+```
+
+## Props
+
+```typescript
+interface TimeSlotPickerProps {
+  /** Available slots from getAvailableSlots() */
+  slots: Slot[];
+  /** Currently selected slot */
+  selectedSlot: Slot | null;
+  /** Callback when a slot is selected */
+  onSlotSelect: (slot: Slot) => void;
+  /** Additional CSS classes */
+  className?: string;
+  /** Inline styles */
+  style?: React.CSSProperties;
+}
+```
+
+## Behavior
+
+- Renders each slot as a button showing the local start time
+- Selected slot is visually highlighted
+- Empty state message when no slots are available
+- Scrollable container for dates with many slots

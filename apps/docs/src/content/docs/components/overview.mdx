@@ -1,0 +1,81 @@
+---
+title: UI Components Overview
+description: 21 copy-paste React components following the shadcn/ui convention.
+---
+
+SlotKit provides 21 React components built on shadcn/ui, react-day-picker, react-big-calendar, and react-hook-form. Following the shadcn/ui convention, you **copy the source code** into your project and own it completely.
+
+## Installation
+
+Components live in `registry/ui/src/components/`. Copy the ones you need into your project:
+
+```bash
+# Copy a component
+cp registry/ui/src/components/booking-calendar.tsx src/components/slotkit/
+
+# Copy the cn() utility (used by all components)
+cp registry/ui/src/utils/cn.ts src/components/slotkit/utils/
+```
+
+## Dependencies
+
+Components depend on these npm packages:
+
+| Package | Used by |
+|---|---|
+| `react-day-picker` | BookingCalendar |
+| `react-big-calendar` | AdminScheduleView |
+| `react-hook-form` | BookingQuestions, ManualBookingForm, WorkflowBuilder |
+| `date-fns` | Date formatting |
+| `@slotkit/core` | Hooks (useAvailability, useProvider) |
+
+## Customization
+
+All components accept `className` and `style` props. They use the `cn()` utility for class merging (compatible with Tailwind CSS):
+
+```tsx
+<BookingCalendar
+  className="rounded-lg shadow-md"
+  style={{ maxWidth: 400 }}
+  {...otherProps}
+/>
+```
+
+## Component list
+
+### Customer-facing
+
+| Component | File | Description |
+|---|---|---|
+| [BookingCalendar](/components/booking-calendar) | `booking-calendar.tsx` | Date picker with available date highlighting |
+| [TimeSlotPicker](/components/time-slot-picker) | `time-slot-picker.tsx` | Time slot grid for selected date |
+| [BookingQuestions](/components/booking-questions) | `booking-questions.tsx` | Dynamic form from question config |
+| [BookingConfirmation](/components/booking-confirmation) | `booking-confirmation.tsx` | Summary and confirm step |
+| BookingStatusBadge | `booking-status-badge.tsx` | Status pill component |
+| BookingManagementView | `booking-management-view.tsx` | Customer booking list |
+| RecurringBookingPicker | `recurring-booking-picker.tsx` | Series frequency/count picker |
+| SeatsPicker | `seats-picker.tsx` | Attendee count selector |
+| RoutingForm | `routing-form.tsx` | Pre-booking questionnaire |
+| PaymentGate | `payment-gate.tsx` | Payment step wrapper |
+| EmbedConfigurator | `embed-configurator.tsx` | Embed snippet generator |
+
+### Host/Admin
+
+| Component | File | Description |
+|---|---|---|
+| [AvailabilityEditor](/components/availability-editor) | `availability-editor.tsx` | Weekly schedule builder |
+| [AdminScheduleView](/components/admin-schedule-view) | `admin-schedule-view.tsx` | Calendar view (react-big-calendar) |
+| BookingLifecycleActions | `booking-lifecycle-actions.tsx` | Confirm/reject/cancel buttons |
+| ManualBookingForm | `manual-booking-form.tsx` | Admin booking creation |
+| ProviderAuth | `provider-auth.tsx` | Auth wrapper |
+| TeamAssignmentEditor | `team-assignment-editor.tsx` | Team config + strategy |
+| [WorkflowBuilder](/components/workflow-builder) | `workflow-builder.tsx` | Workflow editor |
+| [WebhookManager](/components/webhook-manager) | `webhook-manager.tsx` | Webhook CRUD |
+| PaymentHistory | `payment-history.tsx` | Payment ledger |
+
+### Hooks
+
+| Hook | File | Description |
+|---|---|---|
+| `useAvailability` | `hooks/use-availability.ts` | Fetches and caches available slots |
+| `useProvider` | `hooks/use-provider.ts` | Fetches provider profile and settings |

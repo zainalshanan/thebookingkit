@@ -1,0 +1,101 @@
+---
+title: Routing Forms
+description: Pre-booking questionnaires that route customers to the right event type or provider.
+---
+
+Routing forms are pre-booking questionnaires. Based on the customer's answers, they're automatically routed to the appropriate event type, provider, or external URL.
+
+## How it works
+
+1. Customer visits a routing form URL
+2. They answer a series of questions
+3. Rules evaluate the responses
+4. Customer is redirected to the matched event type or provider's booking page
+
+## Form structure
+
+```typescript
+import type { RoutingFormDefinition, RoutingField, RoutingRule } from "@slotkit/core";
+
+const form: RoutingFormDefinition = {
+  name: "New Patient Intake",
+  fields: [
+    {
+      id: "visit_type",
+      label: "What type of visit do you need?",
+      type: "select",
+      required: true,
+      options: ["New patient", "Follow-up", "Emergency"],
+    },
+    {
+      id: "insurance",
+      label: "Do you have insurance?",
+      type: "select",
+      required: true,
+      options: ["Yes", "No"],
+    },
+  ],
+  rules: [
+    {
+      conditions: [
+        { field: "visit_type", operator: "equals", value: "Emergency" },
+      ],
+      action: { type: "redirect", url: "/emergency" },
+    },
+    {
+      conditions: [
+        { field: "visit_type", operator: "equals", value: "New patient" },
+        { field: "insurance", operator: "equals", value: "Yes" },
+      ],
+      action: { type: "event_type", eventTypeId: "new-patient-insured" },
+    },
+  ],
+  fallbackAction: { type: "event_type", eventTypeId: "general-consultation" },
+};
+```
+
+## Evaluation
+
+```typescript
+import { evaluateRoutingRules, validateRoutingResponses } from "@slotkit/core";
+
+// Validate responses match the form definition
+validateRoutingResponses(form, responses);
+
+// Find the matching rule
+const result = evaluateRoutingRules(form.rules, responses, form.fallbackAction);
+// Returns: RoutingResult { action, matchedRule? }
+```
+
+## Validation
+
+```typescript
+import { validateRoutingForm, RoutingFormValidationError } from "@slotkit/core";
+
+validateRoutingForm(form);
+// Validates: field types, rule conditions reference valid fields, fallback exists
+```
+
+## Analytics
+
+```typescript
+import { computeRoutingAnalytics } from "@slotkit/core";
+
+const analytics = computeRoutingAnalytics(submissions);
+// Returns: RoutingAnalytics
+// { totalSubmissions, ruleMatchCounts, fieldValueDistribution, completionRate }
+```
+
+## UI component
+
+```tsx
+import { RoutingForm } from "./components/routing-form";
+
+<RoutingForm
+  fields={form.fields}
+  onSubmit={(responses) => {
+    const result = evaluateRoutingRules(form.rules, responses, form.fallbackAction);
+    router.push(result.action.url || `/book/${result.action.eventTypeId}`);
+  }}
+/>
+```

@@ -1,0 +1,55 @@
+---
+title: AdminScheduleView
+description: Calendar view of all bookings using react-big-calendar.
+---
+
+A full calendar view for providers to see their bookings. Built on `react-big-calendar` with week and month views, color-coded by booking status.
+
+## Usage
+
+```tsx
+import { AdminScheduleView } from "./components/admin-schedule-view";
+
+<AdminScheduleView
+  bookings={providerBookings}
+  onBookingClick={(booking) => openBookingDetail(booking.id)}
+  defaultView="week"
+/>
+```
+
+## Props
+
+```typescript
+interface AdminScheduleViewProps {
+  /** Bookings to display on the calendar */
+  bookings: ScheduleBooking[];
+  /** Callback when a booking is clicked */
+  onBookingClick?: (booking: ScheduleBooking) => void;
+  /** Default calendar view */
+  defaultView?: "week" | "month";
+  /** Additional CSS classes */
+  className?: string;
+}
+
+interface ScheduleBooking {
+  id: string;
+  title: string;
+  customerName: string;
+  customerEmail?: string;
+  startsAt: Date;
+  endsAt: Date;
+  status: string;
+  eventTitle?: string;
+  location?: string;
+  questionResponses?: Record<string, unknown>;
+}
+```
+
+## Features
+
+- **Week and month views** with toggle
+- **Color coding** by booking status (confirmed = blue, pending = yellow, cancelled = red, completed = green)
+- **Click to view details** — opens a detail popover with customer info, event type, and question responses
+- **Current time indicator** — red line showing the current time in week view
+- **Date navigation** — previous/next/today buttons
+- Uses `date-fns` localizer for internationalization support

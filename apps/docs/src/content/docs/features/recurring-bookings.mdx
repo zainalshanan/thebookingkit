@@ -1,0 +1,81 @@
+---
+title: Recurring Bookings
+description: Create weekly, biweekly, and monthly booking series.
+---
+
+Recurring bookings let customers book a series of appointments at a regular cadence — weekly therapy sessions, biweekly coaching calls, monthly check-ups.
+
+## Creating a series
+
+```typescript
+import { generateOccurrences } from "@slotkit/core";
+
+const occurrences = generateOccurrences({
+  startDate: new Date("2026-03-10T14:00:00Z"),
+  endDate: new Date("2026-03-10T14:30:00Z"),
+  frequency: "weekly",
+  count: 8,                // Generate 8 occurrences
+  timezone: "America/New_York",
+});
+
+// Returns: RecurringOccurrence[]
+// Each has { start, end, occurrenceNumber }
+```
+
+## Frequencies
+
+| Frequency | Description |
+|---|---|
+| `weekly` | Same day and time every week |
+| `biweekly` | Every two weeks |
+| `monthly` | Same day of month (or closest business day) |
+
+## Availability checking
+
+```typescript
+import { checkRecurringAvailability } from "@slotkit/core";
+
+const result = checkRecurringAvailability(
+  occurrences,
+  rules,
+  overrides,
+  existingBookings,
+);
+
+// Returns: RecurringAvailabilityResult
+// {
+//   allAvailable: false,
+//   availableOccurrences: [...],
+//   unavailableOccurrences: [{ occurrence, reason }],
+// }
+```
+
+This checks every occurrence against the provider's availability and existing bookings. Customers can then decide to book only the available occurrences or skip.
+
+## Cancelling future occurrences
+
+```typescript
+import { cancelFutureOccurrences } from "@slotkit/core";
+
+const result = cancelFutureOccurrences(
+  seriesBookings,
+  new Date("2026-04-01"),  // Cancel from this date onward
+);
+
+// Returns: SeriesCancellationResult
+// { cancelled: [...], kept: [...] }
+```
+
+## UI component
+
+```tsx
+import { RecurringBookingPicker } from "./components/recurring-booking-picker";
+
+<RecurringBookingPicker
+  frequencies={["weekly", "biweekly", "monthly"]}
+  maxOccurrences={12}
+  occurrences={generatedOccurrences}
+  onFrequencyChange={handleFrequencyChange}
+  onCountChange={handleCountChange}
+/>
+```

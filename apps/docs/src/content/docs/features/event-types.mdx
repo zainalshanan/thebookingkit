@@ -1,0 +1,101 @@
+---
+title: Event Types
+description: Configure bookable services with duration, questions, limits, and more.
+---
+
+Event types define the services a provider offers — haircuts, consultations, classes, etc. Each event type configures duration, booking questions, limits, pricing, and behavior.
+
+## Validation
+
+```typescript
+import { validateEventType, EventTypeValidationError } from "@slotkit/core";
+
+validateEventType({
+  title: "30-Minute Consultation",
+  slug: "30-min-consultation",
+  durationMinutes: 30,
+  priceCents: 5000,
+  minimumNoticeMinutes: 60,
+  maxAdvanceDays: 30,
+  bufferBefore: 0,
+  bufferAfter: 15,
+});
+// Throws EventTypeValidationError if invalid
+```
+
+## Slug generation
+
+```typescript
+import { generateSlug } from "@slotkit/core";
+
+generateSlug("30-Minute Consultation"); // "30-minute-consultation"
+generateSlug("Haircut & Beard Trim");   // "haircut-beard-trim"
+```
+
+## Booking questions
+
+Event types can define custom questions that customers answer during the booking flow:
+
+```typescript
+import type { BookingQuestion } from "@slotkit/core";
+
+const questions: BookingQuestion[] = [
+  {
+    id: "reason",
+    label: "What is the reason for your visit?",
+    type: "textarea",
+    required: true,
+  },
+  {
+    id: "first_visit",
+    label: "Is this your first visit?",
+    type: "select",
+    required: true,
+    options: ["Yes", "No"],
+  },
+  {
+    id: "phone",
+    label: "Phone number",
+    type: "phone",
+    required: false,
+  },
+];
+```
+
+### Field types
+
+| Type | Description |
+|---|---|
+| `text` | Single-line text input |
+| `textarea` | Multi-line text |
+| `select` | Dropdown with predefined options |
+| `multiselect` | Multiple selection from options |
+| `checkbox` | Boolean toggle |
+| `phone` | Phone number input |
+| `number` | Numeric input |
+
+### Validation
+
+```typescript
+import { validateQuestionResponses } from "@slotkit/core";
+
+const responses = { reason: "Annual checkup", first_visit: "No" };
+validateQuestionResponses(questions, responses);
+// Throws if required fields are missing or types don't match
+```
+
+## Key configuration fields
+
+| Field | Type | Description |
+|---|---|---|
+| `title` | `string` | Display name of the event type |
+| `slug` | `string` | URL-safe identifier |
+| `durationMinutes` | `number` | Length of appointment |
+| `priceCents` | `number` | Price in cents (0 for free) |
+| `bufferBefore` | `number` | Minutes of padding before |
+| `bufferAfter` | `number` | Minutes of padding after |
+| `minimumNoticeMinutes` | `number` | Minimum advance booking time |
+| `maxAdvanceDays` | `number` | How far in advance bookings are allowed |
+| `requiresConfirmation` | `boolean` | Whether provider must approve |
+| `maxBookingsPerDay` | `number` | Daily booking limit |
+| `questions` | `BookingQuestion[]` | Custom booking questions (JSONB) |

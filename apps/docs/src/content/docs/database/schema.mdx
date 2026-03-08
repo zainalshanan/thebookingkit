@@ -1,0 +1,108 @@
+---
+title: Schema Overview
+description: 23 PostgreSQL tables managed by Drizzle ORM.
+---
+
+SlotKit's database schema consists of 23 tables managed by Drizzle ORM with full TypeScript type inference.
+
+## Table groups
+
+### Core booking tables
+
+| Table | Description |
+|---|---|
+| `providers` | Service providers (doctors, stylists, consultants). Includes `metadata` JSONB for settings. |
+| `event_types` | Bookable services. Duration, price, questions, limits, confirmation mode. |
+| `availability_rules` | Recurring schedules using RRULE. Linked to providers. |
+| `availability_overrides` | Date-specific schedule modifications (block/extend hours). |
+| `bookings` | Customer appointments. `starts_at`/`ends_at` in UTC with `EXCLUDE USING gist`. |
+| `booking_events` | Append-only audit trail for every booking status change. |
+| `out_of_office` | Extended unavailability periods (vacations, leave). |
+
+### Team tables
+
+| Table | Description |
+|---|---|
+| `teams` | Groups of providers with assignment strategy. |
+| `team_members` | Provider membership in teams with role. |
+| `team_event_types` | Event types associated with teams. |
+
+### Payment tables
+
+| Table | Description |
+|---|---|
+| `payments` | Payment records linked to bookings. Amount, status, Stripe IDs. |
+
+### Automation tables
+
+| Table | Description |
+|---|---|
+| `workflows` | Workflow definitions (trigger, conditions, actions). |
+| `workflow_logs` | Execution history for workflows. |
+| `webhook_subscriptions` | Registered webhook endpoints with triggers and secrets. |
+| `webhook_deliveries` | Delivery attempts with response status and retry count. |
+
+### Recurring & seats tables
+
+| Table | Description |
+|---|---|
+| `recurring_series` | Recurring booking series metadata (frequency, count). |
+| `seat_attendees` | Individual attendees for group/seat bookings. |
+
+### API & auth tables
+
+| Table | Description |
+|---|---|
+| `api_keys` | API keys with scopes, rate limits, and expiry. |
+
+### Multi-tenancy tables
+
+| Table | Description |
+|---|---|
+| `organizations` | Tenant organizations with branding and settings. |
+| `organization_members` | User membership in organizations with roles. |
+
+## Common columns
+
+All tables include:
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | `uuid` | Primary key (auto-generated) |
+| `created_at` | `timestamp` | Row creation time |
+| `updated_at` | `timestamp` | Last modification (auto-updated via trigger) |
+
+Most tables include an optional `organization_id` column for multi-tenancy scoping.
+
+## Key constraints
+
+### Double-booking prevention
+
+```sql
+EXCLUDE USING gist (
+  provider_id WITH =,
+  tstzrange(starts_at, ends_at) WITH &&
+) WHERE (status NOT IN ('cancelled', 'rejected'))
+```
+
+Requires the `btree_gist` extension.
+
+### Enums
+
+| Enum | Values |
+|---|---|
+| `booking_status` | `pending`, `confirmed`, `completed`, `cancelled`, `rescheduled`, `no_show`, `rejected` |
+| `payment_status` | `pending`, `succeeded`, `failed`, `refunded`, `partially_refunded` |
+| `payment_type` | `booking`, `cancellation_fee`, `no_show_fee`, `refund` |
+| `assignment_strategy` | `round_robin`, `collective`, `managed`, `fixed` |
+| `recurring_frequency` | `weekly`, `biweekly`, `monthly` |
+| `seat_status` | `confirmed`, `cancelled`, `waitlisted` |
+| `workflow_trigger` | `booking.created`, `booking.confirmed`, `booking.cancelled`, etc. |
+
+## Schema location
+
+```
+packages/db/src/schema/
+├── tables.ts    # All 23 table definitions
+└── enums.ts     # All enum definitions
+```

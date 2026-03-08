@@ -1,0 +1,107 @@
+---
+title: Architecture
+description: How SlotKit's three layers work together.
+---
+
+SlotKit is organized into three layers that can be used independently or together.
+
+## System layers
+
+```
+┌─────────────────────────────────────────────────────┐
+│                   Your Next.js App                   │
+├──────────┬──────────────────┬────────────────────────┤
+│  @slotkit/ui               │     API Routes          │
+│  21 React components       │     (your code)         │
+│  Copy-paste, you own them  │                         │
+├──────────┴──────────────────┤                        │
+│        @slotkit/core        │                        │
+│  Slot engine, scheduling    │                        │
+│  math, business logic       │                        │
+├─────────────────────────────┼────────────────────────┤
+│        @slotkit/db          │    Adapter Interfaces   │
+│  Drizzle schema, 23 tables  │    Auth · Email · Jobs  │
+│  PostgreSQL 15+             │    Calendar · Payment   │
+└─────────────────────────────┴────────────────────────┘
+```
+
+### 1. Logic layer (`@slotkit/core`)
+
+Pure TypeScript with zero framework dependencies. Contains:
+
+- **Slot engine** — Three-step computation pipeline (RRULE → overrides → bookings)
+- **Timezone utilities** — UTC normalization and local display
+- **RRULE parser** — iCalendar recurrence expansion with EXDATE support
+- **Booking limits** — Daily/weekly/monthly caps
+- **Team scheduling** — Round-robin, collective, managed, fixed strategies
+- **Payments** — Cancellation policies, fee computation
+- **Workflows** — Trigger-condition-action evaluation
+- **Webhooks** — HMAC signing, verification, retry logic
+- **Auth middleware** — Provider ownership and customer access assertions
+- **Adapter interfaces** — TypeScript interfaces for external services
+
+### 2. Data layer (`@slotkit/db`)
+
+Drizzle ORM schema with 23 PostgreSQL tables:
+
+- Full TypeScript type inference from schema definitions
+- Custom SQL migrations for `btree_gist`, audit triggers, and GDPR anonymization
+- `EXCLUDE USING gist` constraint for database-level double-booking prevention
+- `SERIALIZABLE` transactions with automatic retry (`withSerializableRetry()`)
+
+### 3. UI layer (`@slotkit/ui`)
+
+21 React components following the shadcn/ui convention:
+
+- Copy source code into your project — you own it completely
+- Built on react-day-picker, react-big-calendar, react-hook-form
+- All components accept `className` and `style` props for customization
+
+## Slot computation pipeline
+
+The core algorithm follows a three-step model:
+
+```
+RRULE rules  →  Base windows  →  Apply overrides  →  Subtract bookings  →  Available slots
+                 (expand)         (mask)               (filter + buffer)
+```
+
+1. **Base Layer:** Expand `availability_rules` via RRULE into time windows for the requested date range
+2. **Mask Layer:** Apply `availability_overrides` — block dates, shorten hours, or add extra hours
+3. **Filter Layer:** Subtract existing bookings and their buffer time to produce available slots
+
+## Adapter pattern
+
+External dependencies are abstracted behind TypeScript interfaces. Swap implementations without changing business logic:
+
+| Adapter | Purpose | Default | Alternatives |
+|---|---|---|---|
+| `AuthAdapter` | Authentication | NextAuth.js | Supabase Auth, Clerk, Lucia |
+| `EmailAdapter` | Transactional email | Resend | SendGrid, AWS SES, Postmark |
+| `CalendarAdapter` | Calendar sync | Google Calendar | Outlook, CalDAV |
+| `JobAdapter` | Background jobs | Inngest | Trigger.dev, BullMQ |
+| `PaymentAdapter` | Payment processing | Stripe | — |
+| `StorageAdapter` | Secret storage | Env vars | Vault, KMS |
+| `SmsAdapter` | SMS notifications | — | Twilio, MessageBird |
+
+```typescript
+// Example: implement the EmailAdapter interface
+const myEmailAdapter: EmailAdapter = {
+  async sendEmail(options: SendEmailOptions): Promise<EmailResult> {
+    // Your implementation
+    return { messageId: "abc", status: "sent" };
+  },
+};
+
+// Pass it to notification functions
+await sendConfirmationEmail(payload, myEmailAdapter);
+```
+
+## Double-booking prevention
+
+SlotKit prevents double-bookings at two levels:
+
+1. **Database constraint:** `EXCLUDE USING gist` with `btree_gist` extension ensures no two confirmed bookings overlap for the same provider
+2. **Application-level:** `SERIALIZABLE` transactions with `withSerializableRetry()` — catches serialization failures (SQLSTATE 40001) and retries up to 3 times with jittered exponential backoff
+
+This means double-bookings are impossible even under high concurrent load.

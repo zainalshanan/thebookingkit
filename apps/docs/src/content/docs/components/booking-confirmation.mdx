@@ -1,0 +1,54 @@
+---
+title: BookingConfirmation
+description: Booking summary and confirmation step component.
+---
+
+Displays a summary of the booking details (date, time, service, customer info) and a confirm button.
+
+## Usage
+
+```tsx
+import { BookingConfirmation } from "./components/booking-confirmation";
+
+<BookingConfirmation
+  eventTitle="30-Minute Consultation"
+  providerName="Dr. Smith"
+  date={selectedDate}
+  slot={selectedSlot}
+  customerName="Alice Johnson"
+  customerEmail="alice@example.com"
+  onConfirm={handleConfirm}
+  onBack={handleBack}
+/>
+```
+
+## Props
+
+```typescript
+interface BookingConfirmationProps {
+  /** Event type title */
+  eventTitle: string;
+  /** Provider name */
+  providerName: string;
+  /** Selected date */
+  date: Date;
+  /** Selected time slot */
+  slot: Slot;
+  /** Customer name */
+  customerName: string;
+  /** Customer email */
+  customerEmail: string;
+  /** Question responses (if any) */
+  questionResponses?: Record<string, unknown>;
+  /** Price in cents (0 or undefined for free) */
+  priceCents?: number;
+  /** Confirm callback */
+  onConfirm: () => void;
+  /** Back/edit callback */
+  onBack: () => void;
+  /** Loading state */
+  isLoading?: boolean;
+  /** Additional CSS classes */
+  className?: string;
+}
+```

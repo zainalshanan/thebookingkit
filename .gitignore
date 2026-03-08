@@ -1,9 +1,19 @@
 node_modules/
 dist/
 .turbo/
+.next/
 .env
 .env.local
 .env.*.local
 *.tsbuildinfo
 .DS_Store
 coverage/
+
+# User stories / planning docs (not shipped)
+user-stories/
+
+# Astro build output
+apps/docs/.astro/
+
+# Lock files for sub-apps with their own package manager
+apps/docs/pnpm-lock.yaml

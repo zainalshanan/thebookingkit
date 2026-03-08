@@ -1,0 +1,72 @@
+---
+title: Seat & Group Bookings
+description: Manage capacity for group events, classes, and workshops.
+---
+
+Seat bookings enable event types with multiple attendees per time slot — yoga classes, workshops, group sessions.
+
+## Seat availability
+
+```typescript
+import { computeSeatAvailability, isGroupEvent } from "@slotkit/core";
+
+// Check if an event type supports group bookings
+isGroupEvent({ maxSeats: 20 }); // true
+isGroupEvent({ maxSeats: 1 });  // false
+
+// Compute remaining capacity
+const availability = computeSeatAvailability({
+  maxSeats: 20,
+  attendees: existingAttendees,  // SeatAttendee[]
+});
+
+// Returns: SeatAvailability
+// { totalSeats: 20, bookedSeats: 12, remainingSeats: 8, isFull: false }
+```
+
+## Reserving seats
+
+```typescript
+import { canReserveSeat, validateSeatReservation, SeatError } from "@slotkit/core";
+
+// Quick check
+canReserveSeat(availability, 3); // true if 3+ seats remain
+
+// Full validation (throws SeatError if invalid)
+validateSeatReservation({
+  maxSeats: 20,
+  currentAttendees: existingAttendees,
+  requestedSeats: 3,
+});
+```
+
+## Group event summary
+
+```typescript
+import { computeGroupEventSummary, formatSeatCount } from "@slotkit/core";
+
+const summary = computeGroupEventSummary({
+  maxSeats: 20,
+  attendees: existingAttendees,
+  slotStart: new Date("2026-03-10T14:00:00Z"),
+  slotEnd: new Date("2026-03-10T15:00:00Z"),
+});
+
+// Returns: GroupEventSummary
+// { totalSeats, bookedSeats, remainingSeats, attendeeList, isFull }
+
+formatSeatCount(8, 20); // "8 / 20 seats booked"
+```
+
+## UI component
+
+```tsx
+import { SeatsPicker } from "./components/seats-picker";
+
+<SeatsPicker
+  maxSeats={availability.remainingSeats}
+  selectedSeats={seatCount}
+  onSeatsChange={setSeatCount}
+  pricePerSeat={eventType.priceCents}
+/>
+```

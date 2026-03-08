@@ -1,0 +1,97 @@
+---
+title: Payments & Stripe
+description: Accept payments, handle cancellation fees, and manage no-show holds.
+---
+
+SlotKit provides payment logic through the `PaymentAdapter` interface and pure computation functions for cancellation policies and fees.
+
+## Payment adapter
+
+The `PaymentAdapter` interface abstracts payment processing:
+
+```typescript
+interface PaymentAdapter {
+  createPaymentIntent(options: CreatePaymentIntentOptions): Promise<CreatePaymentIntentResult>;
+  createSetupIntent(options: CreateSetupIntentOptions): Promise<CreateSetupIntentResult>;
+  capturePayment(paymentIntentId: string): Promise<CaptureResult>;
+  refundPayment(paymentIntentId: string, amountCents?: number): Promise<RefundResult>;
+}
+```
+
+## Cancellation policies
+
+Define tiered fee schedules based on how far in advance a booking is cancelled:
+
+```typescript
+import { evaluateCancellationFee, validateCancellationPolicy } from "@slotkit/core";
+
+const policy: CancellationPolicy = {
+  tiers: [
+    { hoursBeforeStart: 48, feePercent: 0 },    // Free cancellation 48h+
+    { hoursBeforeStart: 24, feePercent: 25 },   // 25% fee 24-48h before
+    { hoursBeforeStart: 0,  feePercent: 50 },   // 50% fee same day
+  ],
+  noShowFeePercent: 100,                          // Full charge for no-shows
+};
+
+// Validate the policy structure
+validateCancellationPolicy(policy);
+
+// Compute the fee for a specific cancellation
+const fee = evaluateCancellationFee(
+  policy,
+  5000,                               // booking price in cents ($50)
+  new Date("2026-03-10T14:00:00Z"),   // appointment start time
+  new Date("2026-03-09T10:00:00Z"),   // cancellation time (28h before)
+);
+
+// Returns: CancellationFeeResult
+// { feeCents: 1250, feePercent: 25, tier: { hoursBeforeStart: 24, feePercent: 25 } }
+```
+
+## Payment utilities
+
+```typescript
+import {
+  requiresPayment,
+  hasNoShowFee,
+  validatePaymentAmount,
+  validateCurrency,
+  formatPaymentAmount,
+  computePaymentSummary,
+} from "@slotkit/core";
+
+requiresPayment({ priceCents: 5000 });           // true
+requiresPayment({ priceCents: 0 });               // false
+
+hasNoShowFee(policy);                              // true (noShowFeePercent > 0)
+
+validatePaymentAmount(5000);                       // true
+validatePaymentAmount(-100);                       // throws PaymentValidationError
+
+validateCurrency("usd");                           // true
+validateCurrency("xyz");                           // throws PaymentValidationError
+
+formatPaymentAmount(5000, "usd");                  // "$50.00"
+formatPaymentAmount(1250, "gbp");                  // "£12.50"
+
+const summary = computePaymentSummary(payments);
+// Returns: PaymentSummary { totalPaid, totalRefunded, netAmount, payments[] }
+```
+
+## UI components
+
+```tsx
+import { PaymentGate } from "./components/payment-gate";
+import { PaymentHistory } from "./components/payment-history";
+
+// Wrap the booking confirmation in a payment step
+<PaymentGate
+  amountCents={5000}
+  currency="usd"
+  onPaymentComplete={handlePaymentComplete}
+/>
+
+// Show payment history to provider
+<PaymentHistory payments={bookingPayments} />
+```

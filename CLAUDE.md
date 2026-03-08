@@ -18,9 +18,9 @@ Philosophy: **"Hide the Math, Expose the UI."** The scheduling logic is encapsul
 | `@slotkit/db` | `packages/db/` | Drizzle ORM schema, migrations, type exports |
 | `@slotkit/cli` | `packages/cli/` | Scaffolding CLI: init, add, migrate, generate, diff, update |
 | `@slotkit/embed` | `packages/embed/` | Lightweight embed script for non-Next.js sites |
-| UI Components | `packages/ui/` | 17+ React components (shadcn convention) |
-| Documentation | `packages/docs/` | Astro Starlight documentation site |
-| Barber Shop Demo | `packages/demo/` | Full working example application |
+| UI Components | `registry/ui/` | 17+ React components (shadcn convention) |
+| Documentation | `apps/docs/` | Astro Starlight documentation site |
+| Barber Shop Demo | `apps/demo/` | Full working example application |
 
 ### Three System Layers
 

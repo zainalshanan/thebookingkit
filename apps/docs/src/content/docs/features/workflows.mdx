@@ -1,0 +1,107 @@
+---
+title: Workflow Automation
+description: Trigger-condition-action engine for automating booking processes.
+---
+
+The workflow engine lets you automate actions in response to booking events — send custom emails, fire webhooks, update booking status, or sync calendars based on configurable triggers and conditions.
+
+## Workflow structure
+
+```typescript
+import type { WorkflowDefinition } from "@slotkit/core";
+
+const workflow: WorkflowDefinition = {
+  name: "Send follow-up after completion",
+  trigger: "booking.completed",
+  conditions: [
+    {
+      field: "event.title",
+      operator: "contains",
+      value: "Consultation",
+    },
+  ],
+  actions: [
+    {
+      type: "send_email",
+      config: {
+        to: "{{customer.email}}",
+        subject: "Thank you for your consultation, {{customer.name}}!",
+        body: "We hope your session on {{booking.date}} was helpful.",
+      },
+    },
+  ],
+};
+```
+
+## Triggers
+
+| Trigger | Fires when |
+|---|---|
+| `booking.created` | A new booking is created |
+| `booking.confirmed` | A booking is confirmed |
+| `booking.cancelled` | A booking is cancelled |
+| `booking.rescheduled` | A booking is rescheduled |
+| `booking.completed` | An appointment is marked complete |
+| `booking.no_show` | A customer no-shows |
+| `booking.reminder` | Reminder time is reached |
+
+## Conditions
+
+```typescript
+import { evaluateConditions } from "@slotkit/core";
+
+const conditions: WorkflowCondition[] = [
+  { field: "booking.priceCents", operator: "greater_than", value: 0 },
+  { field: "event.title", operator: "contains", value: "Premium" },
+];
+
+const match = evaluateConditions(conditions, context);
+// Returns true if ALL conditions match
+```
+
+### Operators
+
+`equals`, `not_equals`, `contains`, `not_contains`, `greater_than`, `less_than`, `is_empty`, `is_not_empty`
+
+## Actions
+
+| Type | Description |
+|---|---|
+| `send_email` | Send an email via EmailAdapter |
+| `send_sms` | Send an SMS via SmsAdapter |
+| `fire_webhook` | POST to a URL |
+| `update_status` | Change booking status |
+| `sync_calendar` | Create/update calendar event |
+
+## Template variables
+
+All text fields support template variables:
+
+```typescript
+import { resolveTemplateVariables, TEMPLATE_VARIABLES } from "@slotkit/core";
+
+const resolved = resolveTemplateVariables(
+  "Hello {{customer.name}}, your {{event.title}} is on {{booking.date}}",
+  context
+);
+```
+
+Available variables: `{{customer.name}}`, `{{customer.email}}`, `{{booking.date}}`, `{{booking.time}}`, `{{event.title}}`, `{{event.duration}}`, `{{provider.name}}`, `{{booking.status}}`, and more.
+
+## Validation
+
+```typescript
+import { validateWorkflow, WorkflowValidationError } from "@slotkit/core";
+
+validateWorkflow(workflow);
+// Throws WorkflowValidationError if trigger, conditions, or actions are invalid
+```
+
+## Matching workflows
+
+```typescript
+import { matchWorkflows } from "@slotkit/core";
+
+const matching = matchWorkflows(allWorkflows, "booking.confirmed", context);
+// Returns workflows whose trigger matches and all conditions pass
+```

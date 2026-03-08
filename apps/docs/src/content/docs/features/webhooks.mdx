@@ -1,0 +1,114 @@
+---
+title: Webhooks
+description: HMAC-signed webhook delivery with replay protection and retry logic.
+---
+
+SlotKit's webhook system delivers signed HTTP payloads to subscriber endpoints when booking events occur.
+
+## Webhook security
+
+### HMAC-SHA256 signing
+
+Every webhook payload is signed with the subscription's secret:
+
+```typescript
+import { signWebhookPayload, verifyWebhookSignature, SIGNATURE_HEADER, TIMESTAMP_HEADER } from "@slotkit/core";
+
+// Signing (sender side)
+const signature = signWebhookPayload(payload, secret, timestamp);
+
+// Verification (receiver side)
+const result = verifyWebhookSignature(
+  payload,
+  signature,    // From X-SlotKit-Signature header
+  timestamp,    // From X-SlotKit-Timestamp header
+  secret,
+);
+// Returns: WebhookVerificationResult { valid, reason? }
+```
+
+### Replay protection
+
+The timestamp is included in the signature computation. `verifyWebhookSignature()` rejects payloads older than the tolerance window (default: 300 seconds).
+
+## Webhook triggers
+
+| Trigger | Payload |
+|---|---|
+| `booking.created` | Full booking data |
+| `booking.confirmed` | Booking with status change |
+| `booking.cancelled` | Booking with cancellation reason |
+| `booking.rescheduled` | Old and new booking data |
+| `booking.completed` | Completed booking data |
+| `booking.no_show` | No-show booking data |
+
+## Creating envelopes
+
+```typescript
+import { createWebhookEnvelope } from "@slotkit/core";
+
+const envelope = createWebhookEnvelope(
+  "booking.created",
+  bookingData,
+  subscription,
+);
+
+// Returns: WebhookEnvelope
+// { id, trigger, payload, signature, timestamp, subscriptionId }
+```
+
+## Retry logic
+
+Failed deliveries are retried with exponential backoff:
+
+```typescript
+import { getRetryDelay, isSuccessResponse, DEFAULT_RETRY_CONFIG } from "@slotkit/core";
+
+// Default config: 3 retries, 60s base delay, 3600s max delay
+const delay = getRetryDelay(attemptNumber, DEFAULT_RETRY_CONFIG);
+// Attempt 0: ~60s, Attempt 1: ~120s, Attempt 2: ~240s
+
+isSuccessResponse(200); // true (2xx)
+isSuccessResponse(500); // false
+```
+
+## Subscription management
+
+```typescript
+import { validateWebhookSubscription, matchWebhookSubscriptions } from "@slotkit/core";
+
+// Validate a subscription
+validateWebhookSubscription({
+  url: "https://example.com/webhooks",
+  triggers: ["booking.created", "booking.cancelled"],
+  secret: "whsec_...",
+});
+
+// Find subscriptions matching a trigger
+const matching = matchWebhookSubscriptions(allSubscriptions, "booking.created");
+```
+
+## Custom payload templates
+
+```typescript
+import { resolvePayloadTemplate } from "@slotkit/core";
+
+const customPayload = resolvePayloadTemplate(
+  { event: "{{trigger}}", customer: "{{booking.customerName}}" },
+  context
+);
+```
+
+## UI component
+
+```tsx
+import { WebhookManager } from "./components/webhook-manager";
+
+<WebhookManager
+  webhooks={subscriptions}
+  deliveryLogs={logs}
+  onCreateWebhook={handleCreate}
+  onDeleteWebhook={handleDelete}
+  onTestWebhook={handleTest}
+/>
+```

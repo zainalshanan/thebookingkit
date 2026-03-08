@@ -1,0 +1,98 @@
+---
+title: Booking Lifecycle
+description: Booking status state machine and audit trail.
+---
+
+Every booking in SlotKit follows a defined state machine. All transitions are recorded in an append-only audit trail.
+
+## Status state machine
+
+```
+                    ┌──────────┐
+                    │ pending  │
+                    └────┬─────┘
+                         │
+              ┌──────────┼──────────┐
+              ▼          ▼          ▼
+         ┌─────────┐ ┌────────┐ ┌──────────┐
+         │confirmed│ │rejected│ │(auto-     │
+         └────┬────┘ └────────┘ │ reject)   │
+              │                 └───────────┘
+     ┌────────┼────────┬─────────┐
+     ▼        ▼        ▼         ▼
+┌─────────┐ ┌──────┐ ┌──────────┐ ┌────────┐
+│completed│ │no_show│ │cancelled │ │resched-│
+└─────────┘ └──────┘ └──────────┘ │uled    │
+                                   └────────┘
+```
+
+### Statuses
+
+| Status | Description |
+|---|---|
+| `pending` | Awaiting provider confirmation (confirmation mode only) |
+| `confirmed` | Booking is confirmed and on the schedule |
+| `completed` | Appointment has taken place |
+| `cancelled` | Cancelled by customer or provider |
+| `rescheduled` | Original booking moved to a new time |
+| `no_show` | Customer did not attend |
+| `rejected` | Provider declined the booking (confirmation mode) |
+
+### Valid transitions
+
+| From | To |
+|---|---|
+| `pending` | `confirmed`, `rejected` |
+| `confirmed` | `completed`, `cancelled`, `rescheduled`, `no_show` |
+
+Auto-confirm event types skip `pending` and go directly to `confirmed`.
+
+## Confirmation mode
+
+Event types can require manual approval before bookings are confirmed:
+
+```typescript
+import { getInitialBookingStatus, getAutoRejectDeadline } from "@slotkit/core";
+
+// Returns "pending" or "confirmed" based on event type config
+const status = getInitialBookingStatus(eventType.requiresConfirmation);
+
+// Auto-reject deadline (default: 24 hours)
+const deadline = getAutoRejectDeadline(booking.createdAt);
+```
+
+See [Confirmation Mode](/features/confirmation-mode) for full details.
+
+## Audit trail
+
+Every status change is recorded in the `booking_events` table:
+
+| Column | Description |
+|---|---|
+| `booking_id` | FK to the booking |
+| `event_type` | The type of change (status_change, created, updated, etc.) |
+| `old_status` | Previous status |
+| `new_status` | New status |
+| `actor_id` | Who made the change (provider, customer, or system) |
+| `metadata` | JSONB with additional context |
+| `created_at` | When the change occurred |
+
+The `booking_events` table is append-only — rows are never updated or deleted. This provides a complete history of every booking for auditing, dispute resolution, and analytics.
+
+A database trigger automatically creates audit entries on booking status changes.
+
+## Booking tokens
+
+Customers can manage their bookings via signed tokens (no login required):
+
+```typescript
+import { generateBookingToken, verifyBookingToken } from "@slotkit/core";
+
+// Generate a token for a booking (e.g., in confirmation email)
+const token = generateBookingToken(bookingId, customerEmail, secret);
+
+// Verify and extract the booking ID from a token
+const { bookingId, email } = verifyBookingToken(token, secret);
+```
+
+These tokens are used in cancel/reschedule links in emails.

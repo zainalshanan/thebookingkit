@@ -1,0 +1,74 @@
+---
+title: Booking Questions
+description: Collect custom information from customers during booking.
+---
+
+Booking questions let you collect information from customers as part of the booking flow. Questions are defined per event type and stored as JSONB.
+
+## Defining questions
+
+```typescript
+import type { BookingQuestion } from "@slotkit/core";
+
+const questions: BookingQuestion[] = [
+  {
+    id: "reason",
+    label: "Reason for visit",
+    type: "textarea",
+    required: true,
+    placeholder: "Tell us what you need help with",
+  },
+  {
+    id: "hair_type",
+    label: "Hair type",
+    type: "select",
+    required: true,
+    options: ["Straight", "Wavy", "Curly", "Coily"],
+  },
+  {
+    id: "consent",
+    label: "I agree to the cancellation policy",
+    type: "checkbox",
+    required: true,
+  },
+];
+```
+
+## Validating responses
+
+```typescript
+import { validateQuestionResponses } from "@slotkit/core";
+
+const responses = {
+  reason: "Haircut and beard trim",
+  hair_type: "Wavy",
+  consent: true,
+};
+
+// Throws if validation fails
+validateQuestionResponses(questions, responses);
+```
+
+Validation checks:
+- All required fields are present and non-empty
+- Select/multiselect values match defined options
+- Checkbox fields are boolean
+- Phone fields match phone number patterns
+
+## UI component
+
+The `<BookingQuestions />` component renders a dynamic form from the question config:
+
+```tsx
+import { BookingQuestions } from "./components/booking-questions";
+
+<BookingQuestions
+  questions={eventType.questions}
+  onSubmit={(responses) => {
+    // responses: Record<string, string | string[] | boolean>
+    createBooking({ ...bookingData, questionResponses: responses });
+  }}
+/>
+```
+
+See [BookingQuestions component](/components/booking-questions) for full props.

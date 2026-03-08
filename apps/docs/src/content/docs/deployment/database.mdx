@@ -1,0 +1,92 @@
+---
+title: Database Setup
+description: Configure PostgreSQL for SlotKit in development and production.
+---
+
+SlotKit requires PostgreSQL 15+ with the `btree_gist` extension.
+
+## Supported providers
+
+| Provider | Notes |
+|---|---|
+| **Local Docker** | Included `docker-compose.yml` for development |
+| **Neon** | Serverless Postgres, great for Vercel |
+| **Supabase** | Managed Postgres with auth and storage |
+| **Railway** | One-click Postgres provisioning |
+| **Vercel Postgres** | Integrated with Vercel deployments |
+| **AWS RDS** | Production-grade managed Postgres |
+| **DigitalOcean** | Managed databases |
+
+## Local development
+
+### Docker Compose
+
+```bash
+docker compose up -d
+```
+
+This starts Postgres 15 with:
+- Database: `slotkit`
+- Port: `5432`
+- User: `postgres`
+- Password: from `.env`
+
+### Connection string
+
+```
+DATABASE_URL="postgresql://postgres:password@localhost:5432/slotkit"
+```
+
+## Schema setup
+
+```bash
+# 1. Push Drizzle schema (tables, enums, indexes)
+npx drizzle-kit push
+
+# 2. Apply custom migrations (btree_gist, audit triggers, GDPR)
+npx tsx packages/db/src/migrate.ts
+
+# 3. (Optional) Seed sample data
+npm run db:seed -w @slotkit/db
+```
+
+## Production deployment
+
+### 1. Provision a database
+
+Create a Postgres 15+ database with your preferred provider. Ensure the user has permissions to create extensions.
+
+### 2. Set the connection string
+
+```bash
+DATABASE_URL="postgresql://user:pass@host:5432/slotkit?sslmode=require"
+```
+
+### 3. Run migrations
+
+```bash
+# Generate and apply Drizzle migrations
+npx drizzle-kit generate
+npx drizzle-kit migrate
+
+# Apply custom SQL migrations
+npx tsx packages/db/src/migrate.ts
+```
+
+### 4. Verify btree_gist
+
+The double-booking prevention constraint requires `btree_gist`. Most managed Postgres providers support it. Verify:
+
+```sql
+SELECT * FROM pg_extension WHERE extname = 'btree_gist';
+```
+
+If the extension isn't installed, the custom migration script will create it automatically (requires `CREATE EXTENSION` permission).
+
+## Connection pooling
+
+For serverless deployments (Vercel, Cloudflare), use connection pooling:
+
+- **Neon:** Use the pooled connection string (append `?pgbouncer=true`)
+- **Supabase:** Use the pooled port (6543 instead of 5432)
+- **PgBouncer:** Set `DIRECT_URL` for migrations, `DATABASE_URL` for the pooled URL

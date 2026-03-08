@@ -1,0 +1,63 @@
+---
+title: Confirmation Mode
+description: Require manual approval for bookings before they're confirmed.
+---
+
+By default, bookings are auto-confirmed. Confirmation mode lets providers review and approve each booking before it goes on the schedule.
+
+## How it works
+
+1. Customer submits a booking request
+2. Booking is created with status `pending`
+3. Provider receives a notification to review
+4. Provider confirms or rejects the booking
+5. If no action is taken, the booking is auto-rejected after a configurable deadline
+
+## API
+
+```typescript
+import {
+  getInitialBookingStatus,
+  getAutoRejectDeadline,
+  isPendingBookingOverdue,
+  CONFIRMATION_TIMEOUT_HOURS,
+} from "@slotkit/core";
+
+// Determine initial status based on event type config
+const status = getInitialBookingStatus(eventType.requiresConfirmation);
+// Returns "pending" or "confirmed"
+
+// Calculate auto-reject deadline
+const deadline = getAutoRejectDeadline(booking.createdAt);
+// Returns a Date 24 hours after creation (default)
+
+// Check if a pending booking has exceeded its deadline
+const overdue = isPendingBookingOverdue(booking.createdAt);
+// Returns true if past the deadline
+```
+
+## Auto-reject
+
+The default timeout is 24 hours (`CONFIRMATION_TIMEOUT_HOURS = 24`). A background job should run periodically to reject overdue bookings:
+
+```typescript
+// In your job handler (Inngest, BullMQ, etc.)
+const overdueBookings = await findOverduePendingBookings();
+
+for (const booking of overdueBookings) {
+  if (isPendingBookingOverdue(booking.createdAt)) {
+    await updateBookingStatus(booking.id, "rejected");
+    await sendRejectionEmail(booking);
+  }
+}
+```
+
+## Enabling confirmation mode
+
+Set `requiresConfirmation: true` on the event type:
+
+```typescript
+await db.update(eventTypes).set({
+  requiresConfirmation: true,
+}).where(eq(eventTypes.id, eventTypeId));
+```

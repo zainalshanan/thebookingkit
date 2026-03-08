@@ -1,0 +1,154 @@
+---
+title: Availability Rules
+description: Define provider schedules with RRULE recurrence patterns.
+---
+
+Availability rules define when a provider is available for bookings. They use the iCalendar RRULE standard for recurrence patterns, making them flexible enough to handle any schedule.
+
+## Rule structure
+
+```typescript
+interface AvailabilityRuleInput {
+  rrule: string;            // iCalendar RRULE string
+  startTime: string;        // "HH:mm" format (e.g., "09:00")
+  endTime: string;          // "HH:mm" format (e.g., "17:00")
+  timezone: string;         // IANA timezone (e.g., "America/New_York")
+  validFrom?: Date | null;  // Rule starts applying from this date
+  validUntil?: Date | null; // Rule stops applying after this date
+}
+```
+
+## Common patterns
+
+### Standard business hours (Mon-Fri 9-5)
+
+```typescript
+{
+  rrule: "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+  startTime: "09:00",
+  endTime: "17:00",
+  timezone: "America/New_York",
+}
+```
+
+### Split schedule (morning + afternoon with lunch break)
+
+Use two rules:
+
+```typescript
+// Morning block
+{
+  rrule: "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+  startTime: "09:00",
+  endTime: "12:00",
+  timezone: "America/New_York",
+}
+
+// Afternoon block
+{
+  rrule: "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+  startTime: "13:00",
+  endTime: "17:00",
+  timezone: "America/New_York",
+}
+```
+
+### Weekend-only availability
+
+```typescript
+{
+  rrule: "RRULE:FREQ=WEEKLY;BYDAY=SA,SU",
+  startTime: "10:00",
+  endTime: "16:00",
+  timezone: "Europe/London",
+}
+```
+
+### Seasonal availability (summer only)
+
+```typescript
+{
+  rrule: "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+  startTime: "09:00",
+  endTime: "17:00",
+  timezone: "America/New_York",
+  validFrom: new Date("2026-06-01"),
+  validUntil: new Date("2026-08-31"),
+}
+```
+
+### Exclude specific dates
+
+Use EXDATE in the RRULE:
+
+```typescript
+{
+  rrule: "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR\nEXDATE:20260325T000000Z,20260401T000000Z",
+  startTime: "09:00",
+  endTime: "17:00",
+  timezone: "America/New_York",
+}
+```
+
+## Overrides
+
+Overrides modify availability for specific dates without changing the underlying rules.
+
+```typescript
+interface AvailabilityOverrideInput {
+  date: Date;
+  startTime?: string | null;   // New start time, or null
+  endTime?: string | null;     // New end time, or null
+  isUnavailable: boolean;      // true = block the entire day
+}
+```
+
+### Block a day
+
+```typescript
+{ date: new Date("2026-03-11"), isUnavailable: true }
+```
+
+### Shorten hours
+
+```typescript
+{
+  date: new Date("2026-03-12"),
+  startTime: "09:00",
+  endTime: "12:00",
+  isUnavailable: false,
+}
+```
+
+### Add extra hours
+
+```typescript
+{
+  date: new Date("2026-03-14"),   // A Saturday
+  startTime: "10:00",
+  endTime: "14:00",
+  isUnavailable: false,
+}
+```
+
+## RRULE parsing
+
+SlotKit uses the `rrule` npm package for parsing. The `parseRecurrence()` function expands an RRULE into concrete date occurrences:
+
+```typescript
+import { parseRecurrence } from "@slotkit/core";
+
+const occurrences = parseRecurrence(
+  "RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR",
+  { start: new Date("2026-03-01"), end: new Date("2026-03-31") },
+  "09:00",
+  "17:00"
+);
+
+// Returns: DateOccurrence[]
+// [{ date: "2026-03-02", startTime: "09:00", endTime: "17:00" }, ...]
+```
+
+## Database storage
+
+Rules and overrides are stored in the `availability_rules` and `availability_overrides` tables. See [Schema Overview](/database/schema) for details.

@@ -1,0 +1,59 @@
+---
+title: BookingQuestions
+description: Dynamic form component rendered from event type question configuration.
+---
+
+Renders a form dynamically from the event type's booking question configuration. Built on `react-hook-form`.
+
+## Usage
+
+```tsx
+import { BookingQuestions } from "./components/booking-questions";
+
+function QuestionsStep({ questions }) {
+  return (
+    <BookingQuestions
+      questions={questions}
+      onSubmit={(data) => {
+        console.log(data);
+        // { reason: "Annual checkup", first_visit: "Yes", consent: true }
+      }}
+    />
+  );
+}
+```
+
+## Props
+
+```typescript
+interface BookingQuestionsProps {
+  /** Question definitions from event type config */
+  questions: BookingQuestion[];
+  /** Callback with validated form data */
+  onSubmit: (data: BookingFormData) => void;
+  /** Pre-filled values */
+  defaultValues?: Record<string, string | string[] | boolean>;
+  /** Submit button text */
+  submitLabel?: string;
+  /** Additional CSS classes */
+  className?: string;
+}
+```
+
+## Rendered field types
+
+| Question type | Rendered as |
+|---|---|
+| `text` | `<input type="text">` |
+| `textarea` | `<textarea>` |
+| `select` | `<select>` dropdown |
+| `multiselect` | Multi-checkbox group |
+| `checkbox` | Single checkbox |
+| `phone` | `<input type="tel">` |
+| `number` | `<input type="number">` |
+
+## Validation
+
+- Required fields show error messages if left empty
+- Select/multiselect validate against defined options
+- Form uses react-hook-form for efficient re-rendering

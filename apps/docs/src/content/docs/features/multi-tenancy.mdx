@@ -1,0 +1,87 @@
+---
+title: Multi-Tenancy
+description: Organization isolation, RBAC, and cascading settings.
+---
+
+Multi-tenancy lets you build platforms where multiple organizations share a single SlotKit deployment with full data isolation.
+
+## Organization RBAC
+
+### Roles
+
+| Role | Description |
+|---|---|
+| `owner` | Full access, can delete the organization |
+| `admin` | Manage providers, event types, settings |
+| `member` | View and manage own schedule |
+
+### Permissions
+
+```typescript
+import { getRolePermissions, roleHasPermission, assertOrgPermission, TenantAuthorizationError } from "@slotkit/core";
+
+const permissions = getRolePermissions("admin");
+// Returns: OrgPermission[] — e.g., ["manage_providers", "manage_event_types", "view_analytics"]
+
+roleHasPermission("member", "manage_providers"); // false
+
+// Assert in an API handler — throws TenantAuthorizationError if denied
+assertOrgPermission(currentUser, "manage_event_types");
+```
+
+## Cascading settings
+
+Settings resolve in priority order: **event type > provider > organization > global defaults**.
+
+```typescript
+import { resolveEffectiveSettings, GLOBAL_DEFAULTS } from "@slotkit/core";
+
+const effective = resolveEffectiveSettings(
+  eventTypeSettings,    // Highest priority
+  providerSettings,
+  orgSettings,
+  GLOBAL_DEFAULTS,      // Fallback
+);
+
+// Returns: ResolvedSettings
+// Each field comes from the most specific level that defines it
+```
+
+### Settings structure
+
+```typescript
+interface OrgSettings {
+  defaultTimezone?: string;
+  defaultCurrency?: string;
+  defaultBufferBefore?: number;
+  defaultBufferAfter?: number;
+  requiresConfirmation?: boolean;
+  maxAdvanceDays?: number;
+  minimumNoticeMinutes?: number;
+}
+```
+
+## Tenant scoping
+
+Ensure queries are scoped to the current organization:
+
+```typescript
+import { assertTenantScope } from "@slotkit/core";
+
+// Throws if the resource doesn't belong to the user's organization
+assertTenantScope(booking.organizationId, currentUser.organizationId);
+```
+
+## Booking URLs
+
+Generate and parse organization-scoped booking URLs:
+
+```typescript
+import { buildOrgBookingUrl, parseOrgBookingPath } from "@slotkit/core";
+
+buildOrgBookingUrl("acme-corp", "dr-smith", "consultation");
+// "/org/acme-corp/dr-smith/consultation"
+
+parseOrgBookingPath("/org/acme-corp/dr-smith/consultation");
+// { orgSlug: "acme-corp", providerSlug: "dr-smith", eventTypeSlug: "consultation" }
+```

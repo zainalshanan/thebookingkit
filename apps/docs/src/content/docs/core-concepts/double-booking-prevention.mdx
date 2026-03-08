@@ -1,0 +1,86 @@
+---
+title: Double-Booking Prevention
+description: How SlotKit prevents concurrent bookings from overlapping.
+---
+
+Double-booking prevention is a solved problem in SlotKit. It operates at two levels to guarantee safety even under high concurrent load.
+
+## Database-level: EXCLUDE constraint
+
+SlotKit uses PostgreSQL's `btree_gist` extension with an `EXCLUDE USING gist` constraint:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS btree_gist;
+
+ALTER TABLE bookings
+ADD CONSTRAINT bookings_no_overlap
+EXCLUDE USING gist (
+  provider_id WITH =,
+  tstzrange(starts_at, ends_at) WITH &&
+)
+WHERE (status NOT IN ('cancelled', 'rejected'));
+```
+
+This constraint is enforced at the database level — even if your application has a bug, Postgres will reject overlapping bookings with a constraint violation error.
+
+## Application-level: Serializable transactions
+
+For additional safety, booking creation runs in `SERIALIZABLE` isolation with automatic retry:
+
+```typescript
+import { withSerializableRetry } from "@slotkit/core";
+
+const booking = await withSerializableRetry(async (tx) => {
+  // Check availability
+  const available = isSlotAvailable(rules, overrides, bookings, start, end);
+  if (!available) throw new BookingConflictError();
+
+  // Create the booking
+  return tx.insert(bookings).values({ ... }).returning();
+});
+```
+
+### `withSerializableRetry(fn, options?)`
+
+Wraps a database operation in a `SERIALIZABLE` transaction. If PostgreSQL detects a serialization conflict (SQLSTATE 40001), the function automatically retries.
+
+**Options:**
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `maxRetries` | `number` | `3` | Maximum retry attempts |
+| `baseDelay` | `number` | `50` | Base delay in ms before first retry |
+| `maxDelay` | `number` | `1000` | Maximum delay in ms |
+
+Retry delays use **jittered exponential backoff**: `min(baseDelay * 2^attempt + jitter, maxDelay)`.
+
+## How it works together
+
+1. Two customers try to book the same 2pm slot simultaneously
+2. Both enter `SERIALIZABLE` transactions
+3. Both check availability — both see the slot as open
+4. Both attempt to insert a booking
+5. PostgreSQL detects the conflict:
+   - One transaction commits successfully
+   - The other gets a serialization error (40001)
+6. `withSerializableRetry` catches the error and retries
+7. On retry, the availability check now sees the first booking and rejects
+
+The `EXCLUDE` constraint is the final safety net — if somehow both transactions pass the application check, the constraint prevents the second insert.
+
+## Error handling
+
+```typescript
+import { BookingConflictError, SerializationRetryExhaustedError } from "@slotkit/core";
+
+try {
+  const booking = await createBooking(slotStart, slotEnd, providerId);
+} catch (error) {
+  if (error instanceof BookingConflictError) {
+    // Slot was taken — show "slot no longer available" to customer
+  }
+  if (error instanceof SerializationRetryExhaustedError) {
+    // All retries failed — extremely high contention, ask customer to try again
+  }
+}
+```
