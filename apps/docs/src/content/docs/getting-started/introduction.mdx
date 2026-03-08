@@ -1,17 +1,17 @@
 ---
 title: Introduction
-description: What is SlotKit and why use it?
+description: What is The Booking Kit and why use it?
 ---
 
-SlotKit is an open-source TypeScript toolkit for building production-grade booking and scheduling systems. It provides the database schema, scheduling math, and UI components — without locking you into a SaaS platform.
+The Booking Kit is an open-source TypeScript toolkit for building production-grade booking and scheduling systems. It provides the database schema, scheduling math, and UI components — without locking you into a SaaS platform.
 
 ## Philosophy
 
 **"Hide the Math, Expose the UI."**
 
-The hard parts — timezone-aware slot computation, RRULE recurrence expansion, double-booking prevention, team scheduling algorithms — are encapsulated in `@slotkit/core`. The UI components are copy-paste source code you own entirely, following the [shadcn/ui](https://ui.shadcn.com/) convention.
+The hard parts — timezone-aware slot computation, RRULE recurrence expansion, double-booking prevention, team scheduling algorithms — are encapsulated in `@thebookingkit/core`. The UI components are copy-paste source code you own entirely, following the [shadcn/ui](https://ui.shadcn.com/) convention.
 
-## Who is SlotKit for?
+## Who is The Booking Kit for?
 
 - **SaaS builders** adding booking to their platform (clinics, salons, studios, tutoring)
 - **Agencies** building custom scheduling for clients
@@ -21,9 +21,9 @@ The hard parts — timezone-aware slot computation, RRULE recurrence expansion, 
 
 | Package | Description |
 |---|---|
-| `@slotkit/core` | Framework-agnostic scheduling engine, business logic, and adapter interfaces |
-| `@slotkit/db` | Drizzle ORM schema (23 tables), migrations, and type exports for PostgreSQL 15+ |
-| `@slotkit/ui` | 21 React components — booking calendar, slot picker, admin views |
+| `@thebookingkit/core` | Framework-agnostic scheduling engine, business logic, and adapter interfaces |
+| `@thebookingkit/db` | Drizzle ORM schema (23 tables), migrations, and type exports for PostgreSQL 15+ |
+| `@thebookingkit/ui` | 21 React components — booking calendar, slot picker, admin views |
 
 ## Key capabilities
 
@@ -39,12 +39,12 @@ The hard parts — timezone-aware slot computation, RRULE recurrence expansion, 
 
 ## Framework agnostic
 
-- **`@slotkit/core`** is pure TypeScript. Runs in Node.js, Deno, Bun, and edge runtimes.
-- **`@slotkit/db`** uses standard Postgres via Drizzle ORM. Database constraints work regardless of your backend.
-- **`@slotkit/ui`** provides React components. Use `@slotkit/core` with any frontend framework.
+- **`@thebookingkit/core`** is pure TypeScript. Runs in Node.js, Deno, Bun, and edge runtimes.
+- **`@thebookingkit/db`** uses standard Postgres via Drizzle ORM. Database constraints work regardless of your backend.
+- **`@thebookingkit/ui`** provides React components. Use `@thebookingkit/core` with any frontend framework.
 
 ## Next steps
 
-- [Installation](/getting-started/installation) — Add SlotKit to your project
+- [Installation](/getting-started/installation) — Add The Booking Kit to your project
 - [Quick Start](/getting-started/quick-start) — Compute your first available slots
 - [Architecture](/getting-started/architecture) — Understand how the pieces fit together

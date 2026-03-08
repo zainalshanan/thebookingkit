@@ -8,7 +8,7 @@ Event types define the services a provider offers — haircuts, consultations, c
 ## Validation
 
 ```typescript
-import { validateEventType, EventTypeValidationError } from "@slotkit/core";
+import { validateEventType, EventTypeValidationError } from "@thebookingkit/core";
 
 validateEventType({
   title: "30-Minute Consultation",
@@ -26,7 +26,7 @@ validateEventType({
 ## Slug generation
 
 ```typescript
-import { generateSlug } from "@slotkit/core";
+import { generateSlug } from "@thebookingkit/core";
 
 generateSlug("30-Minute Consultation"); // "30-minute-consultation"
 generateSlug("Haircut & Beard Trim");   // "haircut-beard-trim"
@@ -37,7 +37,7 @@ generateSlug("Haircut & Beard Trim");   // "haircut-beard-trim"
 Event types can define custom questions that customers answer during the booking flow:
 
 ```typescript
-import type { BookingQuestion } from "@slotkit/core";
+import type { BookingQuestion } from "@thebookingkit/core";
 
 const questions: BookingQuestion[] = [
   {
@@ -77,7 +77,7 @@ const questions: BookingQuestion[] = [
 ### Validation
 
 ```typescript
-import { validateQuestionResponses } from "@slotkit/core";
+import { validateQuestionResponses } from "@thebookingkit/core";
 
 const responses = { reason: "Annual checkup", first_visit: "No" };
 validateQuestionResponses(questions, responses);

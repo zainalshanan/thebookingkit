@@ -3,7 +3,7 @@ title: Multi-Tenancy
 description: Organization isolation, RBAC, and cascading settings.
 ---
 
-Multi-tenancy lets you build platforms where multiple organizations share a single SlotKit deployment with full data isolation.
+Multi-tenancy lets you build platforms where multiple organizations share a single The Booking Kit deployment with full data isolation.
 
 ## Organization RBAC
 
@@ -18,7 +18,7 @@ Multi-tenancy lets you build platforms where multiple organizations share a sing
 ### Permissions
 
 ```typescript
-import { getRolePermissions, roleHasPermission, assertOrgPermission, TenantAuthorizationError } from "@slotkit/core";
+import { getRolePermissions, roleHasPermission, assertOrgPermission, TenantAuthorizationError } from "@thebookingkit/core";
 
 const permissions = getRolePermissions("admin");
 // Returns: OrgPermission[] — e.g., ["manage_providers", "manage_event_types", "view_analytics"]
@@ -34,7 +34,7 @@ assertOrgPermission(currentUser, "manage_event_types");
 Settings resolve in priority order: **event type > provider > organization > global defaults**.
 
 ```typescript
-import { resolveEffectiveSettings, GLOBAL_DEFAULTS } from "@slotkit/core";
+import { resolveEffectiveSettings, GLOBAL_DEFAULTS } from "@thebookingkit/core";
 
 const effective = resolveEffectiveSettings(
   eventTypeSettings,    // Highest priority
@@ -66,7 +66,7 @@ interface OrgSettings {
 Ensure queries are scoped to the current organization:
 
 ```typescript
-import { assertTenantScope } from "@slotkit/core";
+import { assertTenantScope } from "@thebookingkit/core";
 
 // Throws if the resource doesn't belong to the user's organization
 assertTenantScope(booking.organizationId, currentUser.organizationId);
@@ -77,7 +77,7 @@ assertTenantScope(booking.organizationId, currentUser.organizationId);
 Generate and parse organization-scoped booking URLs:
 
 ```typescript
-import { buildOrgBookingUrl, parseOrgBookingPath } from "@slotkit/core";
+import { buildOrgBookingUrl, parseOrgBookingPath } from "@thebookingkit/core";
 
 buildOrgBookingUrl("acme-corp", "dr-smith", "consultation");
 // "/org/acme-corp/dr-smith/consultation"

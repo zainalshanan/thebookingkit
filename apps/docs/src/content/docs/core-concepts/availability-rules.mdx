@@ -133,10 +133,10 @@ interface AvailabilityOverrideInput {
 
 ## RRULE parsing
 
-SlotKit uses the `rrule` npm package for parsing. The `parseRecurrence()` function expands an RRULE into concrete date occurrences:
+The Booking Kit uses the `rrule` npm package for parsing. The `parseRecurrence()` function expands an RRULE into concrete date occurrences:
 
 ```typescript
-import { parseRecurrence } from "@slotkit/core";
+import { parseRecurrence } from "@thebookingkit/core";
 
 const occurrences = parseRecurrence(
   "RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR",

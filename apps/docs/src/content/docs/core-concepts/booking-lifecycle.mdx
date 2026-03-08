@@ -3,7 +3,7 @@ title: Booking Lifecycle
 description: Booking status state machine and audit trail.
 ---
 
-Every booking in SlotKit follows a defined state machine. All transitions are recorded in an append-only audit trail.
+Every booking in The Booking Kit follows a defined state machine. All transitions are recorded in an append-only audit trail.
 
 ## Status state machine
 
@@ -52,7 +52,7 @@ Auto-confirm event types skip `pending` and go directly to `confirmed`.
 Event types can require manual approval before bookings are confirmed:
 
 ```typescript
-import { getInitialBookingStatus, getAutoRejectDeadline } from "@slotkit/core";
+import { getInitialBookingStatus, getAutoRejectDeadline } from "@thebookingkit/core";
 
 // Returns "pending" or "confirmed" based on event type config
 const status = getInitialBookingStatus(eventType.requiresConfirmation);
@@ -86,7 +86,7 @@ A database trigger automatically creates audit entries on booking status changes
 Customers can manage their bookings via signed tokens (no login required):
 
 ```typescript
-import { generateBookingToken, verifyBookingToken } from "@slotkit/core";
+import { generateBookingToken, verifyBookingToken } from "@thebookingkit/core";
 
 // Generate a token for a booking (e.g., in confirmation email)
 const token = generateBookingToken(bookingId, customerEmail, secret);

@@ -3,7 +3,7 @@ title: Payments & Stripe
 description: Accept payments, handle cancellation fees, and manage no-show holds.
 ---
 
-SlotKit provides payment logic through the `PaymentAdapter` interface and pure computation functions for cancellation policies and fees.
+The Booking Kit provides payment logic through the `PaymentAdapter` interface and pure computation functions for cancellation policies and fees.
 
 ## Payment adapter
 
@@ -23,7 +23,7 @@ interface PaymentAdapter {
 Define tiered fee schedules based on how far in advance a booking is cancelled:
 
 ```typescript
-import { evaluateCancellationFee, validateCancellationPolicy } from "@slotkit/core";
+import { evaluateCancellationFee, validateCancellationPolicy } from "@thebookingkit/core";
 
 const policy: CancellationPolicy = {
   tiers: [
@@ -59,7 +59,7 @@ import {
   validateCurrency,
   formatPaymentAmount,
   computePaymentSummary,
-} from "@slotkit/core";
+} from "@thebookingkit/core";
 
 requiresPayment({ priceCents: 5000 });           // true
 requiresPayment({ priceCents: 0 });               // false

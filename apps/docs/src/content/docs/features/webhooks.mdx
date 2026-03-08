@@ -3,7 +3,7 @@ title: Webhooks
 description: HMAC-signed webhook delivery with replay protection and retry logic.
 ---
 
-SlotKit's webhook system delivers signed HTTP payloads to subscriber endpoints when booking events occur.
+The Booking Kit's webhook system delivers signed HTTP payloads to subscriber endpoints when booking events occur.
 
 ## Webhook security
 
@@ -12,7 +12,7 @@ SlotKit's webhook system delivers signed HTTP payloads to subscriber endpoints w
 Every webhook payload is signed with the subscription's secret:
 
 ```typescript
-import { signWebhookPayload, verifyWebhookSignature, SIGNATURE_HEADER, TIMESTAMP_HEADER } from "@slotkit/core";
+import { signWebhookPayload, verifyWebhookSignature, SIGNATURE_HEADER, TIMESTAMP_HEADER } from "@thebookingkit/core";
 
 // Signing (sender side)
 const signature = signWebhookPayload(payload, secret, timestamp);
@@ -20,8 +20,8 @@ const signature = signWebhookPayload(payload, secret, timestamp);
 // Verification (receiver side)
 const result = verifyWebhookSignature(
   payload,
-  signature,    // From X-SlotKit-Signature header
-  timestamp,    // From X-SlotKit-Timestamp header
+  signature,    // From X-The Booking Kit-Signature header
+  timestamp,    // From X-The Booking Kit-Timestamp header
   secret,
 );
 // Returns: WebhookVerificationResult { valid, reason? }
@@ -45,7 +45,7 @@ The timestamp is included in the signature computation. `verifyWebhookSignature(
 ## Creating envelopes
 
 ```typescript
-import { createWebhookEnvelope } from "@slotkit/core";
+import { createWebhookEnvelope } from "@thebookingkit/core";
 
 const envelope = createWebhookEnvelope(
   "booking.created",
@@ -62,7 +62,7 @@ const envelope = createWebhookEnvelope(
 Failed deliveries are retried with exponential backoff:
 
 ```typescript
-import { getRetryDelay, isSuccessResponse, DEFAULT_RETRY_CONFIG } from "@slotkit/core";
+import { getRetryDelay, isSuccessResponse, DEFAULT_RETRY_CONFIG } from "@thebookingkit/core";
 
 // Default config: 3 retries, 60s base delay, 3600s max delay
 const delay = getRetryDelay(attemptNumber, DEFAULT_RETRY_CONFIG);
@@ -75,7 +75,7 @@ isSuccessResponse(500); // false
 ## Subscription management
 
 ```typescript
-import { validateWebhookSubscription, matchWebhookSubscriptions } from "@slotkit/core";
+import { validateWebhookSubscription, matchWebhookSubscriptions } from "@thebookingkit/core";
 
 // Validate a subscription
 validateWebhookSubscription({
@@ -91,7 +91,7 @@ const matching = matchWebhookSubscriptions(allSubscriptions, "booking.created");
 ## Custom payload templates
 
 ```typescript
-import { resolvePayloadTemplate } from "@slotkit/core";
+import { resolvePayloadTemplate } from "@thebookingkit/core";
 
 const customPayload = resolvePayloadTemplate(
   { event: "{{trigger}}", customer: "{{booking.customerName}}" },

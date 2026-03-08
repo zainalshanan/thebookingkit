@@ -1,9 +1,9 @@
 ---
 title: Architecture
-description: How SlotKit's three layers work together.
+description: How The Booking Kit's three layers work together.
 ---
 
-SlotKit is organized into three layers that can be used independently or together.
+The Booking Kit is organized into three layers that can be used independently or together.
 
 ## System layers
 
@@ -11,21 +11,21 @@ SlotKit is organized into three layers that can be used independently or togethe
 ┌─────────────────────────────────────────────────────┐
 │                   Your Next.js App                   │
 ├──────────┬──────────────────┬────────────────────────┤
-│  @slotkit/ui               │     API Routes          │
+│  @thebookingkit/ui               │     API Routes          │
 │  21 React components       │     (your code)         │
 │  Copy-paste, you own them  │                         │
 ├──────────┴──────────────────┤                        │
-│        @slotkit/core        │                        │
+│        @thebookingkit/core        │                        │
 │  Slot engine, scheduling    │                        │
 │  math, business logic       │                        │
 ├─────────────────────────────┼────────────────────────┤
-│        @slotkit/db          │    Adapter Interfaces   │
+│        @thebookingkit/db          │    Adapter Interfaces   │
 │  Drizzle schema, 23 tables  │    Auth · Email · Jobs  │
 │  PostgreSQL 15+             │    Calendar · Payment   │
 └─────────────────────────────┴────────────────────────┘
 ```
 
-### 1. Logic layer (`@slotkit/core`)
+### 1. Logic layer (`@thebookingkit/core`)
 
 Pure TypeScript with zero framework dependencies. Contains:
 
@@ -40,7 +40,7 @@ Pure TypeScript with zero framework dependencies. Contains:
 - **Auth middleware** — Provider ownership and customer access assertions
 - **Adapter interfaces** — TypeScript interfaces for external services
 
-### 2. Data layer (`@slotkit/db`)
+### 2. Data layer (`@thebookingkit/db`)
 
 Drizzle ORM schema with 23 PostgreSQL tables:
 
@@ -49,7 +49,7 @@ Drizzle ORM schema with 23 PostgreSQL tables:
 - `EXCLUDE USING gist` constraint for database-level double-booking prevention
 - `SERIALIZABLE` transactions with automatic retry (`withSerializableRetry()`)
 
-### 3. UI layer (`@slotkit/ui`)
+### 3. UI layer (`@thebookingkit/ui`)
 
 21 React components following the shadcn/ui convention:
 
@@ -99,7 +99,7 @@ await sendConfirmationEmail(payload, myEmailAdapter);
 
 ## Double-booking prevention
 
-SlotKit prevents double-bookings at two levels:
+The Booking Kit prevents double-bookings at two levels:
 
 1. **Database constraint:** `EXCLUDE USING gist` with `btree_gist` extension ensures no two confirmed bookings overlap for the same provider
 2. **Application-level:** `SERIALIZABLE` transactions with `withSerializableRetry()` — catches serialization failures (SQLSTATE 40001) and retries up to 3 times with jittered exponential backoff

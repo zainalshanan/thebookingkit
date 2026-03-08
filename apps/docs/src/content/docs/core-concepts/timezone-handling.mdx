@@ -1,9 +1,9 @@
 ---
 title: Timezone Handling
-description: How SlotKit handles timezones safely across the computation pipeline.
+description: How The Booking Kit handles timezones safely across the computation pipeline.
 ---
 
-Timezone handling is one of the hardest parts of scheduling software. SlotKit follows a simple principle: **store and compute in UTC, display in local time.**
+Timezone handling is one of the hardest parts of scheduling software. The Booking Kit follows a simple principle: **store and compute in UTC, display in local time.**
 
 ## Core utilities
 
@@ -14,7 +14,7 @@ import {
   isValidTimezone,
   getTimezoneOffset,
   InvalidTimezoneError,
-} from "@slotkit/core";
+} from "@thebookingkit/core";
 ```
 
 ### `normalizeToUTC(localTime, timezone)`
@@ -87,9 +87,51 @@ const slots = getAvailableSlots(rules, overrides, bookings, dateRange, "Asia/Tok
 
 The `bookings` table stores `starts_at` and `ends_at` as UTC timestamps. This ensures correct behavior regardless of DST changes between booking creation and the appointment date.
 
+## Common pitfall: `dateRange` must be UTC
+
+The `dateRange` parameter passed to `getAvailableSlots()` **must use UTC Date objects**. The RRULE expansion uses `dateRange.start` as `dtstart`, which determines the time-of-day reference for generated occurrences. Passing local-time dates on a non-UTC server silently shifts the boundary and can exclude an entire day's occurrences.
+
+```typescript
+// ✅ Correct — explicit UTC with Z suffix
+const dateRange = {
+  start: new Date("2026-03-09T00:00:00.000Z"),
+  end:   new Date("2026-03-09T23:59:59.999Z"),
+};
+
+// ✅ Also correct — Date.UTC()
+const dateRange = {
+  start: new Date(Date.UTC(2026, 2, 9, 0, 0, 0)),
+  end:   new Date(Date.UTC(2026, 2, 9, 23, 59, 59, 999)),
+};
+
+// ❌ WRONG — parsed as server's local time, breaks on non-UTC servers
+const dateRange = {
+  start: new Date("2026-03-09T00:00:00"),   // no Z!
+  end:   new Date("2026-03-09T23:59:59"),
+};
+```
+
+**Why it breaks:** On a server running in `Australia/Sydney` (UTC+11), `new Date("2026-03-09T00:00:00")` becomes `2026-03-08T13:00:00Z`. The RRULE generates Monday's occurrence at `13:00 UTC` on March 9 — but `dateRange.end` is `12:59:59 UTC`, so the entire day is excluded.
+
+:::tip[Database queries are separate]
+If your database stores booking times as local ISO strings (common with SQLite/D1), use separate date boundaries for the DB query (local strings) and the slot engine (`Date` objects with UTC). Don't reuse the same values for both:
+
+```typescript
+const dateStr = "2026-03-09";
+
+// For SQLite/D1 string comparison
+const dbStart = `${dateStr}T00:00:00`;
+const dbEnd   = `${dateStr}T23:59:59`;
+
+// For slot engine — always UTC
+const rangeStart = new Date(`${dateStr}T00:00:00.000Z`);
+const rangeEnd   = new Date(`${dateStr}T23:59:59.999Z`);
+```
+:::
+
 ## DST transitions
 
-SlotKit handles DST transitions correctly:
+The Booking Kit handles DST transitions correctly:
 
 - **Spring forward:** If a provider is available 9am-5pm Eastern and DST springs forward on March 8, slots on March 9 correctly map to UTC-4 instead of UTC-5
 - **Fall back:** The extra hour during fall-back does not create duplicate slots
@@ -97,10 +139,10 @@ SlotKit handles DST transitions correctly:
 
 ## Libraries used
 
-SlotKit uses `date-fns` and `date-fns-tz` for all date/time operations:
+The Booking Kit uses `date-fns` and `date-fns-tz` for all date/time operations:
 
 - `fromZonedTime()` — Convert local time to UTC
 - `toZonedTime()` — Convert UTC to local time
 - `format()` — Format dates in a specific timezone
 
-These are peer dependencies of `@slotkit/core`.
+These are peer dependencies of `@thebookingkit/core`.

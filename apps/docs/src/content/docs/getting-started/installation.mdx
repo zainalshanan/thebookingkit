@@ -1,6 +1,6 @@
 ---
 title: Installation
-description: How to install and configure SlotKit in your project.
+description: How to install and configure The Booking Kit in your project.
 ---
 
 ## Prerequisites
@@ -11,7 +11,7 @@ description: How to install and configure SlotKit in your project.
 ## Install packages
 
 ```bash
-npm install @slotkit/core @slotkit/db
+npm install @thebookingkit/core @thebookingkit/db
 ```
 
 The UI components follow the shadcn/ui convention — you copy them into your project rather than installing via npm. See the [Components overview](/components/overview) for details.
@@ -23,7 +23,7 @@ The UI components follow the shadcn/ui convention — you copy them into your pr
 Create a `.env` file with your Postgres connection string:
 
 ```bash
-DATABASE_URL="postgresql://user:pass@localhost:5432/slotkit"
+DATABASE_URL="postgresql://user:pass@localhost:5432/thebookingkit"
 ```
 
 ### 2. Push schema
@@ -33,13 +33,14 @@ DATABASE_URL="postgresql://user:pass@localhost:5432/slotkit"
 npx drizzle-kit push
 
 # Apply custom SQL migrations (btree_gist extension, audit triggers, GDPR functions)
+# If using the CLI, this is handled automatically via 'npx slotkit migrate'
 npx tsx packages/db/src/migrate.ts
 ```
 
 ### 3. Seed sample data (optional)
 
 ```bash
-npm run db:seed -w @slotkit/db
+npm run db:seed -w @thebookingkit/db
 ```
 
 ## Local development with Docker
@@ -50,15 +51,15 @@ If you don't have a Postgres instance, use the included `docker-compose.yml`:
 docker compose up -d
 ```
 
-This starts Postgres 15 on port 5432 with a `slotkit` database.
+This starts Postgres 15 on port 5432 with a `thebookingkit` database.
 
 ## Monorepo development
 
-If you're working on SlotKit itself:
+If you're working on The Booking Kit itself:
 
 ```bash
-git clone https://github.com/your-org/slotkit.git
-cd slotkit
+git clone https://github.com/thebookingkit/thebookingkit.git
+cd thebookingkit
 npm install
 
 # Run all tests
@@ -74,7 +75,7 @@ turbo typecheck
 ## Verify installation
 
 ```typescript
-import { getAvailableSlots, isSlotAvailable } from "@slotkit/core";
+import { getAvailableSlots, isSlotAvailable } from "@thebookingkit/core";
 
 console.log(typeof getAvailableSlots); // "function"
 console.log(typeof isSlotAvailable);   // "function"

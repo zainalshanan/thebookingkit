@@ -1,14 +1,14 @@
 ---
-title: "@slotkit/core API"
+title: "@thebookingkit/core API"
 description: Complete API reference for the core scheduling engine.
 ---
 
-All exports from `@slotkit/core`.
+All exports from `@thebookingkit/core`.
 
 ## Slot Engine
 
 ```typescript
-import { getAvailableSlots, isSlotAvailable } from "@slotkit/core";
+import { getAvailableSlots, isSlotAvailable } from "@thebookingkit/core";
 ```
 
 | Function | Description |
@@ -19,7 +19,7 @@ import { getAvailableSlots, isSlotAvailable } from "@slotkit/core";
 ## RRULE Parser
 
 ```typescript
-import { parseRecurrence, InvalidRRuleError } from "@slotkit/core";
+import { parseRecurrence, InvalidRRuleError } from "@thebookingkit/core";
 ```
 
 | Function | Description |
@@ -29,13 +29,13 @@ import { parseRecurrence, InvalidRRuleError } from "@slotkit/core";
 ## Timezone
 
 ```typescript
-import { normalizeToUTC, utcToLocal, isValidTimezone, getTimezoneOffset, InvalidTimezoneError } from "@slotkit/core";
+import { normalizeToUTC, utcToLocal, isValidTimezone, getTimezoneOffset, InvalidTimezoneError } from "@thebookingkit/core";
 ```
 
 ## Booking Limits
 
 ```typescript
-import { computeBookingLimits, filterSlotsByLimits } from "@slotkit/core";
+import { computeBookingLimits, filterSlotsByLimits } from "@thebookingkit/core";
 ```
 
 | Function | Description |
@@ -46,25 +46,25 @@ import { computeBookingLimits, filterSlotsByLimits } from "@slotkit/core";
 ## Event Types
 
 ```typescript
-import { validateEventType, generateSlug, validateQuestionResponses, EventTypeValidationError } from "@slotkit/core";
+import { validateEventType, generateSlug, validateQuestionResponses, EventTypeValidationError } from "@thebookingkit/core";
 ```
 
 ## Confirmation Mode
 
 ```typescript
-import { getInitialBookingStatus, getAutoRejectDeadline, isPendingBookingOverdue, CONFIRMATION_TIMEOUT_HOURS } from "@slotkit/core";
+import { getInitialBookingStatus, getAutoRejectDeadline, isPendingBookingOverdue, CONFIRMATION_TIMEOUT_HOURS } from "@thebookingkit/core";
 ```
 
 ## Booking Tokens
 
 ```typescript
-import { generateBookingToken, verifyBookingToken } from "@slotkit/core";
+import { generateBookingToken, verifyBookingToken } from "@thebookingkit/core";
 ```
 
 ## Auth Middleware
 
 ```typescript
-import { withAuth, assertProviderOwnership, assertCustomerAccess } from "@slotkit/core";
+import { withAuth, assertProviderOwnership, assertCustomerAccess } from "@thebookingkit/core";
 ```
 
 | Function | Description |
@@ -76,96 +76,96 @@ import { withAuth, assertProviderOwnership, assertCustomerAccess } from "@slotki
 ## Serialization Retry
 
 ```typescript
-import { withSerializableRetry, SerializationRetryExhaustedError } from "@slotkit/core";
+import { withSerializableRetry, SerializationRetryExhaustedError } from "@thebookingkit/core";
 ```
 
 ## Team Scheduling
 
 ```typescript
-import { getTeamSlots, assignHost, resolveManagedEventType, isFieldLocked, propagateTemplateChanges } from "@slotkit/core";
+import { getTeamSlots, assignHost, resolveManagedEventType, isFieldLocked, propagateTemplateChanges } from "@thebookingkit/core";
 ```
 
 ## Payments
 
 ```typescript
-import { evaluateCancellationFee, validateCancellationPolicy, computePaymentSummary, requiresPayment, hasNoShowFee, validatePaymentAmount, validateCurrency, formatPaymentAmount, PaymentValidationError } from "@slotkit/core";
+import { evaluateCancellationFee, validateCancellationPolicy, computePaymentSummary, requiresPayment, hasNoShowFee, validatePaymentAmount, validateCurrency, formatPaymentAmount, PaymentValidationError } from "@thebookingkit/core";
 ```
 
 ## Workflows
 
 ```typescript
-import { resolveTemplateVariables, evaluateConditions, validateWorkflow, matchWorkflows, DEFAULT_TEMPLATES, TEMPLATE_VARIABLES, WorkflowValidationError } from "@slotkit/core";
+import { resolveTemplateVariables, evaluateConditions, validateWorkflow, matchWorkflows, DEFAULT_TEMPLATES, TEMPLATE_VARIABLES, WorkflowValidationError } from "@thebookingkit/core";
 ```
 
 ## Webhooks
 
 ```typescript
-import { signWebhookPayload, verifyWebhookSignature, createWebhookEnvelope, resolvePayloadTemplate, matchWebhookSubscriptions, getRetryDelay, isSuccessResponse, validateWebhookSubscription, WebhookValidationError, DEFAULT_RETRY_CONFIG, WEBHOOK_TRIGGERS, SIGNATURE_HEADER, TIMESTAMP_HEADER } from "@slotkit/core";
+import { signWebhookPayload, verifyWebhookSignature, createWebhookEnvelope, resolvePayloadTemplate, matchWebhookSubscriptions, getRetryDelay, isSuccessResponse, validateWebhookSubscription, WebhookValidationError, DEFAULT_RETRY_CONFIG, WEBHOOK_TRIGGERS, SIGNATURE_HEADER, TIMESTAMP_HEADER } from "@thebookingkit/core";
 ```
 
 ## Recurring Bookings
 
 ```typescript
-import { generateOccurrences, checkRecurringAvailability, cancelFutureOccurrences, isValidFrequency, RecurringBookingError } from "@slotkit/core";
+import { generateOccurrences, checkRecurringAvailability, cancelFutureOccurrences, isValidFrequency, RecurringBookingError } from "@thebookingkit/core";
 ```
 
 ## Seats / Group Bookings
 
 ```typescript
-import { computeSeatAvailability, canReserveSeat, isGroupEvent, computeGroupEventSummary, formatSeatCount, validateSeatReservation, SeatError } from "@slotkit/core";
+import { computeSeatAvailability, canReserveSeat, isGroupEvent, computeGroupEventSummary, formatSeatCount, validateSeatReservation, SeatError } from "@thebookingkit/core";
 ```
 
 ## Notifications
 
 ```typescript
-import { sendConfirmationEmail, sendReminderEmail, sendCancellationEmail, sendRescheduleEmail, scheduleAutoReject, syncBookingToCalendar, deleteBookingFromCalendar, formatDateTimeForEmail, formatDurationForEmail } from "@slotkit/core";
+import { sendConfirmationEmail, sendReminderEmail, sendCancellationEmail, sendRescheduleEmail, scheduleAutoReject, syncBookingToCalendar, deleteBookingFromCalendar, formatDateTimeForEmail, formatDurationForEmail } from "@thebookingkit/core";
 ```
 
 ## Email Templates
 
 ```typescript
-import { interpolateTemplate, CONFIRMATION_EMAIL_HTML, CONFIRMATION_EMAIL_TEXT, REMINDER_EMAIL_HTML, CANCELLATION_EMAIL_HTML, RESCHEDULE_EMAIL_HTML } from "@slotkit/core";
+import { interpolateTemplate, CONFIRMATION_EMAIL_HTML, CONFIRMATION_EMAIL_TEXT, REMINDER_EMAIL_HTML, CANCELLATION_EMAIL_HTML, RESCHEDULE_EMAIL_HTML } from "@thebookingkit/core";
 ```
 
 ## Routing Forms
 
 ```typescript
-import { validateRoutingForm, evaluateRoutingRules, validateRoutingResponses, computeRoutingAnalytics, RoutingFormValidationError } from "@slotkit/core";
+import { validateRoutingForm, evaluateRoutingRules, validateRoutingResponses, computeRoutingAnalytics, RoutingFormValidationError } from "@thebookingkit/core";
 ```
 
 ## Embed
 
 ```typescript
-import { validateEmbedConfig, generateEmbedSnippet, generateAllSnippets, buildEmbedUrl, EmbedConfigError } from "@slotkit/core";
+import { validateEmbedConfig, generateEmbedSnippet, generateAllSnippets, buildEmbedUrl, EmbedConfigError } from "@thebookingkit/core";
 ```
 
 ## REST API Utilities
 
 ```typescript
-import { createErrorResponse, createSuccessResponse, createPaginatedResponse, generateApiKey, hashApiKey, verifyApiKey, hasScope, isKeyExpired, checkRateLimit, encodeCursor, decodeCursor, validateSlotQueryParams, parseSortParam, API_ERROR_CODES } from "@slotkit/core";
+import { createErrorResponse, createSuccessResponse, createPaginatedResponse, generateApiKey, hashApiKey, verifyApiKey, hasScope, isKeyExpired, checkRateLimit, encodeCursor, decodeCursor, validateSlotQueryParams, parseSortParam, API_ERROR_CODES } from "@thebookingkit/core";
 ```
 
 ## CLI Utilities
 
 ```typescript
-import { COMPONENT_REGISTRY, findComponent, resolveComponentDependencies, listComponents, createManifestEntry, hasLocalModifications, generateSlotkitConfig, generateEnvTemplate, parseMigrationFiles, getPendingMigrations, DEFAULT_MANIFEST } from "@slotkit/core";
+import { COMPONENT_REGISTRY, findComponent, resolveComponentDependencies, listComponents, createManifestEntry, hasLocalModifications, generateSlotkitConfig, generateEnvTemplate, parseMigrationFiles, getPendingMigrations, DEFAULT_MANIFEST } from "@thebookingkit/core";
 ```
 
 ## Multi-Tenancy
 
 ```typescript
-import { resolveEffectiveSettings, getRolePermissions, roleHasPermission, assertOrgPermission, assertTenantScope, buildOrgBookingUrl, parseOrgBookingPath, TenantAuthorizationError, GLOBAL_DEFAULTS } from "@slotkit/core";
+import { resolveEffectiveSettings, getRolePermissions, roleHasPermission, assertOrgPermission, assertTenantScope, buildOrgBookingUrl, parseOrgBookingPath, TenantAuthorizationError, GLOBAL_DEFAULTS } from "@thebookingkit/core";
 ```
 
 ## Errors
 
 ```typescript
-import { BookingConflictError, SerializationRetryExhaustedError, UnauthorizedError, ForbiddenError } from "@slotkit/core";
+import { BookingConflictError, SerializationRetryExhaustedError, UnauthorizedError, ForbiddenError } from "@thebookingkit/core";
 ```
 
 ## Adapters
 
 ```typescript
-import type { AuthAdapter, EmailAdapter, CalendarAdapter, JobAdapter, PaymentAdapter, StorageAdapter, SmsAdapter } from "@slotkit/core";
-import { generateICSAttachment, JOB_NAMES } from "@slotkit/core";
+import type { AuthAdapter, EmailAdapter, CalendarAdapter, JobAdapter, PaymentAdapter, StorageAdapter, SmsAdapter } from "@thebookingkit/core";
+import { generateICSAttachment, JOB_NAMES } from "@thebookingkit/core";
 ```

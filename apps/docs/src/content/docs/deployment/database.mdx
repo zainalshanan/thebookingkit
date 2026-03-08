@@ -1,9 +1,9 @@
 ---
 title: Database Setup
-description: Configure PostgreSQL for SlotKit in development and production.
+description: Configure PostgreSQL for The Booking Kit in development and production.
 ---
 
-SlotKit requires PostgreSQL 15+ with the `btree_gist` extension.
+The Booking Kit requires PostgreSQL 15+ with the `btree_gist` extension.
 
 ## Supported providers
 
@@ -47,7 +47,7 @@ npx drizzle-kit push
 npx tsx packages/db/src/migrate.ts
 
 # 3. (Optional) Seed sample data
-npm run db:seed -w @slotkit/db
+npm run db:seed -w @thebookingkit/db
 ```
 
 ## Production deployment

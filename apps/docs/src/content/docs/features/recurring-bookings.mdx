@@ -8,7 +8,7 @@ Recurring bookings let customers book a series of appointments at a regular cade
 ## Creating a series
 
 ```typescript
-import { generateOccurrences } from "@slotkit/core";
+import { generateOccurrences } from "@thebookingkit/core";
 
 const occurrences = generateOccurrences({
   startDate: new Date("2026-03-10T14:00:00Z"),
@@ -33,7 +33,7 @@ const occurrences = generateOccurrences({
 ## Availability checking
 
 ```typescript
-import { checkRecurringAvailability } from "@slotkit/core";
+import { checkRecurringAvailability } from "@thebookingkit/core";
 
 const result = checkRecurringAvailability(
   occurrences,
@@ -55,7 +55,7 @@ This checks every occurrence against the provider's availability and existing bo
 ## Cancelling future occurrences
 
 ```typescript
-import { cancelFutureOccurrences } from "@slotkit/core";
+import { cancelFutureOccurrences } from "@thebookingkit/core";
 
 const result = cancelFutureOccurrences(
   seriesBookings,

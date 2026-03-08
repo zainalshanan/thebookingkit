@@ -8,7 +8,7 @@ The workflow engine lets you automate actions in response to booking events — 
 ## Workflow structure
 
 ```typescript
-import type { WorkflowDefinition } from "@slotkit/core";
+import type { WorkflowDefinition } from "@thebookingkit/core";
 
 const workflow: WorkflowDefinition = {
   name: "Send follow-up after completion",
@@ -48,7 +48,7 @@ const workflow: WorkflowDefinition = {
 ## Conditions
 
 ```typescript
-import { evaluateConditions } from "@slotkit/core";
+import { evaluateConditions } from "@thebookingkit/core";
 
 const conditions: WorkflowCondition[] = [
   { field: "booking.priceCents", operator: "greater_than", value: 0 },
@@ -78,7 +78,7 @@ const match = evaluateConditions(conditions, context);
 All text fields support template variables:
 
 ```typescript
-import { resolveTemplateVariables, TEMPLATE_VARIABLES } from "@slotkit/core";
+import { resolveTemplateVariables, TEMPLATE_VARIABLES } from "@thebookingkit/core";
 
 const resolved = resolveTemplateVariables(
   "Hello {{customer.name}}, your {{event.title}} is on {{booking.date}}",
@@ -91,7 +91,7 @@ Available variables: `{{customer.name}}`, `{{customer.email}}`, `{{booking.date}
 ## Validation
 
 ```typescript
-import { validateWorkflow, WorkflowValidationError } from "@slotkit/core";
+import { validateWorkflow, WorkflowValidationError } from "@thebookingkit/core";
 
 validateWorkflow(workflow);
 // Throws WorkflowValidationError if trigger, conditions, or actions are invalid
@@ -100,7 +100,7 @@ validateWorkflow(workflow);
 ## Matching workflows
 
 ```typescript
-import { matchWorkflows } from "@slotkit/core";
+import { matchWorkflows } from "@thebookingkit/core";
 
 const matching = matchWorkflows(allWorkflows, "booking.confirmed", context);
 // Returns workflows whose trigger matches and all conditions pass

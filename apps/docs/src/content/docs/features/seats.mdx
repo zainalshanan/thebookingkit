@@ -8,7 +8,7 @@ Seat bookings enable event types with multiple attendees per time slot — yoga 
 ## Seat availability
 
 ```typescript
-import { computeSeatAvailability, isGroupEvent } from "@slotkit/core";
+import { computeSeatAvailability, isGroupEvent } from "@thebookingkit/core";
 
 // Check if an event type supports group bookings
 isGroupEvent({ maxSeats: 20 }); // true
@@ -27,7 +27,7 @@ const availability = computeSeatAvailability({
 ## Reserving seats
 
 ```typescript
-import { canReserveSeat, validateSeatReservation, SeatError } from "@slotkit/core";
+import { canReserveSeat, validateSeatReservation, SeatError } from "@thebookingkit/core";
 
 // Quick check
 canReserveSeat(availability, 3); // true if 3+ seats remain
@@ -43,7 +43,7 @@ validateSeatReservation({
 ## Group event summary
 
 ```typescript
-import { computeGroupEventSummary, formatSeatCount } from "@slotkit/core";
+import { computeGroupEventSummary, formatSeatCount } from "@thebookingkit/core";
 
 const summary = computeGroupEventSummary({
   maxSeats: 20,

@@ -3,7 +3,7 @@ title: Calendar Sync
 description: Two-way sync with Google Calendar and other providers via CalendarAdapter.
 ---
 
-SlotKit syncs bookings with external calendars through the `CalendarAdapter` interface.
+The Booking Kit syncs bookings with external calendars through the `CalendarAdapter` interface.
 
 ## CalendarAdapter interface
 
@@ -23,7 +23,7 @@ interface CalendarAdapter {
 3. **Booking cancelled** → `deleteBookingFromCalendar()` removes the calendar event
 
 ```typescript
-import { syncBookingToCalendar, deleteBookingFromCalendar } from "@slotkit/core";
+import { syncBookingToCalendar, deleteBookingFromCalendar } from "@thebookingkit/core";
 
 // In your booking creation handler
 await syncBookingToCalendar({
@@ -31,7 +31,7 @@ await syncBookingToCalendar({
   title: `${booking.customerName} - ${eventType.title}`,
   start: booking.startsAt,
   end: booking.endsAt,
-  description: "Booking via SlotKit",
+  description: "Booking via The Booking Kit",
   location: eventType.location,
   attendees: [booking.customerEmail],
 }, calendarAdapter);
@@ -44,7 +44,7 @@ await deleteBookingFromCalendar({
 
 ## Conflict checking
 
-External calendar events (personal appointments, meetings from other sources) can block SlotKit availability:
+External calendar events (personal appointments, meetings from other sources) can block The Booking Kit availability:
 
 ```typescript
 const conflicts = await calendarAdapter.getConflicts(
@@ -73,7 +73,7 @@ The default `CalendarAdapter` implementation uses Google Calendar OAuth:
 For email-based calendar integration (works with any calendar app):
 
 ```typescript
-import { generateICSAttachment } from "@slotkit/core";
+import { generateICSAttachment } from "@thebookingkit/core";
 
 const ics = generateICSAttachment({
   title: "Consultation",

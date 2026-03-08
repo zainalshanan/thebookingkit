@@ -3,7 +3,7 @@ title: Adapters
 description: Pluggable interfaces for auth, email, calendar, jobs, payments, and more.
 ---
 
-SlotKit uses the adapter pattern to abstract external dependencies. Each adapter is a TypeScript interface — implement it for your preferred provider.
+The Booking Kit uses the adapter pattern to abstract external dependencies. Each adapter is a TypeScript interface — implement it for your preferred provider.
 
 ## Available adapters
 
@@ -103,6 +103,28 @@ interface SmsAdapter {
 **Default:** Not implemented (optional)
 **Alternatives:** Twilio, MessageBird, Vonage
 
+## Database Adapters
+
+While The Booking Kit is built for PostgreSQL, it provides specialized adapters for other database environments.
+
+### Cloudflare D1 / SQLite (`@thebookingkit/d1`)
+
+Cloudflare D1 requires special handling for date storage and concurrency. This package provides:
+
+- **Canonical Date Encoding**: SQLite has no native timestamp type. `D1DateCodec` ensures all dates are stored as sortable UTC-Z strings.
+- **Advisory Locking**: Since SQLite lacks `EXCLUDE` constraints, `D1BookingLock` provides application-level mutexes to prevent double-booking.
+- **Schedule Adapters**: Utilities to intersect personal and location schedules into RRULE windows.
+
+```typescript
+import { D1DateCodec, D1BookingLock } from "@thebookingkit/d1";
+
+// Ensure a slot is available and book it atomically
+const lock = new D1BookingLock(db);
+await lock.withLock(`provider:${id}`, async () => {
+  // Read-check-write logic here
+});
+```
+
 ## Implementing an adapter
 
 ```typescript
@@ -134,7 +156,7 @@ const sendGridAdapter: EmailAdapter = {
 Pass adapters to the functions that need them:
 
 ```typescript
-import { sendConfirmationEmail } from "@slotkit/core";
+import { sendConfirmationEmail } from "@thebookingkit/core";
 
 await sendConfirmationEmail(bookingPayload, sendGridAdapter);
 ```

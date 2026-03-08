@@ -3,7 +3,7 @@ title: Background Jobs
 description: Configure background jobs for reminders, auto-reject, and calendar sync.
 ---
 
-SlotKit uses background jobs for tasks that shouldn't block the request/response cycle: sending emails, syncing calendars, auto-rejecting overdue bookings.
+The Booking Kit uses background jobs for tasks that shouldn't block the request/response cycle: sending emails, syncing calendars, auto-rejecting overdue bookings.
 
 ## JobAdapter interface
 
@@ -51,7 +51,7 @@ export const { GET, POST, PUT } = serve({
 
 ```typescript
 import { inngest } from "./client";
-import { sendConfirmationEmail } from "@slotkit/core";
+import { sendConfirmationEmail } from "@thebookingkit/core";
 
 export const handleBookingCreated = inngest.createFunction(
   { id: "send-confirmation" },

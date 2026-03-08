@@ -15,7 +15,7 @@ Routing forms are pre-booking questionnaires. Based on the customer's answers, t
 ## Form structure
 
 ```typescript
-import type { RoutingFormDefinition, RoutingField, RoutingRule } from "@slotkit/core";
+import type { RoutingFormDefinition, RoutingField, RoutingRule } from "@thebookingkit/core";
 
 const form: RoutingFormDefinition = {
   name: "New Patient Intake",
@@ -57,7 +57,7 @@ const form: RoutingFormDefinition = {
 ## Evaluation
 
 ```typescript
-import { evaluateRoutingRules, validateRoutingResponses } from "@slotkit/core";
+import { evaluateRoutingRules, validateRoutingResponses } from "@thebookingkit/core";
 
 // Validate responses match the form definition
 validateRoutingResponses(form, responses);
@@ -70,7 +70,7 @@ const result = evaluateRoutingRules(form.rules, responses, form.fallbackAction);
 ## Validation
 
 ```typescript
-import { validateRoutingForm, RoutingFormValidationError } from "@slotkit/core";
+import { validateRoutingForm, RoutingFormValidationError } from "@thebookingkit/core";
 
 validateRoutingForm(form);
 // Validates: field types, rule conditions reference valid fields, fallback exists
@@ -79,7 +79,7 @@ validateRoutingForm(form);
 ## Analytics
 
 ```typescript
-import { computeRoutingAnalytics } from "@slotkit/core";
+import { computeRoutingAnalytics } from "@thebookingkit/core";
 
 const analytics = computeRoutingAnalytics(submissions);
 // Returns: RoutingAnalytics

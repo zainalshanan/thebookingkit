@@ -12,7 +12,7 @@ Team scheduling enables organizations with multiple providers to manage bookings
 Distributes bookings evenly across team members. Considers each member's existing booking count to maintain balance.
 
 ```typescript
-import { assignHost } from "@slotkit/core";
+import { assignHost } from "@thebookingkit/core";
 
 const result = assignHost(
   teamMembers,
@@ -27,7 +27,7 @@ const result = assignHost(
 All team members must be available for the slot. Used for group interviews, panel discussions, or meetings requiring all participants.
 
 ```typescript
-import { getTeamSlots } from "@slotkit/core";
+import { getTeamSlots } from "@thebookingkit/core";
 
 const slots = getTeamSlots(
   teamMembers,      // Each member's rules, overrides, bookings
@@ -43,7 +43,7 @@ const slots = getTeamSlots(
 Organization-level event type templates with field locking. Admins create templates; members get auto-generated event types with locked fields.
 
 ```typescript
-import { resolveManagedEventType, isFieldLocked } from "@slotkit/core";
+import { resolveManagedEventType, isFieldLocked } from "@thebookingkit/core";
 
 const resolved = resolveManagedEventType(template, memberOverrides);
 // Template fields marked as locked cannot be overridden
@@ -59,7 +59,7 @@ Direct booking with a specific team member. No automatic assignment.
 ## Team slots
 
 ```typescript
-import { getTeamSlots } from "@slotkit/core";
+import { getTeamSlots } from "@thebookingkit/core";
 
 const slots = getTeamSlots(
   [
@@ -92,7 +92,7 @@ const slots = getTeamSlots(
 When an admin updates a managed template, changes propagate to all member event types:
 
 ```typescript
-import { propagateTemplateChanges } from "@slotkit/core";
+import { propagateTemplateChanges } from "@thebookingkit/core";
 
 const updates = propagateTemplateChanges(template, memberEventTypes);
 // Returns changes to apply to each member's event type

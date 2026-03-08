@@ -3,7 +3,7 @@ title: Notifications & Email
 description: Transactional email templates for booking lifecycle events.
 ---
 
-SlotKit includes email templates and notification job helpers for the booking lifecycle.
+The Booking Kit includes email templates and notification job helpers for the booking lifecycle.
 
 ## Email functions
 
@@ -13,7 +13,7 @@ import {
   sendReminderEmail,
   sendCancellationEmail,
   sendRescheduleEmail,
-} from "@slotkit/core";
+} from "@thebookingkit/core";
 
 // Each function takes a payload and an EmailAdapter
 await sendConfirmationEmail(
@@ -44,7 +44,7 @@ await sendConfirmationEmail(
 ### Template interpolation
 
 ```typescript
-import { interpolateTemplate } from "@slotkit/core";
+import { interpolateTemplate } from "@thebookingkit/core";
 
 const html = interpolateTemplate(CONFIRMATION_EMAIL_HTML, {
   customerName: "Alice",
@@ -59,7 +59,7 @@ const html = interpolateTemplate(CONFIRMATION_EMAIL_HTML, {
 ## Calendar sync
 
 ```typescript
-import { syncBookingToCalendar, deleteBookingFromCalendar } from "@slotkit/core";
+import { syncBookingToCalendar, deleteBookingFromCalendar } from "@thebookingkit/core";
 
 // Create a calendar event for a booking
 await syncBookingToCalendar(bookingPayload, calendarAdapter);
@@ -71,7 +71,7 @@ await deleteBookingFromCalendar(deletePayload, calendarAdapter);
 ## ICS attachments
 
 ```typescript
-import { generateICSAttachment } from "@slotkit/core";
+import { generateICSAttachment } from "@thebookingkit/core";
 
 const ics = generateICSAttachment({
   title: "Consultation with Dr. Smith",
@@ -85,7 +85,7 @@ const ics = generateICSAttachment({
 ## Formatting helpers
 
 ```typescript
-import { formatDateTimeForEmail, formatDurationForEmail } from "@slotkit/core";
+import { formatDateTimeForEmail, formatDurationForEmail } from "@thebookingkit/core";
 
 formatDateTimeForEmail(new Date("2026-03-10T14:00:00Z"), "America/New_York");
 // "Tuesday, March 10, 2026 at 9:00 AM EST"

@@ -1,13 +1,13 @@
 ---
 title: Double-Booking Prevention
-description: How SlotKit prevents concurrent bookings from overlapping.
+description: How The Booking Kit prevents concurrent bookings from overlapping.
 ---
 
-Double-booking prevention is a solved problem in SlotKit. It operates at two levels to guarantee safety even under high concurrent load.
+Double-booking prevention is a solved problem in The Booking Kit. It operates at two levels to guarantee safety even under high concurrent load.
 
 ## Database-level: EXCLUDE constraint
 
-SlotKit uses PostgreSQL's `btree_gist` extension with an `EXCLUDE USING gist` constraint:
+The Booking Kit uses PostgreSQL's `btree_gist` extension with an `EXCLUDE USING gist` constraint:
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS btree_gist;
@@ -28,7 +28,7 @@ This constraint is enforced at the database level — even if your application h
 For additional safety, booking creation runs in `SERIALIZABLE` isolation with automatic retry:
 
 ```typescript
-import { withSerializableRetry } from "@slotkit/core";
+import { withSerializableRetry } from "@thebookingkit/core";
 
 const booking = await withSerializableRetry(async (tx) => {
   // Check availability
@@ -71,7 +71,7 @@ The `EXCLUDE` constraint is the final safety net — if somehow both transaction
 ## Error handling
 
 ```typescript
-import { BookingConflictError, SerializationRetryExhaustedError } from "@slotkit/core";
+import { BookingConflictError, SerializationRetryExhaustedError } from "@thebookingkit/core";
 
 try {
   const booking = await createBooking(slotStart, slotEnd, providerId);
