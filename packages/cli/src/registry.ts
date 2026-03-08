@@ -24,7 +24,7 @@ export interface ComponentRegistryEntry {
   /** npm packages the component requires (beyond react) */
   npmDependencies: Record<string, string>;
   /** Category for grouping */
-  category: "customer" | "admin" | "payment" | "routing" | "team" | "embed" | "utility";
+  category: "customer" | "admin" | "payment" | "routing" | "team" | "embed" | "walk-in" | "kiosk" | "utility";
 }
 
 // ---------------------------------------------------------------------------
@@ -221,6 +221,98 @@ export const COMPONENT_REGISTRY: ComponentRegistryEntry[] = [
     dependencies: [],
     npmDependencies: {},
     category: "embed",
+  },
+  // Walk-in queue components
+  {
+    name: "walk-in-entry-form",
+    displayName: "WalkInEntryForm",
+    description: "Form for adding walk-in customers to the queue",
+    sourcePath: "components/walk-in-entry-form.tsx",
+    dependencies: [],
+    npmDependencies: {},
+    category: "walk-in",
+  },
+  {
+    name: "walk-in-toggle",
+    displayName: "WalkInToggle",
+    description: "Toggle switch to enable/disable walk-in acceptance",
+    sourcePath: "components/walk-in-toggle.tsx",
+    dependencies: [],
+    npmDependencies: {},
+    category: "walk-in",
+  },
+  {
+    name: "walk-in-analytics",
+    displayName: "WalkInAnalytics",
+    description: "Analytics dashboard for walk-in queue metrics",
+    sourcePath: "components/walk-in-analytics.tsx",
+    dependencies: [],
+    npmDependencies: {},
+    category: "walk-in",
+  },
+  {
+    name: "queue-display",
+    displayName: "QueueDisplay",
+    description: "Public-facing queue status display for waiting customers",
+    sourcePath: "components/queue-display.tsx",
+    dependencies: [],
+    npmDependencies: {},
+    category: "walk-in",
+  },
+  {
+    name: "queue-manager",
+    displayName: "QueueManager",
+    description: "Admin queue management with start/skip/remove actions",
+    sourcePath: "components/queue-manager.tsx",
+    dependencies: [],
+    npmDependencies: {},
+    category: "walk-in",
+  },
+  {
+    name: "queue-ticket",
+    displayName: "QueueTicket",
+    description: "Individual queue ticket display with position and wait time",
+    sourcePath: "components/queue-ticket.tsx",
+    dependencies: [],
+    npmDependencies: {},
+    category: "walk-in",
+  },
+  // Kiosk components
+  {
+    name: "kiosk-calendar",
+    displayName: "KioskCalendar",
+    description: "Multi-provider day/week calendar view for reception kiosks",
+    sourcePath: "components/kiosk-calendar.tsx",
+    dependencies: [],
+    npmDependencies: {},
+    category: "kiosk",
+  },
+  {
+    name: "kiosk-settings-panel",
+    displayName: "KioskSettingsPanel",
+    description: "Settings panel for configuring kiosk display options",
+    sourcePath: "components/kiosk-settings-panel.tsx",
+    dependencies: [],
+    npmDependencies: {},
+    category: "kiosk",
+  },
+  {
+    name: "kiosk-shell",
+    displayName: "KioskShell",
+    description: "Full-screen kiosk shell with header and provider tabs",
+    sourcePath: "components/kiosk-shell.tsx",
+    dependencies: ["kiosk-calendar", "kiosk-settings-panel"],
+    npmDependencies: {},
+    category: "kiosk",
+  },
+  {
+    name: "break-block-form",
+    displayName: "BreakBlockForm",
+    description: "Form for adding break or block-off periods to the schedule",
+    sourcePath: "components/break-block-form.tsx",
+    dependencies: [],
+    npmDependencies: {},
+    category: "kiosk",
   },
 ];
 

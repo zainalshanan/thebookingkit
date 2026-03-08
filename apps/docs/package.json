@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build",
+    "build": "cd ../.. && npx tsx scripts/build-registry.ts && cd apps/docs && astro build",
     "preview": "astro preview"
   },
   "dependencies": {

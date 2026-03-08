@@ -3,21 +3,27 @@
 /**
  * Registry Generator
  *
- * Reads registry/ui component source files and generates a registry.json
- * that maps each component to its metadata and inline source code.
+ * 1. Copies raw component/hook/util source files to apps/docs/public/registry/
+ *    so the CLI can fetch them from https://thebookingkit.dev/registry/components/<name>.tsx
  *
- * Output: apps/docs/public/registry/index.json
+ * 2. Generates apps/docs/public/registry/index.json with metadata and inline source
+ *    for documentation browsing.
  *
  * Usage:
  *   npx tsx scripts/build-registry.ts
  */
 
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { join, resolve } from "node:path";
 
-// Import the registry from the CLI package source
-// (we read it directly since this is a build script)
 const REGISTRY_SRC = resolve("registry/ui/src");
 const OUTPUT_DIR = resolve("apps/docs/public/registry");
 
@@ -33,13 +39,9 @@ interface ComponentRegistryEntry {
 
 // Read the registry definition from CLI source
 function loadRegistry(): ComponentRegistryEntry[] {
-  // We parse the registry.ts file to extract the data
-  // For robustness, we import the built version if available,
-  // otherwise we read from source
   const registryPath = resolve("packages/cli/src/registry.ts");
   const content = readFileSync(registryPath, "utf-8");
 
-  // Extract the array between COMPONENT_REGISTRY: ComponentRegistryEntry[] = [ ... ];
   const match = content.match(
     /export const COMPONENT_REGISTRY[^=]*=\s*\[([\s\S]*?)\];/,
   );
@@ -47,8 +49,6 @@ function loadRegistry(): ComponentRegistryEntry[] {
     throw new Error("Could not parse COMPONENT_REGISTRY from registry.ts");
   }
 
-  // Use Function constructor to evaluate the array literal
-  // (safe here since we control the source)
   const arraySource = `[${match[1]}]`;
   const entries = new Function(`return ${arraySource}`)() as ComponentRegistryEntry[];
   return entries;
@@ -71,6 +71,57 @@ interface RegistryOutput {
     }>;
   }>;
 }
+
+// ---------------------------------------------------------------------------
+// Step 1: Copy raw source files so the CLI can fetch them
+// ---------------------------------------------------------------------------
+
+function copySourceFiles(): number {
+  let count = 0;
+
+  // Copy components
+  const componentsOut = join(OUTPUT_DIR, "components");
+  mkdirSync(componentsOut, { recursive: true });
+  const componentsDir = join(REGISTRY_SRC, "components");
+  for (const file of readdirSync(componentsDir)) {
+    if (file.endsWith(".tsx") || file.endsWith(".ts")) {
+      copyFileSync(join(componentsDir, file), join(componentsOut, file));
+      count++;
+    }
+  }
+
+  // Copy hooks
+  const hooksDir = join(REGISTRY_SRC, "hooks");
+  if (existsSync(hooksDir)) {
+    const hooksOut = join(OUTPUT_DIR, "hooks");
+    mkdirSync(hooksOut, { recursive: true });
+    for (const file of readdirSync(hooksDir)) {
+      if (file.endsWith(".ts") || file.endsWith(".tsx")) {
+        copyFileSync(join(hooksDir, file), join(hooksOut, file));
+        count++;
+      }
+    }
+  }
+
+  // Copy utils
+  const utilsDir = join(REGISTRY_SRC, "utils");
+  if (existsSync(utilsDir)) {
+    const utilsOut = join(OUTPUT_DIR, "utils");
+    mkdirSync(utilsOut, { recursive: true });
+    for (const file of readdirSync(utilsDir)) {
+      if (file.endsWith(".ts") || file.endsWith(".tsx")) {
+        copyFileSync(join(utilsDir, file), join(utilsOut, file));
+        count++;
+      }
+    }
+  }
+
+  return count;
+}
+
+// ---------------------------------------------------------------------------
+// Step 2: Generate index.json with inline source
+// ---------------------------------------------------------------------------
 
 function buildRegistry(): RegistryOutput {
   const entries = loadRegistry();
@@ -117,15 +168,16 @@ function buildRegistry(): RegistryOutput {
 
 console.log("Building component registry...\n");
 
+mkdirSync(OUTPUT_DIR, { recursive: true });
+
+// Step 1: Copy raw files for CLI fetch
+const fileCount = copySourceFiles();
+console.log(`Copied ${fileCount} source files to ${OUTPUT_DIR}/`);
+
+// Step 2: Generate index.json
 const registry = buildRegistry();
-
-if (!existsSync(OUTPUT_DIR)) {
-  mkdirSync(OUTPUT_DIR, { recursive: true });
-}
-
 const outputPath = join(OUTPUT_DIR, "index.json");
 writeFileSync(outputPath, JSON.stringify(registry, null, 2));
 
-console.log(`Generated ${registry.components.length} component entries`);
-console.log(`Output: ${outputPath}`);
+console.log(`Generated ${registry.components.length} component entries in index.json`);
 console.log(`Size: ${(JSON.stringify(registry).length / 1024).toFixed(1)} KB`);

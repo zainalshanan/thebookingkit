@@ -15,7 +15,8 @@
     "db:push": "npm -w @thebookingkit/db run db:push",
     "db:migrate": "npm -w @thebookingkit/db run db:migrate",
     "db:seed": "npm -w @thebookingkit/db run db:seed",
-    "db:generate": "npm -w @thebookingkit/db run db:generate"
+    "db:generate": "npm -w @thebookingkit/db run db:generate",
+    "registry:build": "npx tsx scripts/build-registry.ts"
   },
   "devDependencies": {
     "@changesets/cli": "^2.30.0",
