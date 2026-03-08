@@ -3,7 +3,33 @@ title: Upcoming Features
 description: Features planned for future releases of The Booking Kit.
 ---
 
-The Booking Kit has completed 16 epics covering the full booking system lifecycle. These features are planned for upcoming releases.
+The Booking Kit has completed 18 epics covering the full booking system lifecycle, including the recently shipped Walk-In Queue (E-19) and Kiosk Mode (E-20). The following features are planned for upcoming releases.
+
+---
+
+## Recently Shipped
+
+### Walk-In Queue & Hybrid Scheduling (E-19)
+
+Enables providers to accept walk-in customers alongside scheduled appointments. The provider or receptionist adds walk-ins on behalf of customers; the system auto-finds the next available gap and estimates wait time.
+
+**Shipped in core:** `addWalkIn()`, `estimateWaitTime()`, `findNextAvailableGap()`, `startService()`, `completeService()`, `markNoShow()`, `reorderQueue()`, `getQueueMetrics()`, full walk-in state machine (`queued` → `in_service` → `completed`/`no_show`/`cancelled`), analytics helpers.
+
+**Shipped in registry/ui:** `<WalkInEntryForm />`, `<QueueDisplay />`, `<QueueManager />`, `<WalkInToggle />`, `<QueueTicket />`.
+
+Designed for barber shops, salons, clinics, and restaurants — any business serving both scheduled and walk-in customers.
+
+---
+
+### Kiosk Mode & Interactive Schedule Management (E-20)
+
+A full-screen, Google Calendar-style interactive view for providers to manage their entire schedule from a single screen. Supports configurable event display, inline break/block creation, drag-and-drop rescheduling, and integrated walk-in queue management.
+
+**Shipped in core:** `validateKioskSettings()`, `resolveKioskSettings()`, `validateReschedule()`, `validateBreakBlock()`, `getMultiProviderView()`, break/block management utilities.
+
+**Shipped in registry/ui:** `<KioskCalendar />`, `<KioskShell />`, `<KioskSettingsPanel />`, `<BreakBlockForm />`, `<KioskPinLock />`.
+
+Optimized for 10"+ tablets in landscape at reception desks, wall-mounted displays, and desktop use.
 
 ---
 
@@ -51,47 +77,3 @@ Weekends: $120 flat rate (vs $80 base)
 Booked 7+ days ahead: 10% early bird discount
 Last 3 slots this week: +15% surge
 ```
-
----
-
-## Walk-In Queue & Hybrid Scheduling (E-19)
-
-> **Release R7 · 34 story points · 7 user stories**
-
-Enable providers to accept walk-in customers alongside scheduled appointments. The provider or receptionist adds walk-ins on behalf of customers, selecting the service and provider. Walk-ins fill gaps between existing bookings.
-
-### Planned features
-
-- **Walk-in data model** — `booking_source` enum (`online`, `walk_in`, `phone`, `admin`), `walk_in_queue` table with queue position, estimated wait, service timestamps, and status tracking
-- **Core logic** — `addWalkIn()` auto-finds the next gap in the schedule. `estimateWaitTime()` calculates wait based on queue length and in-progress services. `startService()`, `completeService()`, `markNoShow()`, `reorderQueue()`
-- **Admin entry form** — `<WalkInEntryForm />` for adding walk-ins: customer name, service selector, provider selector, optional notes. Remembers recent customers
-- **Live queue display** — `<QueueDisplay />` public-facing auto-refreshing queue. `<QueueTicket />` with QR code for tracking. `<QueueManager />` with drag-to-reorder
-- **Walk-in toggle** — `<WalkInToggle />` for providers to start/stop accepting. Auto-disables at end of working hours
-- **QR code check-in** — Customers scan a QR code at the location, fill in name and service, and join the queue without interacting with staff
-- **Analytics** — Walk-in metrics: average wait time, peak hours, no-show rate, walk-in vs appointment ratio
-
-### Designed for
-
-Barber shops, salons, clinics, restaurants — any business that serves both scheduled and walk-in customers.
-
----
-
-## Kiosk Mode & Interactive Schedule Management (E-20)
-
-> **Release R7 · 34 story points · 7 user stories**
-
-A full-screen, Google Calendar-style interactive view for providers to manage their entire schedule from a single screen. Supports drag-and-drop rescheduling, configurable event detail display, inline break/block creation, and integrated walk-in queue management.
-
-### Planned features
-
-- **Kiosk calendar view** — `<KioskCalendar />` built on `react-big-calendar` with `react-dnd` for drag-and-drop. Day, week, and 3-day views. Dragging a booking to a new time triggers a reschedule. Resizing adjusts end time. Double-click opens quick-add
-- **Configurable detail display** — `<KioskSettingsPanel />` to choose which fields show on calendar blocks (name, email, phone, service, status, price, notes). Three density modes: compact, standard, detailed. Settings persisted per provider
-- **Break & block management** — `<BreakBlockForm />` for adding breaks, personal blocks, meetings, and closures. Stored as availability overrides. "Block rest of day" and "Add non-working day" quick actions. Break/booking overlap validation
-- **Drag-and-drop rescheduling** — Ghost preview on drag, confirmation dialog with original/new time, conflict validation, undo toast. `validateReschedule()` pure function for checking conflicts and availability
-- **Walk-in integration** — Collapsible sidebar showing the walk-in queue from E-19. Walk-ins appear as distinct calendar blocks. Toggle walk-in acceptance from the toolbar
-- **Multi-provider kiosk** — Side-by-side provider columns (resource view). Dragging between columns reassigns the booking. Provider toggle and team filter
-- **Full-screen & touch mode** — `<KioskShell />` wrapper with full-screen toggle. Touch-optimized targets (44px minimum), swipe navigation, long-press context menus. `<KioskPinLock />` for idle auto-lock. Wake Lock API support
-
-### Designed for
-
-Tablets at reception desks, wall-mounted displays, and desktop use. Optimized for 10"+ tablets in landscape and smaller screens in portrait.

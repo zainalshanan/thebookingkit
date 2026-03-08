@@ -1,0 +1,81 @@
+/*
+ * Custom CSS overrides for The Booking Kit documentation site.
+ * Imported via astro.config.mjs → starlight({ customCss: [...] }).
+ */
+
+/* -----------------------------------------------------------------------
+ * CardGrid alignment fix
+ *
+ * Starlight's <CardGrid stagger> applies a translateY offset to every
+ * even child to create the staggered visual. This is fine when card
+ * heights are equal, but when card text lengths differ the cards drift
+ * out of vertical alignment. The fix below forces the grid into a
+ * standard (non-staggered) layout on the homepage "Why The Booking Kit?"
+ * section and ensures all cards in any CardGrid stretch to the same
+ * height via align-items: stretch.
+ * ----------------------------------------------------------------------- */
+
+/* Make every card in a CardGrid the full height of its grid row. */
+.sl-markdown-content .card-grid {
+  align-items: stretch;
+}
+
+.sl-markdown-content .card-grid > * {
+  height: 100%;
+}
+
+/* Starlight's stagger effect uses nth-child(even) translateY.
+ * Reset it so cards sit on the same baseline regardless of content
+ * length. The stagger is a purely cosmetic nudge that breaks alignment
+ * when card heights differ.
+ */
+.sl-markdown-content .card-grid.stagger > :nth-child(even) {
+  transform: none;
+}
+
+/* Ensure card inner content flexes to fill the full card height,
+ * keeping icon + title flush to the top and the body text below. */
+.sl-markdown-content .card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.sl-markdown-content .card > .sl-flex {
+  flex: 1;
+}
+
+/* -----------------------------------------------------------------------
+ * Starlight uses a CSS custom property approach for card grids.
+ * The selectors above cover the rendered HTML; the block below
+ * handles the Astro component's scoped class names when present.
+ * ----------------------------------------------------------------------- */
+
+/* Wider gap between cards for better visual breathing room. */
+@media (min-width: 50rem) {
+  .sl-markdown-content .card-grid {
+    gap: 1.5rem;
+  }
+}
+
+/* -----------------------------------------------------------------------
+ * Comparison table tweaks — used on the /getting-started/comparison page.
+ * Makes feature comparison tables readable at narrower viewports.
+ * ----------------------------------------------------------------------- */
+
+.sl-markdown-content table {
+  display: block;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.sl-markdown-content table th,
+.sl-markdown-content table td {
+  white-space: normal;
+  min-width: 8rem;
+}
+
+/* Center-align the tick/cross cells in comparison tables. */
+.sl-markdown-content table td:not(:first-child) {
+  text-align: center;
+}

@@ -11,6 +11,7 @@ export default defineConfig({
 			editLink: {
 				baseUrl: 'https://github.com/thebookingkit/thebookingkit/edit/main/apps/docs/',
 			},
+			customCss: ['./src/styles/custom.css'],
 			sidebar: [
 				{
 					label: 'Getting Started',
@@ -19,6 +20,8 @@ export default defineConfig({
 						{ label: 'Installation', slug: 'getting-started/installation' },
 						{ label: 'Quick Start', slug: 'getting-started/quick-start' },
 						{ label: 'Architecture', slug: 'getting-started/architecture' },
+						{ label: 'Examples & Use Cases', slug: 'getting-started/examples' },
+						{ label: 'Comparison', slug: 'getting-started/comparison' },
 					],
 				},
 				{

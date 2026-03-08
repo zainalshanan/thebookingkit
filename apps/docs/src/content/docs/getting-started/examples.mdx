@@ -1,0 +1,279 @@
+---
+title: Examples & Use Cases
+description: Real-world examples of how The Booking Kit powers different types of booking systems — from barber shops to medical clinics to fitness studios.
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+The Booking Kit is a general-purpose scheduling primitive. The same core APIs power very different booking experiences depending on how you configure them. The examples below show five real use cases with the key API calls for each.
+
+---
+
+## 1. Barber Shop — Forza Barber v2
+
+Forza Barber v2 is the flagship reference implementation for The Booking Kit. It is a production barber shop booking system built on **TanStack Start + Cloudflare Workers + Cloudflare D1**, replacing an earlier Next.js + Payload CMS architecture.
+
+The app covers two Sydney locations (CBD and Bondi), seven barbers with individual weekly schedules, a five-step customer booking wizard, and a full kiosk/admin timeline for walk-in queue management at the reception desk.
+
+**Stack:** TanStack Start, Cloudflare Workers, Cloudflare D1 (SQLite), `@slotkit/core`, `@slotkit/d1`, Drizzle ORM, Tailwind CSS, shadcn/ui.
+
+The `@slotkit/d1` adapter converts the barber shop's `weekly_schedule` JSON format (stored in D1) into the RRULE-based availability rules that `@slotkit/core` expects:
+
+```typescript
+// lib/slotkit-adapter.ts
+import { toWeeklyAvailabilityRules } from '@slotkit/d1';
+import { getAvailableSlots } from '@slotkit/core';
+
+// Each barber stores their schedule as a simple JSON object in D1.
+// The adapter converts this to RRULE-based AvailabilityRuleInput[] that
+// @slotkit/core understands.
+const barberSchedule = {
+  monday:    { startTime: '09:00', endTime: '18:00', isOff: false },
+  tuesday:   { startTime: '09:00', endTime: '18:00', isOff: false },
+  wednesday: { startTime: '09:00', endTime: '18:00', isOff: false },
+  thursday:  { startTime: '09:00', endTime: '21:00', isOff: false },
+  friday:    { startTime: '09:00', endTime: '18:00', isOff: false },
+  saturday:  { startTime: '08:00', endTime: '16:00', isOff: false },
+  sunday:    { startTime: null,    endTime: null,    isOff: true  },
+};
+
+const availabilityRules = toWeeklyAvailabilityRules(
+  barberSchedule,
+  'Australia/Sydney',
+);
+
+// Compute available 30-minute slots for a given barber on a given day.
+const slots = getAvailableSlots({
+  date: new Date('2025-06-15'),
+  durationMinutes: 30,          // Classic Haircut
+  availabilityRules,
+  existingBookings: barberBookings,  // fetched from D1
+  bufferMinutes: 5,
+  timezone: 'Australia/Sydney',
+});
+```
+
+The admin kiosk uses the walk-in queue API to accept walk-in customers alongside scheduled appointments:
+
+```typescript
+import { addWalkIn, estimateWaitTime } from '@slotkit/core';
+
+// Receptionist adds a walk-in at the desk.
+const entry = addWalkIn({
+  queue: currentQueue,
+  barber: selectedBarber,
+  service: { durationMinutes: 30 },
+  existingBookings: todaysBookings,
+  walkedInAt: new Date(),
+});
+
+// Display estimated wait time on the public queue screen.
+const { estimatedWaitMinutes } = estimateWaitTime({
+  queue: currentQueue,
+  position: entry.queuePosition,
+  averageServiceMinutes: 32,
+});
+```
+
+---
+
+## 2. Medical Clinic — Round-Robin Doctor Assignment
+
+A medical clinic needs to route appointment requests to available doctors using round-robin assignment, and requires manual approval before confirming any appointment. Patients book a type of appointment (GP visit, specialist review) and the system assigns a doctor — the patient does not pick one directly.
+
+```typescript
+import { getTeamSlots, assignHost } from '@slotkit/core';
+
+// Get available slots across the entire GP team.
+// The team scheduling engine merges individual availability windows
+// and eliminates conflicts.
+const teamSlots = getTeamSlots({
+  date: new Date('2025-06-15'),
+  durationMinutes: 20,           // Standard GP visit
+  providers: doctors.map(doctor => ({
+    id: doctor.id,
+    availabilityRules: doctor.availabilityRules,
+    existingBookings: doctor.bookings,
+    bufferMinutes: 10,           // 10-minute buffer between patients
+  })),
+  timezone: 'Australia/Sydney',
+  algorithm: 'round-robin',
+});
+
+// When a patient selects a slot, assign the next doctor in rotation.
+const assignedDoctor = assignHost({
+  slot: selectedSlot,
+  providers: doctors,
+  algorithm: 'round-robin',
+  lastAssignedProviderId: clinic.lastAssignedDoctorId,
+});
+
+// Create the booking with manual confirmation mode.
+// The booking is pending until a receptionist approves it.
+const booking = await createBooking({
+  slotStart: selectedSlot.start,
+  slotEnd: selectedSlot.end,
+  providerId: assignedDoctor.id,
+  eventType: {
+    confirmationMode: 'manual',          // requires staff to confirm
+    autoRejectAfterMinutes: 1440,        // auto-reject if not actioned in 24h
+  },
+  customer: patientDetails,
+});
+```
+
+---
+
+## 3. Fitness Studio — Seat-Based Group Classes
+
+A fitness studio runs group classes with a fixed capacity. Multiple participants can book the same time slot up to the seat limit. Classes repeat on the same days each week via a recurring schedule.
+
+```typescript
+import { getAvailableSlots, isSlotAvailable } from '@slotkit/core';
+import { rrulestr } from 'rrule';
+
+// The instructor's recurring availability is defined as an RRULE.
+// This RRULE expands to every Monday and Wednesday at 07:00.
+const morningClassRule = {
+  rrule: 'FREQ=WEEKLY;BYDAY=MO,WE;DTSTART=20250101T070000Z',
+  startTime: '07:00',
+  endTime: '08:00',
+  timezone: 'Australia/Melbourne',
+};
+
+// getAvailableSlots respects the seatCount — a slot is still "available"
+// if fewer than seatCount bookings exist for it.
+const slots = getAvailableSlots({
+  date: new Date('2025-06-16'),  // Monday
+  durationMinutes: 60,
+  availabilityRules: [morningClassRule],
+  existingBookings: classBookings,
+  timezone: 'Australia/Melbourne',
+  seatCount: 15,                 // class capacity
+});
+
+// Before confirming a new participant, verify the seat is still open.
+// This is the final check before the database write.
+const available = isSlotAvailable({
+  slotStart: selectedSlot.start,
+  slotEnd: selectedSlot.end,
+  existingBookings: classBookings,
+  seatCount: 15,
+});
+
+if (!available) {
+  throw new Error('This class is now full. Please join the waitlist.');
+}
+```
+
+---
+
+## 4. Tutoring Platform — Multi-Timezone Routing Forms
+
+A tutoring marketplace connects students with tutors across multiple countries. A routing form first asks the student what subject they need, then routes them to tutors who teach that subject. Slots are displayed in the student's local timezone regardless of where the tutor is located.
+
+```typescript
+import { evaluateRoutingForm, getAvailableSlots } from '@slotkit/core';
+
+// The routing form asks for subject and level, then resolves
+// to a filtered list of tutors and their event types.
+const routingResult = evaluateRoutingForm({
+  form: subjectRoutingForm,
+  responses: {
+    subject: 'Mathematics',
+    level: 'Year 12',
+    preferredLanguage: 'English',
+  },
+});
+
+// routingResult.eventTypeId is the matched tutor's event type.
+// routingResult.providerId may be null if multiple tutors match
+// (the student picks from available slots across all matched tutors).
+
+// Fetch available slots for all matching tutors and convert to
+// the student's local timezone for display.
+const allSlots = await Promise.all(
+  routingResult.matchedProviders.map(tutor =>
+    getAvailableSlots({
+      date: requestedDate,
+      durationMinutes: 60,
+      availabilityRules: tutor.availabilityRules,
+      existingBookings: tutor.bookings,
+      bufferMinutes: 15,
+      timezone: tutor.timezone,            // tutor's own timezone
+    }).map(slot => ({
+      ...slot,
+      // Convert to student's local timezone for display.
+      displayStart: toZonedTime(slot.start, student.timezone),
+      displayEnd:   toZonedTime(slot.end,   student.timezone),
+      tutorId: tutor.id,
+      tutorName: tutor.name,
+    }))
+  )
+);
+
+// Flatten and sort by start time for the student's slot picker.
+const sortedSlots = allSlots.flat().sort(
+  (a, b) => a.start.getTime() - b.start.getTime()
+);
+```
+
+---
+
+## 5. Salon with Walk-Ins — Hybrid Appointment + Queue
+
+A hair salon accepts both pre-booked appointments and walk-in customers. Walk-ins are added to a queue; the system finds the next available gap in the stylist's schedule and slots them in. The public queue display updates in real time so walk-ins can see their estimated wait without asking staff.
+
+```typescript
+import {
+  addWalkIn,
+  estimateWaitTime,
+  findNextAvailableGap,
+  getQueueMetrics,
+} from '@slotkit/core';
+
+// Find the next gap in the stylist's schedule that fits a 45-minute service.
+const nextGap = findNextAvailableGap({
+  existingBookings: stylist.todaysBookings,
+  walkinQueue: stylist.currentQueue,
+  durationMinutes: 45,           // Colour + Cut service
+  workingHoursEnd: new Date('2025-06-15T18:00:00+10:00'),
+  now: new Date(),
+});
+
+// Add the walk-in to the queue at that gap.
+const walkinEntry = addWalkIn({
+  queue: stylist.currentQueue,
+  barber: stylist,
+  service: { durationMinutes: 45 },
+  existingBookings: stylist.todaysBookings,
+  walkedInAt: new Date(),
+  preferredProviderId: stylist.id,  // customer asked for a specific stylist
+});
+
+// Compute wait time for the public-facing display.
+const waitInfo = estimateWaitTime({
+  queue: stylist.currentQueue,
+  position: walkinEntry.queuePosition,
+  averageServiceMinutes: 48,     // actual average from recent completions
+});
+
+// Aggregate queue metrics for the salon's front desk summary.
+const metrics = getQueueMetrics({
+  queue: stylist.currentQueue,
+  completedToday: stylist.completedWalkins,
+});
+// metrics.averageWaitMinutes, metrics.currentQueueLength, metrics.noShowRate
+```
+
+<Aside type="note">
+  Walk-in queue management and kiosk mode are covered in detail in the [Walk-In Queue](/features/walk-in) and [Kiosk Mode](/features/kiosk) feature pages.
+</Aside>
+
+---
+
+## What to Build Next
+
+All five examples above use the same underlying APIs from `@slotkit/core`. The difference is configuration: which scheduling algorithm, what seat count, which timezone, whether confirmation is automatic or manual.
+
+To start integrating The Booking Kit into your own application, follow the [Quick Start](/getting-started/quick-start) guide or review the [Architecture](/getting-started/architecture) page for a full picture of how the packages fit together.
