@@ -5,11 +5,11 @@ import starlight from '@astrojs/starlight';
 export default defineConfig({
 	integrations: [
 		starlight({
-			title: 'SlotKit',
+			title: 'The Booking Kit',
 			description: 'The Headless Booking Primitive — open-source scheduling toolkit for Next.js and Postgres.',
-			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/your-org/slotkit' }],
+			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/thebookingkit/thebookingkit' }],
 			editLink: {
-				baseUrl: 'https://github.com/your-org/slotkit/edit/main/packages/docs/',
+				baseUrl: 'https://github.com/thebookingkit/thebookingkit/edit/main/apps/docs/',
 			},
 			sidebar: [
 				{
@@ -89,6 +89,12 @@ export default defineConfig({
 					label: 'Roadmap',
 					items: [
 						{ label: 'Upcoming Features', slug: 'roadmap/upcoming' },
+					],
+				},
+				{
+					label: 'Release Notes',
+					items: [
+						{ label: 'Changelog', slug: 'changelog' },
 					],
 				},
 			],

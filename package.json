@@ -18,6 +18,9 @@
     "db:generate": "npm -w @thebookingkit/db run db:generate"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.30.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "turbo": "^2.4.0",
     "typescript": "^5.7.0"
   },

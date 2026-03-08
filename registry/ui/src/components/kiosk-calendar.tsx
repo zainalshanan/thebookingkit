@@ -26,7 +26,7 @@ const localizer = dateFnsLocalizer({
 /** A resource (provider/room/equipment) shown as a column in day view */
 export interface KioskResource {
   /** Unique identifier */
-  id: string;
+  id: string | number;
   /** Display label shown in the column header */
   title: string;
 }
@@ -47,7 +47,7 @@ export interface KioskEvent {
   priceCents?: number;
   location?: string;
   /** Resource ID — determines column placement in day view and filtering in week view */
-  resourceId?: string;
+  resourceId?: string | number;
   /** Whether this is a break/block (not a booking) */
   isBlock?: boolean;
   blockType?: "break" | "personal" | "meeting" | "closed";
@@ -98,12 +98,12 @@ export interface KioskCalendarProps {
   /** Called when a booking is clicked */
   onEventClick?: (event: KioskEvent) => void;
   /** Called when an empty time slot is selected. resourceId is the column's resource in day view. */
-  onSlotDoubleClick?: (start: Date, end: Date, resourceId?: string) => void;
+  onSlotDoubleClick?: (start: Date, end: Date, resourceId?: string | number) => void;
   /**
    * Called when a booking is dragged to a new time (or a new resource column).
    * `resourceId` is the target resource when dragging between columns in day view.
    */
-  onEventDrop?: (eventId: string, newStart: Date, newEnd: Date, resourceId?: string) => Promise<void>;
+  onEventDrop?: (eventId: string, newStart: Date, newEnd: Date, resourceId?: string | number) => Promise<void>;
   /** Called when a booking is resized */
   onEventResize?: (eventId: string, newStart: Date, newEnd: Date) => Promise<void>;
   /**
@@ -209,7 +209,7 @@ export function KioskCalendar({
   const hasMultipleResources = resources && resources.length > 1;
 
   // Week-view resource selection: default to first resource.
-  const [selectedResourceId, setSelectedResourceId] = useState<string>(
+  const [selectedResourceId, setSelectedResourceId] = useState<string | number>(
     resources?.[0]?.id ?? "",
   );
   const calendarRef = useRef<HTMLDivElement>(null);
@@ -255,7 +255,7 @@ export function KioskCalendar({
     start: Date;
     end: Date;
     resource: KioskEvent;
-    resourceId?: string;
+    resourceId?: string | number;
   }
 
   // In week view with multiple resources, filter to the selected resource.
@@ -294,7 +294,7 @@ export function KioskCalendar({
   );
 
   const handleSelectSlot = useCallback(
-    ({ start, end, resourceId }: { start: Date; end: Date; resourceId?: string }) => {
+    ({ start, end, resourceId }: { start: Date; end: Date; resourceId?: string | number }) => {
       // In day view, resourceId comes from the clicked column.
       // In week view, resources aren't passed to RBC so resourceId is undefined —
       // fall back to the currently selected resource from the picker.
@@ -314,12 +314,12 @@ export function KioskCalendar({
       event: CalendarEvent;
       start: Date | string;
       end: Date | string;
-      resourceId?: string;
+      resourceId?: string | number;
     }) => {
       if (!onEventDrop) return;
       const s = typeof start === "string" ? new Date(start) : start;
       const e = typeof end === "string" ? new Date(end) : end;
-      await onEventDrop(event.id, s, e, resourceId as string | undefined);
+      await onEventDrop(event.id, s, e, resourceId);
     },
     [onEventDrop],
   );
@@ -526,7 +526,7 @@ export function KioskCalendar({
       </div>
 
       {/* ── Calendar ── */}
-      <Calendar<CalendarEvent>
+      <Calendar<CalendarEvent, KioskResource>
         localizer={localizer}
         events={calendarEvents}
         view={view}
@@ -552,7 +552,6 @@ export function KioskCalendar({
               resourceTitleAccessor: "title" as any,
             }
           : {})}
-        showCurrentTimeIndicator
       />
 
       {/* ── Event Detail Popover ── */}

@@ -1,6 +1,6 @@
 {
   "name": "@thebookingkit/d1",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publishConfig": {
     "access": "public"
   },
@@ -22,7 +22,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@thebookingkit/core": "^0.1.0",
+    "@thebookingkit/core": "^0.1.1",
     "date-fns": "^3.6.0",
     "date-fns-tz": "^3.2.0"
   },
