@@ -18,5 +18,8 @@ export { BookingLifecycleActions, type BookingLifecycleActionsProps } from "./co
 export { ManualBookingForm, type ManualBookingFormProps, type ManualBookingFormValues, type EventTypeOption } from "./components/manual-booking-form.js";
 export { ProviderAuth, type ProviderAuthProps } from "./components/provider-auth.js";
 
+// Team Components
+export { TeamAssignmentEditor, type TeamAssignmentEditorProps, type TeamMemberDisplay } from "./components/team-assignment-editor.js";
+
 // Utilities
 export { cn } from "./utils/cn.js";
