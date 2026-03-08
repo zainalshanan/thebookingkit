@@ -324,3 +324,23 @@ export {
   type ValidationDetail,
   type ValidationResult,
 } from "./api.js";
+
+// CLI Utilities
+export {
+  COMPONENT_REGISTRY,
+  findComponent,
+  resolveComponentDependencies,
+  listComponents,
+  createManifestEntry,
+  hasLocalModifications,
+  generateSlotkitConfig,
+  generateEnvTemplate,
+  parseMigrationFiles,
+  getPendingMigrations,
+  DEFAULT_MANIFEST,
+  type ComponentRegistryEntry,
+  type ManifestEntry,
+  type SlotKitManifest,
+  type SlotKitConfig,
+  type MigrationFile,
+} from "./cli.js";
