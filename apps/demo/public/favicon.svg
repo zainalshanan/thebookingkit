@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Background rounded square -->
+  <rect width="32" height="32" rx="7" ry="7" fill="#0f0f1a"/>
+  <!-- Top slot bar — left-anchored -->
+  <rect x="4" y="8" width="19" height="4" rx="2" fill="#e94560"/>
+  <!-- Middle slot bar — right-anchored -->
+  <rect x="9" y="14" width="19" height="4" rx="2" fill="#e94560"/>
+  <!-- Bottom slot bar — left-anchored -->
+  <rect x="4" y="20" width="19" height="4" rx="2" fill="#e94560"/>
+</svg>

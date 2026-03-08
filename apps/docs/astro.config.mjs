@@ -7,9 +7,9 @@ export default defineConfig({
 		starlight({
 			title: 'The Booking Kit',
 			description: 'The Headless Booking Primitive — open-source scheduling toolkit for Next.js and Postgres.',
-			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/thebookingkit/thebookingkit' }],
+			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/zainalshanan/thebookingkit' }],
 			editLink: {
-				baseUrl: 'https://github.com/thebookingkit/thebookingkit/edit/main/apps/docs/',
+				baseUrl: 'https://github.com/zainalshanan/thebookingkit/edit/main/apps/docs/',
 			},
 			customCss: ['./src/styles/custom.css'],
 			sidebar: [

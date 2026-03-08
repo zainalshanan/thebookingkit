@@ -7,7 +7,7 @@
 [![Tests](https://img.shields.io/badge/Tests-434%20passing-brightgreen)]()
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15%2B-336791)](https://www.postgresql.org/)
 
-**[Documentation](https://docs.thebookingkit.dev)** | **[Live Demo](https://thebookingkit.dev)** | **[GitHub](https://github.com/thebookingkit/thebookingkit)**
+**[Documentation](https://docs.thebookingkit.dev)** | **[Live Demo](https://thebookingkit.dev)** | **[GitHub](https://github.com/zainalshanan/thebookingkit)**
 
 ---
 
@@ -279,7 +279,7 @@ Key infrastructure:
 
 ```bash
 # Clone and install
-git clone https://github.com/thebookingkit/thebookingkit.git
+git clone https://github.com/zainalshanan/thebookingkit.git
 cd thebookingkit
 npm install
 
@@ -413,6 +413,10 @@ See the [full documentation](https://docs.thebookingkit.dev) and the [live demo]
 
 - **Documentation:** [docs.thebookingkit.dev](https://docs.thebookingkit.dev)
 - **Live Demo:** [thebookingkit.dev](https://thebookingkit.dev)
+
+### Branding
+
+The favicon features a three-bar slot schedule icon in brand red (#e94560) on a dark background. Files located at `apps/demo/public/` (`favicon.ico`, `favicon.svg`).
 
 ---
 

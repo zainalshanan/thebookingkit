@@ -45,7 +45,7 @@ export function SiteNav() {
 
         <div className="nav-actions">
           <a
-            href="https://github.com/thebookingkit/slotkit"
+            href="https://github.com/zainalshanan/thebookingkit"
             target="_blank"
             rel="noopener noreferrer"
             className="nav-btn-ghost"

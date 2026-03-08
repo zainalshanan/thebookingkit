@@ -53,7 +53,7 @@ export function HeroSection() {
 
           <div className="hero-links">
             <a
-              href="https://github.com/thebookingkit/slotkit"
+              href="https://github.com/zainalshanan/thebookingkit"
               target="_blank"
               rel="noopener noreferrer"
               className="hero-link"

@@ -51,7 +51,7 @@ export function CTAFooterSection() {
             Read the Docs
           </a>
           <a
-            href="https://github.com/thebookingkit/slotkit"
+            href="https://github.com/zainalshanan/thebookingkit"
             target="_blank"
             rel="noopener noreferrer"
             className="cta-link secondary"
@@ -81,7 +81,7 @@ export function CTAFooterSection() {
             <a href="https://docs.thebookingkit.dev" target="_blank" rel="noopener noreferrer" className="cta-footer-link">
               docs.thebookingkit.dev
             </a>
-            <a href="https://github.com/thebookingkit/slotkit" target="_blank" rel="noopener noreferrer" className="cta-footer-link">
+            <a href="https://github.com/zainalshanan/thebookingkit" target="_blank" rel="noopener noreferrer" className="cta-footer-link">
               GitHub
             </a>
             <a href="https://docs.thebookingkit.dev" target="_blank" rel="noopener noreferrer" className="cta-footer-link">

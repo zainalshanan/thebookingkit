@@ -12,6 +12,13 @@ export const metadata: Metadata = {
     url: "https://thebookingkit.dev",
     siteName: "TheBookingKit",
   },
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "any" },
+    ],
+    shortcut: "/favicon.ico",
+  },
 };
 
 export default function RootLayout({
@@ -22,6 +29,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        {/* Favicon — SVG for modern browsers, ICO fallback for legacy */}
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        <link rel="icon" href="/favicon.ico" sizes="any" />
+        <link rel="shortcut icon" href="/favicon.ico" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
