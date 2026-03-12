@@ -44,14 +44,17 @@ npx tsx packages/db/src/migrate.ts
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS btree_gist;
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 ALTER TABLE bookings
 ADD CONSTRAINT bookings_no_overlap
 EXCLUDE USING gist (
   provider_id WITH =,
   tstzrange(starts_at, ends_at) WITH &&
-) WHERE (status NOT IN ('cancelled', 'rejected'));
+) WHERE (status NOT IN ('cancelled', 'rejected', 'rescheduled'));
 ```
+
+The constraint excludes `cancelled`, `rejected`, and `rescheduled` statuses, allowing old bookings that have been moved to be replaced by new ones without double-booking violations.
 
 ### 0002: Booking audit trigger
 

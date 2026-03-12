@@ -340,14 +340,22 @@ export function findComponent(
  */
 export function resolveComponentDependencies(name: string): string[] {
   const resolved = new Set<string>();
+  const visiting = new Set<string>();
   const queue = [name];
 
   while (queue.length > 0) {
     const current = queue.shift()!;
     if (resolved.has(current)) continue;
+    if (visiting.has(current)) {
+      // Circular dependency detected — skip to avoid infinite loop.
+      console.warn(`Circular dependency detected for component "${current}", skipping.`);
+      continue;
+    }
 
     const entry = findComponent(current);
     if (!entry) continue;
+
+    visiting.add(current);
 
     for (const dep of entry.dependencies) {
       if (!resolved.has(dep)) {
@@ -356,6 +364,7 @@ export function resolveComponentDependencies(name: string): string[] {
     }
 
     resolved.add(current);
+    visiting.delete(current);
   }
 
   const result = [...resolved];

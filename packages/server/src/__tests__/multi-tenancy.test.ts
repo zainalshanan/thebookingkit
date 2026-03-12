@@ -190,9 +190,9 @@ describe("assertTenantScope", () => {
     expect(() => assertTenantScope("org-1", "org-1")).not.toThrow();
   });
 
-  it("does not throw when resource has no org ID", () => {
-    expect(() => assertTenantScope(null, "org-1")).not.toThrow();
-    expect(() => assertTenantScope(undefined, "org-1")).not.toThrow();
+  it("throws when resource has no org ID (QA fix M3)", () => {
+    expect(() => assertTenantScope(null, "org-1")).toThrow("Resource has no organization scope");
+    expect(() => assertTenantScope(undefined, "org-1")).toThrow("Resource has no organization scope");
   });
 
   it("throws when org IDs don't match", () => {

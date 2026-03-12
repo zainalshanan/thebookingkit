@@ -203,7 +203,7 @@ export function d1DayQuery(dateStr: string): {
  * ```ts
  * const { bounds, dateRange } = d1LocalDayQuery("2026-03-09", "Australia/Sydney");
  * // bounds.gte = "2026-03-08T13:00:00.000Z"  (March 9 midnight AEDT)
- * // bounds.lte = "2026-03-09T13:00:00.000Z"  (March 10 midnight AEDT)
+ * // bounds.lte = "2026-03-09T12:59:59.999Z"  (1 ms before March 10 midnight AEDT)
  * // dateRange  = UTC midnight March 9 to 23:59:59.999Z (for slot engine)
  * ```
  */
@@ -220,16 +220,28 @@ export function d1LocalDayQuery(dateStr: string, timezone: string): {
   // D1 query bounds: cover the full local day in UTC
   // This ensures bookings that cross UTC midnight are included
   const localMidnightUtc = new Date(normalizeToUTC(`${dateStr}T00:00:00`, timezone));
-  const nextLocalMidnightUtc = new Date(localMidnightUtc.getTime() + 24 * 60 * 60 * 1000);
+
+  // Parse the next day's date string
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const nextDate = new Date(Date.UTC(y, m - 1, d + 1));
+  const nextDateStr = `${nextDate.getUTCFullYear()}-${String(nextDate.getUTCMonth() + 1).padStart(2, "0")}-${String(nextDate.getUTCDate()).padStart(2, "0")}`;
+  const nextLocalMidnightUtc = new Date(normalizeToUTC(`${nextDateStr}T00:00:00`, timezone));
 
   // Slot engine dateRange: UTC midnight bounds (proven correct with RRULE expansion)
   // The 23:59:59.999Z end prevents including the next day's RRULE occurrence
   const utcDayBounds = D1DateCodec.dayBounds(dateStr);
 
+  // Subtract 1ms from the upper bound so that a booking starting at exactly
+  // the next day's local midnight is NOT included when Drizzle uses lte() (<=).
+  // Without this, a booking at e.g. "2026-03-09T13:00:00.000Z" (midnight AEDT
+  // March 10) would pass the lte filter and appear in the March 9 result set.
+  const lteMs = nextLocalMidnightUtc.getTime() - 1;
+  const lteDate = new Date(lteMs);
+
   return {
     bounds: {
       gte: localMidnightUtc.toISOString(),
-      lte: nextLocalMidnightUtc.toISOString(),
+      lte: lteDate.toISOString(),
     },
     dateRange: {
       start: new Date(utcDayBounds.gte),

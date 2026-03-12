@@ -259,13 +259,17 @@ export function estimateWaitTime(
       ),
   );
 
-  // Add time blocked by scheduled appointments
-  for (const booking of blockingBookings) {
-    if (booking.startsAt > now) {
-      const bookingDuration =
-        (booking.endsAt.getTime() - booking.startsAt.getTime()) / 60000;
-      totalWaitMinutes += bookingDuration;
-    }
+  // Merge overlapping booking intervals before summing to avoid double-counting
+  const mergedIntervals = mergeIntervals(
+    blockingBookings
+      .filter((b) => b.startsAt > now)
+      .map((b) => ({ start: b.startsAt, end: b.endsAt })),
+  );
+
+  // Add merged blocked time
+  for (const interval of mergedIntervals) {
+    const duration = (interval.end.getTime() - interval.start.getTime()) / 60000;
+    totalWaitMinutes += duration;
   }
 
   const estimatedMinutes = Math.ceil(totalWaitMinutes);
@@ -426,9 +430,15 @@ export function reorderQueue(
   }
 
   // Build reordered list
+  const orderedIdSet = new Set(orderedIds);
   const reordered = orderedIds
     .map((id) => entryMap.get(id)!)
     .filter((e) => e.status === "queued"); // Only reorder queued entries
+
+  // Append queued entries whose IDs were not in orderedIds
+  const remaining = entries.filter(
+    (e) => e.status === "queued" && !orderedIdSet.has(e.id),
+  );
 
   // Keep in-service entry at position 1 if it exists
   const inService = entries.find((e) => e.status === "in_service");
@@ -438,10 +448,11 @@ export function reorderQueue(
     result.push({ ...inService, queuePosition: 1 });
   }
 
-  // Add reordered queued entries
-  for (let i = 0; i < reordered.length; i++) {
+  // Add reordered queued entries followed by any unordered remainders
+  const allQueued = [...reordered, ...remaining];
+  for (let i = 0; i < allQueued.length; i++) {
     result.push({
-      ...reordered[i],
+      ...allQueued[i],
       queuePosition: (inService ? 2 : 1) + i,
     });
   }
@@ -660,6 +671,29 @@ export function computeWalkInAnalytics(
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Merge an array of potentially overlapping date intervals into a minimal set
+ * of non-overlapping intervals sorted by start time.
+ */
+function mergeIntervals(
+  intervals: Array<{ start: Date; end: Date }>,
+): Array<{ start: Date; end: Date }> {
+  if (intervals.length === 0) return [];
+  const sorted = [...intervals].sort(
+    (a, b) => a.start.getTime() - b.start.getTime(),
+  );
+  const merged: Array<{ start: Date; end: Date }> = [sorted[0]];
+  for (let i = 1; i < sorted.length; i++) {
+    const last = merged[merged.length - 1];
+    if (sorted[i].start <= last.end) {
+      last.end = sorted[i].end > last.end ? sorted[i].end : last.end;
+    } else {
+      merged.push(sorted[i]);
+    }
+  }
+  return merged;
+}
 
 /** Find the booking currently in progress */
 function findCurrentBooking(

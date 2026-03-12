@@ -34,6 +34,7 @@ import {
   webhookDeliveries,
   emailDeliveryLog,
   customerPreferences,
+  walkInQueue,
 } from "./schema/index.js";
 
 // --- Select types (read from DB) ---
@@ -59,6 +60,7 @@ export type Webhook = InferSelectModel<typeof webhooks>;
 export type WebhookDelivery = InferSelectModel<typeof webhookDeliveries>;
 export type EmailDeliveryLogEntry = InferSelectModel<typeof emailDeliveryLog>;
 export type CustomerPreference = InferSelectModel<typeof customerPreferences>;
+export type WalkInQueue = InferSelectModel<typeof walkInQueue>;
 
 // --- Insert types (write to DB) ---
 export type NewOrganization = InferInsertModel<typeof organizations>;
@@ -83,3 +85,4 @@ export type NewWebhook = InferInsertModel<typeof webhooks>;
 export type NewWebhookDelivery = InferInsertModel<typeof webhookDeliveries>;
 export type NewEmailDeliveryLogEntry = InferInsertModel<typeof emailDeliveryLog>;
 export type NewCustomerPreference = InferInsertModel<typeof customerPreferences>;
+export type NewWalkInQueue = InferInsertModel<typeof walkInQueue>;

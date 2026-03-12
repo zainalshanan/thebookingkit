@@ -329,9 +329,11 @@ describe("Cross-midnight UTC boundary edge cases", () => {
 
     const { dateRange, bounds } = d1LocalDayQuery("2026-03-09", "Australia/Sydney");
 
-    // Bounds cover March 9 Sydney time (March 8 13:00 UTC to March 9 13:00 UTC)
+    // Bounds cover March 9 Sydney time (March 8 13:00 UTC to 1ms before March 9 13:00 UTC).
+    // lte is midnight-1ms so a booking at exactly the next day's midnight is excluded
+    // when Drizzle's lte() (<=) is used.
     expect(bounds.gte).toBe("2026-03-08T13:00:00.000Z");
-    expect(bounds.lte).toBe("2026-03-09T13:00:00.000Z");
+    expect(bounds.lte).toBe("2026-03-09T12:59:59.999Z");
 
     // dateRange uses UTC midnight — proven correct for RRULE expansion
     expect(dateRange.start.toISOString()).toBe("2026-03-09T00:00:00.000Z");
@@ -357,9 +359,9 @@ describe("Cross-midnight UTC boundary edge cases", () => {
     // March 9 2026 is a Monday. DST springs forward on March 8 (EDT = UTC-4).
     const { dateRange, bounds } = d1LocalDayQuery("2026-03-09", "America/New_York");
 
-    // Bounds cover March 9 New York time
+    // Bounds cover March 9 New York time. lte is midnight-1ms (exclusive upper bound).
     expect(bounds.gte).toBe("2026-03-09T04:00:00.000Z");
-    expect(bounds.lte).toBe("2026-03-10T04:00:00.000Z");
+    expect(bounds.lte).toBe("2026-03-10T03:59:59.999Z");
 
     // dateRange uses UTC midnight — correct for RRULE expansion
     expect(dateRange.start.toISOString()).toBe("2026-03-09T00:00:00.000Z");

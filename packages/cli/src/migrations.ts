@@ -30,6 +30,11 @@ export function parseMigrationFiles(filenames: string[]): MigrationFile[] {
   return filenames
     .map((filename) => {
       const match = filename.match(/^(\d+)_/);
+      if (!match) {
+        console.warn(
+          `Migration file "${filename}" does not match the expected "^(\\d+)_" pattern — assigning version 0.`,
+        );
+      }
       const version = match ? parseInt(match[1], 10) : 0;
       return { filename, version };
     })

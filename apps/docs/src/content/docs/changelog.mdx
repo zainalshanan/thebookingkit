@@ -7,6 +7,49 @@ description: Latest updates and release notes for The Booking Kit.
 
 All notable changes to The Booking Kit will be documented in this file.
 
+## 0.1.5 (2026-03-12)
+
+### QA Audit — 49 Critical & High Priority Bug Fixes
+
+This release includes a comprehensive QA audit across all packages, fixing 49 bugs across scheduling logic, database constraints, server security, D1 adapter edge cases, and CLI stability.
+
+#### @thebookingkit/core (13 fixes)
+
+- **Critical**: Midnight-crossing availability windows now produce correct slots; single `now` reference in slot filter prevents time drift; RRULE `dtstart` preserved when `BYDAY` is present
+- **High**: Booking limit counters increment after validation; overlapping booking intervals merged before wait time calculation; array responses handled element-wise in condition evaluation
+- **Medium**: Multi-select validation rejects invalid options; break-to-override returns specific time window; HTML escaping in embed snippets
+- **Low**: Slug generation handles special characters; cancellation fee validation throws on invalid timing; queue reordering preserves unmentioned entries; auto-reject deadlines clamped to minimum 1 hour
+
+#### @thebookingkit/db (9 fixes)
+
+- **Critical**: EXCLUDE constraint now excludes `rescheduled` status; audit trigger uses `updated` fallback; metadata initialization fixed
+- **High**: `teams.slug` and `eventTypes.slug` now have unique constraints
+- **Medium**: `bookingEvents.bookingId` changed to `onDelete: restrict` to protect audit trail; `WalkInQueue` type exports added; pgcrypto extension added to setup migration
+- **Low**: Added vitest test script
+
+#### @thebookingkit/d1 (13 fixes)
+
+- **Critical**: SQL identifier validation prevents injection; table name validation in migrations
+- **High**: Lock acquisition only retries on UNIQUE constraint errors; other errors re-thrown immediately
+- **Medium**: DST-aware day boundary computation; 1ms adjustment for midnight exclusion; hour normalization and validation; stricter time range validation; stale lock cleanup timing; date codec refactored to reject ambiguous formats
+- **Low**: Out-of-range time rejection; unused import removed
+
+#### @thebookingkit/server (14 fixes)
+
+- **Critical**: Full 256-bit HMAC signatures in booking tokens; constant-time comparison for token verification
+- **High**: Error handling sanitizes stack traces; role hierarchy enforces admin > provider > member; SSRF validation on webhook subscriptions and fire_webhook action; UUID validation in slot query params
+- **Medium**: Multi-tenancy scope assertions throw on null resource; recursive template injection prevented; XSS prevention in email templates; 90-day date range limit for DoS prevention; slug validation prevents path traversal; timezone-aware time/date formatting in workflows
+- **Low**: ICS carriage return stripping prevents line structure injection
+
+#### @thebookingkit/cli (16 fixes)
+
+- **Critical**: Registry HTTPS validation; adapter input validation prevents shell injection
+- **High**: Manifest JSON parse errors wrapped with helpful messages; partial install state preserved; null-check on registry responses; directory escape prevention; circular dependency detection
+- **Medium**: Dynamic version from package.json; default manifest factory creates fresh instances; migration filename warnings; path traversal prevention
+- **Low**: Config template shape fixed; quote/backslash injection prevention; unused import removed; adapter config validation
+
+---
+
 ## 0.1.3 (2026-03-10)
 
 ### KioskCalendar — Drag-and-Drop & Schedule Map

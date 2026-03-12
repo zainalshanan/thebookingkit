@@ -1,5 +1,41 @@
 # @thebookingkit/d1
 
+## 0.1.5
+
+### Minor Changes — QA Audit (2026-03-12)
+
+13 bugs fixed in `@thebookingkit/d1`.
+
+### Bug Fixes
+
+#### Critical
+
+- **C1** — `D1BookingLock` constructor validates `tableName` against `/^[a-zA-Z_][a-zA-Z0-9_]*$/`, preventing SQL injection via identifier interpolation (`lock.ts`)
+- **C2** — `buildMigrationSql` validates `tableName`, `primaryKey`, and all column keys against the same identifier regex before constructing SQL (`migration.ts`)
+
+#### High
+
+- **H6** — `D1BookingLock.acquire()` inspects error messages for `"UNIQUE constraint"` and only retries on those; all other errors are re-thrown immediately instead of being masked as `LockAcquisitionError` (`lock.ts`)
+
+#### Medium
+
+- **M1** — `d1LocalDayQuery` computes next-day midnight using `normalizeToUTC` on the next date string, producing correct 23h/25h spans on DST transition days instead of a flat 24h addition (`booking-helpers.ts`)
+- **M2** — `d1LocalDayQuery` subtracts 1ms from `bounds.lte` so bookings starting at exactly the next day's midnight are excluded from `<=` queries (`booking-helpers.ts`)
+- **M3** — `weeklyScheduleToRules` normalizes single-digit hours (e.g. `"9:00"` → `"09:00"`) before validation instead of silently dropping them (`schedule-adapter.ts`)
+- **M4** — `isHHmm` regex tightened from `/^\d{2}:\d{2}$/` to `/^([01]\d|2[0-3]):[0-5]\d$/`, rejecting out-of-range values like `"25:00"` or `"99:99"` (`schedule-adapter.ts`)
+- **M5** — Stale lock cleanup threshold changed from `now - lockTtlMs` to `now`, so expired locks are cleaned up immediately instead of after 2x TTL (`lock.ts`)
+- **M6** — `D1DateCodec.encode()` removed the `new Date(value)` fallback that accepted ambiguous strings; now throws `RangeError` for non-ISO formats (`codec.ts`)
+- **M7** — `D1DateCodec.decode()` explicitly rejects date-only strings (`"YYYY-MM-DD"`) with `D1DateDecodeError` instead of silently accepting them via V8's `new Date()` path (`codec.ts`)
+
+#### Low
+
+- **L1** — `weeklyScheduleToRules` throws `RangeError` for inverted time windows (`startTime >= endTime`) instead of silently discarding them (`schedule-adapter.ts`)
+- **L2** — Removed unused `BookingConflictError` import from `lock.ts`
+
+### Dependencies
+
+- Updated `@thebookingkit/core` to `^0.1.5`
+
 ## 0.1.1
 
 ### Patch Changes

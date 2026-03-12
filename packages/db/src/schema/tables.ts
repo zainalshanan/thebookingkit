@@ -60,7 +60,7 @@ export const teams = pgTable("teams", {
   id: idColumn(),
   organizationId: uuid("organization_id").references(() => organizations.id),
   name: text("name").notNull(),
-  slug: varchar("slug", { length: 255 }).notNull(),
+  slug: varchar("slug", { length: 255 }).notNull().unique(),
   assignmentStrategy: assignmentStrategyEnum("assignment_strategy")
     .notNull()
     .default("round_robin"),
@@ -121,7 +121,7 @@ export const eventTypes = pgTable(
     }),
     organizationId: uuid("organization_id").references(() => organizations.id),
     title: text("title").notNull(),
-    slug: varchar("slug", { length: 255 }).notNull(),
+    slug: varchar("slug", { length: 255 }).notNull().unique(),
     description: text("description"),
     durationMinutes: integer("duration_minutes").notNull().default(30),
     bufferBefore: integer("buffer_before").notNull().default(0),
@@ -289,7 +289,7 @@ export const bookingEvents = pgTable(
     id: idColumn(),
     bookingId: uuid("booking_id")
       .notNull()
-      .references(() => bookings.id, { onDelete: "cascade" }),
+      .references(() => bookings.id, { onDelete: "restrict" }),
     eventType: bookingEventTypeEnum("event_type").notNull(),
     actor: text("actor").notNull(), // user ID or 'system'
     metadata: jsonb("metadata").default({}),

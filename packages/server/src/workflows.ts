@@ -181,13 +181,14 @@ export function resolveTemplateVariables(
   template: string,
   context: WorkflowContext,
 ): string {
+  const tz = typeof context.timezone === "string" ? context.timezone : undefined;
   const vars: Record<string, string> = {
     "{booking.title}": context.eventTitle ?? "",
     "{booking.startTime}": context.startsAt
-      ? formatTime(context.startsAt)
+      ? formatTime(context.startsAt, tz)
       : "",
-    "{booking.endTime}": context.endsAt ? formatTime(context.endsAt) : "",
-    "{booking.date}": context.startsAt ? formatDate(context.startsAt) : "",
+    "{booking.endTime}": context.endsAt ? formatTime(context.endsAt, tz) : "",
+    "{booking.date}": context.startsAt ? formatDate(context.startsAt, tz) : "",
     "{attendee.name}": context.customerName ?? "",
     "{attendee.email}": context.customerEmail ?? "",
     "{host.name}": context.hostName ?? "",
@@ -206,20 +207,22 @@ export function resolveTemplateVariables(
   return result;
 }
 
-function formatTime(date: Date): string {
+function formatTime(date: Date, timeZone?: string): string {
   return date.toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
+    ...(timeZone ? { timeZone } : {}),
   });
 }
 
-function formatDate(date: Date): string {
+function formatDate(date: Date, timeZone?: string): string {
   return date.toLocaleDateString("en-US", {
     weekday: "long",
     year: "numeric",
     month: "long",
     day: "numeric",
+    ...(timeZone ? { timeZone } : {}),
   });
 }
 
@@ -398,6 +401,27 @@ function validateAction(action: WorkflowAction): void {
         throw new WorkflowValidationError(
           "Webhook action requires 'url' field",
         );
+      }
+      {
+        let parsedUrl: URL;
+        try {
+          parsedUrl = new URL(action.url);
+        } catch {
+          throw new WorkflowValidationError(
+            `Webhook action has invalid URL: "${action.url}"`,
+          );
+        }
+        if (parsedUrl.protocol !== "https:") {
+          throw new WorkflowValidationError("Webhook URL must use HTTPS");
+        }
+        const hostname = parsedUrl.hostname.toLowerCase();
+        const ssrfPattern =
+          /^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|169\.254\.\d+\.\d+|\[::1\]|::1)$/;
+        if (ssrfPattern.test(hostname)) {
+          throw new WorkflowValidationError(
+            `Webhook URL hostname is not allowed: "${hostname}"`,
+          );
+        }
       }
       break;
 

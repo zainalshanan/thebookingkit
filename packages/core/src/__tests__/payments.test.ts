@@ -154,19 +154,17 @@ describe("evaluateCancellationFee", () => {
     expect(result.matchedTier.hoursBefore).toBe(0);
   });
 
-  it("returns 100% fee when cancelled after booking start", () => {
-    // Cancel after the booking started
+  it("throws when cancelled after booking start", () => {
+    // Cancel after the booking started — should throw since QA fix
     const cancelledAt = new Date("2026-03-15T15:00:00Z");
-    const result = evaluateCancellationFee(
-      standardPolicy,
-      bookingStart,
-      cancelledAt,
-      5000,
-    );
-
-    expect(result.feePercentage).toBe(100);
-    expect(result.feeCents).toBe(5000);
-    expect(result.refundCents).toBe(0);
+    expect(() =>
+      evaluateCancellationFee(
+        standardPolicy,
+        bookingStart,
+        cancelledAt,
+        5000,
+      ),
+    ).toThrow("Cannot cancel a booking that has already started");
   });
 
   it("returns 0% fee at exactly 24 hours before", () => {

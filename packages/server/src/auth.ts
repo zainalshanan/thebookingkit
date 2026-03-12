@@ -36,8 +36,14 @@ export interface AuthenticatedRequest extends Request {
 /** Options for the withAuth middleware */
 export interface WithAuthOptions {
   /** Require a specific role */
-  requiredRole?: "admin" | "provider" | "customer";
+  requiredRole?: "admin" | "provider" | "member";
 }
+
+const ROLE_HIERARCHY: Record<string, number> = {
+  admin: 3,
+  provider: 2,
+  member: 1,
+};
 
 /**
  * Middleware wrapper that injects the authenticated user into every request.
@@ -82,9 +88,13 @@ export function withAuth(
         throw new UnauthorizedError();
       }
 
-      // Check required role if specified
-      if (options?.requiredRole && user.role !== options.requiredRole) {
-        throw new ForbiddenError();
+      // Check required role if specified — use hierarchy so admin satisfies provider requirement
+      if (options?.requiredRole) {
+        const userLevel = ROLE_HIERARCHY[user.role ?? ""] ?? 0;
+        const requiredLevel = ROLE_HIERARCHY[options.requiredRole] ?? 0;
+        if (userLevel < requiredLevel) {
+          throw new ForbiddenError();
+        }
       }
 
       // Inject user into request
@@ -105,7 +115,10 @@ export function withAuth(
           { status: 403 },
         );
       }
-      throw error;
+      return Response.json(
+        { error: "Internal server error", code: "INTERNAL_ERROR" },
+        { status: 500 },
+      );
     }
   };
 }

@@ -1,4 +1,4 @@
-import { createHmac } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 
 /**
  * Generate a signed booking management token.
@@ -18,8 +18,7 @@ export function generateBookingToken(
   const payload = `${bookingId}:${expiresAt.getTime()}`;
   const signature = createHmac("sha256", secret)
     .update(payload)
-    .digest("hex")
-    .slice(0, 16);
+    .digest("hex");
   return Buffer.from(`${payload}:${signature}`).toString("base64url");
 }
 
@@ -49,10 +48,11 @@ export function verifyBookingToken(
     const payload = `${bookingId}:${expiresAtStr}`;
     const expectedSig = createHmac("sha256", secret)
       .update(payload)
-      .digest("hex")
-      .slice(0, 16);
+      .digest("hex");
 
-    if (signature !== expectedSig) return null;
+    const a = Buffer.from(expectedSig, "hex");
+    const b = Buffer.from(signature, "hex");
+    if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
 
     return { bookingId, expiresAt };
   } catch {

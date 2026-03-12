@@ -32,6 +32,12 @@ export interface SlotComputeOptions {
   eventTypeId?: string;
   /** Slot interval in minutes (default: same as duration) */
   slotInterval?: number;
+  /**
+   * The reference point for filtering out past slots.
+   * Defaults to `new Date()` when omitted. Inject an explicit value in tests
+   * or server-side rendering to make slot generation fully deterministic.
+   */
+  now?: Date;
 }
 
 /**

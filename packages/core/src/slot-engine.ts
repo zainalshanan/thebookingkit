@@ -40,6 +40,9 @@ export function getAvailableSlots(
   const bufferBefore = options?.bufferBefore ?? 0;
   const bufferAfter = options?.bufferAfter ?? 0;
   const slotInterval = options?.slotInterval ?? duration;
+  // C2 fix: capture "now" once so the filter is deterministic within a single
+  // call. Callers can inject a stable value via options.now for testing or SSR.
+  const now = options?.now ?? new Date();
 
   // --- Step 1: Base Layer — Expand RRULE into raw time windows ---
   const rawWindows: Array<{ start: Date; end: Date }> = [];
@@ -57,7 +60,15 @@ export function getAvailableSlots(
       const endLocal = `${occ.date}T${occ.endTime}:00`;
 
       const windowStart = fromZonedTime(startLocal, rule.timezone);
-      const windowEnd = fromZonedTime(endLocal, rule.timezone);
+      let windowEnd = fromZonedTime(endLocal, rule.timezone);
+
+      // C1 fix: if the end time is on the same calendar day as the start time
+      // but numerically earlier (e.g. 22:00 -> 02:00), the window crosses
+      // midnight. Advance windowEnd by 24 hours so the slot loop terminates
+      // correctly instead of producing zero slots.
+      if (windowEnd <= windowStart) {
+        windowEnd = addMinutes(windowEnd, 24 * 60);
+      }
 
       rawWindows.push({ start: windowStart, end: windowEnd });
     }
@@ -129,8 +140,11 @@ export function getAvailableSlots(
       }
     }
 
-    // Filter out slots in the past
-    if (slot.start <= new Date()) return false;
+    // Filter out slots whose end time is already in the past.
+    // Using slot.end < now (strict less-than) rather than slot.start <= now so
+    // that a slot still in progress (started but not yet ended) remains
+    // bookable. (C2: `now` is captured once above — not re-evaluated per slot)
+    if (slot.end < now) return false;
 
     return true;
   });
@@ -192,7 +206,12 @@ export function isSlotAvailable(
 
     for (const occ of occurrences) {
       const windowStart = fromZonedTime(`${occ.date}T${occ.startTime}:00`, rule.timezone);
-      const windowEnd = fromZonedTime(`${occ.date}T${occ.endTime}:00`, rule.timezone);
+      let windowEnd = fromZonedTime(`${occ.date}T${occ.endTime}:00`, rule.timezone);
+
+      // C1 fix: same midnight-crossing correction as in getAvailableSlots
+      if (windowEnd <= windowStart) {
+        windowEnd = addMinutes(windowEnd, 24 * 60);
+      }
 
       if (startTime >= windowStart && endTime <= windowEnd) {
         withinAvailability = true;

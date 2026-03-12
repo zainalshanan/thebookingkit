@@ -251,7 +251,7 @@ describe("encodeCursor / decodeCursor", () => {
 
 describe("validateSlotQueryParams", () => {
   const validParams = {
-    providerId: "prov-1",
+    providerId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     start: "2026-03-15",
     end: "2026-04-15",
     timezone: "America/New_York",

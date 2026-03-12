@@ -1,6 +1,6 @@
 {
   "name": "@thebookingkit/server",
-  "version": "0.1.3",
+  "version": "0.1.5",
   "description": "Backend APIs, auth middleware, webhooks, notifications, and multi-tenant utilities for The Booking Kit",
   "license": "MIT",
   "repository": {
@@ -41,7 +41,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@thebookingkit/core": "^0.1.3"
+    "@thebookingkit/core": "^0.1.5"
   },
   "devDependencies": {
     "@types/node": "^25.3.5",

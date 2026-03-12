@@ -1,6 +1,6 @@
 {
   "name": "@thebookingkit/core",
-  "version": "0.1.3",
+  "version": "0.1.5",
   "description": "Headless scheduling engine: slot computation, RRULE expansion, team assignment, recurring bookings, walk-ins, and kiosk mode",
   "license": "MIT",
   "repository": {

@@ -177,6 +177,10 @@ export function evaluateCancellationFee(
   const hoursRemaining =
     (bookingStartsAt.getTime() - cancelledAt.getTime()) / (1000 * 60 * 60);
 
+  if (hoursRemaining < 0) {
+    throw new PaymentValidationError("Cannot cancel a booking that has already started");
+  }
+
   // Walk tiers from longest notice to shortest
   // Find the tier where hoursRemaining is >= tier.hoursBefore
   let matchedTier = policy[policy.length - 1]; // default to shortest notice tier

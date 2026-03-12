@@ -55,7 +55,8 @@ export function getAutoRejectDeadline(
   createdAt: Date,
   timeoutHours: number = CONFIRMATION_TIMEOUT_HOURS,
 ): Date {
-  return new Date(createdAt.getTime() + timeoutHours * 60 * 60 * 1000);
+  const clampedHours = Math.max(1, timeoutHours);
+  return new Date(createdAt.getTime() + clampedHours * 60 * 60 * 1000);
 }
 
 /**

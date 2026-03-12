@@ -21,12 +21,11 @@ BEGIN
       v_event_type := NEW.status::booking_event_type;
     ELSE
       -- Non-status change (e.g. metadata update)
-      v_event_type := 'confirmed'; -- fallback; use confirmed for non-status updates
+      v_event_type := 'updated'; -- fallback; neutral event type for non-status updates
       v_metadata := jsonb_build_object('update', 'non_status_change');
     END IF;
 
     -- Build metadata with changed fields
-    v_metadata := '{}'::jsonb;
     IF NEW.status != OLD.status THEN
       v_metadata := v_metadata || jsonb_build_object('old_status', OLD.status, 'new_status', NEW.status);
     END IF;

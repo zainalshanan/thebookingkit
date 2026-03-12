@@ -111,10 +111,10 @@ describe("weeklyScheduleToRules()", () => {
       sunday:    { startTime: null,    endTime: null,     isOff: true  },
     };
 
-    const rules = weeklyScheduleToRules(invalidWindow, "UTC");
-    // Only Wednesday should produce a rule
-    expect(rules).toHaveLength(1);
-    expect(rules[0].rrule).toContain("WE");
+    // After QA fix, inverted time windows throw a RangeError
+    expect(() => weeklyScheduleToRules(invalidWindow, "UTC")).toThrow(
+      /inverted time window/,
+    );
   });
 
   it("produces valid AvailabilityRuleInput objects with all required fields", () => {

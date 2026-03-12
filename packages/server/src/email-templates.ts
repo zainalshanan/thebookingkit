@@ -23,13 +23,22 @@ export interface EmailTemplateVars {
  * Interpolate template variables into a template string.
  * Variables use the format `{variableName}`.
  */
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export function interpolateTemplate(
   template: string,
   vars: EmailTemplateVars,
 ): string {
   return template.replace(/\{(\w+)\}/g, (match, key) => {
     const value = (vars as unknown as Record<string, string | undefined>)[key];
-    return value ?? match;
+    return value != null ? escapeHtml(value) : match;
   });
 }
 

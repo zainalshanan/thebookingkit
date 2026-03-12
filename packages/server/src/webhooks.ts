@@ -269,8 +269,10 @@ export function resolvePayloadTemplate(
 
   let result = template;
   for (const [key, value] of Object.entries(vars)) {
-    result = result.replaceAll(key, value);
+    const safeValue = value.replace(/\{/g, "\x00LBRACE\x00").replace(/\}/g, "\x00RBRACE\x00");
+    result = result.replaceAll(key, safeValue);
   }
+  result = result.replace(/\x00LBRACE\x00/g, "{").replace(/\x00RBRACE\x00/g, "}");
 
   return result;
 }
@@ -354,11 +356,27 @@ export function validateWebhookSubscription(
     throw new WebhookValidationError("Subscriber URL is required");
   }
 
+  let parsedUrl: URL;
   try {
-    new URL(subscription.subscriberUrl);
+    parsedUrl = new URL(subscription.subscriberUrl);
   } catch {
     throw new WebhookValidationError(
       `Invalid subscriber URL: "${subscription.subscriberUrl}"`,
+    );
+  }
+
+  if (parsedUrl.protocol !== "https:") {
+    throw new WebhookValidationError(
+      "Subscriber URL must use HTTPS",
+    );
+  }
+
+  const hostname = parsedUrl.hostname.toLowerCase();
+  const ssrfPattern =
+    /^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|169\.254\.\d+\.\d+|\[::1\]|::1)$/;
+  if (ssrfPattern.test(hostname)) {
+    throw new WebhookValidationError(
+      `Subscriber URL hostname is not allowed: "${hostname}"`,
     );
   }
 

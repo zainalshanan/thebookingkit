@@ -168,42 +168,51 @@ function validateBranding(branding: EmbedBranding): void {
  * @param config - The embed configuration
  * @returns The HTML snippet with appropriate data attributes
  */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export function generateEmbedSnippet(config: EmbedConfig): string {
   const attrs: Record<string, string> = {
     src: `${config.baseUrl}/embed/thebookingkit-embed.js`,
-    "data-provider": config.providerId,
-    "data-event-type": config.eventTypeSlug,
-    "data-mode": config.mode,
+    "data-provider": escapeHtml(config.providerId),
+    "data-event-type": escapeHtml(config.eventTypeSlug),
+    "data-mode": escapeHtml(config.mode),
   };
 
   if (config.container) {
-    attrs["data-container"] = config.container;
+    attrs["data-container"] = escapeHtml(config.container);
   }
 
   if (config.locale) {
-    attrs["data-locale"] = config.locale;
+    attrs["data-locale"] = escapeHtml(config.locale);
   }
 
   if (config.redirectUrl) {
-    attrs["data-redirect-url"] = config.redirectUrl;
+    attrs["data-redirect-url"] = escapeHtml(config.redirectUrl);
   }
 
   if (config.branding) {
     const { primaryColor, backgroundColor, textColor, borderRadius, fontFamily } =
       config.branding;
-    if (primaryColor) attrs["data-color-primary"] = primaryColor;
-    if (backgroundColor) attrs["data-color-background"] = backgroundColor;
-    if (textColor) attrs["data-color-text"] = textColor;
+    if (primaryColor) attrs["data-color-primary"] = escapeHtml(primaryColor);
+    if (backgroundColor) attrs["data-color-background"] = escapeHtml(backgroundColor);
+    if (textColor) attrs["data-color-text"] = escapeHtml(textColor);
     if (borderRadius !== undefined)
       attrs["data-border-radius"] = String(borderRadius);
-    if (fontFamily) attrs["data-font-family"] = fontFamily;
+    if (fontFamily) attrs["data-font-family"] = escapeHtml(fontFamily);
   }
 
   const attrStr = Object.entries(attrs)
     .map(([k, v]) => `  ${k}="${v}"`)
     .join("\n");
 
-  return `<script\n${attrStr}\n  async\n></script>`;
+  return `<script\n${attrStr}\n  async\n>`;
 }
 
 /**

@@ -62,10 +62,26 @@ export function parseRecurrence(
     }
 
     const rule = RRule.fromString(mainRuleLine);
+
+    // C3 fix: when the rule carries an explicit BYDAY (byweekday) constraint,
+    // anchoring dtstart on dateRange.start is safe — the BYDAY filter will
+    // select the correct day of week regardless of what day dateRange.start
+    // falls on. But when there is NO byweekday, the RRULE engine inherits the
+    // day-of-week from dtstart itself (e.g. FREQ=WEEKLY without BYDAY recurs
+    // on the same weekday as dtstart). Overriding dtstart with dateRange.start
+    // then shifts occurrences to whatever weekday the query window begins on.
+    // Fix: for rules without an explicit byweekday, fall back to the rule's
+    // own dtstart if present, otherwise use a well-known Monday epoch so that
+    // FREQ=WEEKLY always anchors on Monday in a predictable way.
+    const hasExplicitByDay = rule.origOptions.byweekday != null;
+    const dtstart = hasExplicitByDay
+      ? dateRange.start
+      : (rule.origOptions.dtstart ?? new Date("2024-01-01T00:00:00Z"));
+
     ruleSet.rrule(
       new RRule({
         ...rule.origOptions,
-        dtstart: dateRange.start,
+        dtstart,
       }),
     );
 

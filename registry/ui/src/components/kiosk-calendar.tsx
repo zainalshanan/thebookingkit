@@ -129,6 +129,17 @@ export interface KioskCalendarProps {
   resizable?: boolean;
   /** Per-resource schedule map for dimming off-hours slots. Keyed by resource ID. */
   scheduleMap?: Map<string | number, KioskScheduleEntry>;
+  /**
+   * Controlled date value. When provided the calendar displays this date
+   * instead of its own internal state (controlled/uncontrolled pattern).
+   */
+  date?: Date;
+  /**
+   * Called whenever the calendar navigates to a new date (prev/next/today
+   * buttons or keyboard arrows). When a controlled `date` prop is supplied
+   * the parent is responsible for updating the value via this callback.
+   */
+  onDateChange?: (date: Date) => void;
   /** Additional CSS class name */
   className?: string;
   /** Inline styles */
@@ -217,11 +228,23 @@ export function KioskCalendar({
   eventStyleGetter: customStyleGetter,
   resizable = false,
   scheduleMap,
+  date: controlledDate,
+  onDateChange,
   className,
   style,
 }: KioskCalendarProps) {
   const [view, setView] = useState<View>(defaultView);
-  const [date, setDate] = useState<Date>(startOfToday());
+  const [internalDate, setInternalDate] = useState<Date>(startOfToday());
+
+  // When a controlled date is provided use it; otherwise fall back to internal state.
+  const date = controlledDate ?? internalDate;
+
+  // Helper: update date via internal state and notify parent if a callback was given.
+  const setDate = (updater: Date | ((prev: Date) => Date)) => {
+    const next = typeof updater === "function" ? updater(date) : updater;
+    if (!controlledDate) setInternalDate(next);
+    onDateChange?.(next);
+  };
   const [selectedEvent, setSelectedEvent] = useState<KioskEvent | null>(null);
 
   // Whether there are multiple resources (enables column layout in day view

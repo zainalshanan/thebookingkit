@@ -252,7 +252,12 @@ export function assertTenantScope(
   resourceOrgId: string | null | undefined,
   expectedOrgId: string,
 ): void {
-  if (resourceOrgId && resourceOrgId !== expectedOrgId) {
+  if (resourceOrgId == null) {
+    throw new TenantAuthorizationError(
+      "Resource has no organization scope",
+    );
+  }
+  if (resourceOrgId !== expectedOrgId) {
     throw new TenantAuthorizationError(
       "Resource does not belong to the current organization",
     );
@@ -268,12 +273,19 @@ export function assertTenantScope(
  * @param baseUrl - Base URL of the application
  * @returns Full booking URL
  */
+const SLUG_RE = /^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$/;
+
 export function buildOrgBookingUrl(
   orgSlug: string,
   providerSlug: string,
   eventTypeSlug: string,
   baseUrl: string,
 ): string {
+  for (const [name, slug] of [["orgSlug", orgSlug], ["providerSlug", providerSlug], ["eventTypeSlug", eventTypeSlug]] as const) {
+    if (!SLUG_RE.test(slug)) {
+      throw new TenantAuthorizationError(`Invalid ${name}: "${slug}"`);
+    }
+  }
   return `${baseUrl}/${orgSlug}/${providerSlug}/${eventTypeSlug}`;
 }
 

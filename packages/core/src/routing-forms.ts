@@ -252,6 +252,11 @@ function doesRuleMatch(
 
 /**
  * Evaluate a single condition against responses.
+ *
+ * When the response is an array (e.g. from a multi-select / checkbox field)
+ * comparisons are element-wise rather than on the joined string. This
+ * prevents the CORE-H8 bug where `["a","b"].join(",") === "a,b"` caused
+ * `not_equals "a"` to incorrectly fire even though the user did select "a".
  */
 function evaluateCondition(
   condition: RoutingCondition,
@@ -260,19 +265,51 @@ function evaluateCondition(
   const response = responses[condition.fieldKey];
   if (response === undefined || response === null) return false;
 
-  const responseStr = Array.isArray(response)
-    ? response.join(",")
-    : String(response);
+  const conditionValue = String(condition.value);
+
+  // Array responses (multi-select / checkbox) — element-wise comparisons.
+  if (Array.isArray(response)) {
+    switch (condition.operator) {
+      case "equals":
+        // True when the entire selection is exactly the single target value
+        // (i.e. the array has one element that equals conditionValue).
+        // Use `contains` / `in` when partial membership is intended.
+        return response.length === 1 && response[0] === conditionValue;
+
+      case "not_equals":
+        // True only when the selection does NOT contain the target value.
+        return !response.includes(conditionValue);
+
+      case "contains": {
+        // True when any selected element contains the substring.
+        const needle = conditionValue.toLowerCase();
+        return response.some((r) => r.toLowerCase().includes(needle));
+      }
+
+      case "in": {
+        const allowedValues = Array.isArray(condition.value)
+          ? condition.value
+          : [condition.value];
+        return response.some((r) => allowedValues.includes(r));
+      }
+
+      default:
+        return false;
+    }
+  }
+
+  // Scalar response — keep original string-based behaviour.
+  const responseStr = String(response);
 
   switch (condition.operator) {
     case "equals":
-      return responseStr === String(condition.value);
+      return responseStr === conditionValue;
 
     case "not_equals":
-      return responseStr !== String(condition.value);
+      return responseStr !== conditionValue;
 
     case "contains": {
-      const needle = String(condition.value).toLowerCase();
+      const needle = conditionValue.toLowerCase();
       return responseStr.toLowerCase().includes(needle);
     }
 
@@ -280,9 +317,6 @@ function evaluateCondition(
       const allowedValues = Array.isArray(condition.value)
         ? condition.value
         : [condition.value];
-      if (Array.isArray(response)) {
-        return response.some((r) => allowedValues.includes(r));
-      }
       return allowedValues.includes(responseStr);
     }
 

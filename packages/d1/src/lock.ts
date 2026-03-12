@@ -62,8 +62,6 @@
  * ```
  */
 
-import { BookingConflictError } from "@thebookingkit/core";
-
 /** Minimum shape of the DB client required by D1BookingLock. */
 export interface LockDb {
   /** Execute a raw SQL statement (for INSERT and DELETE on the lock table). */
@@ -131,7 +129,13 @@ export class D1BookingLock {
 
   constructor(db: LockDb, options?: D1BookingLockOptions) {
     this.db = db;
-    this.tableName = options?.tableName ?? "booking_locks";
+    const tableName = options?.tableName ?? "booking_locks";
+    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(tableName)) {
+      throw new RangeError(
+        `D1BookingLock: invalid tableName "${tableName}". Must match /^[a-zA-Z_][a-zA-Z0-9_]*$/.`,
+      );
+    }
+    this.tableName = tableName;
     this.lockTtlMs = options?.lockTtlMs ?? 10_000;
     this.maxRetries = options?.maxRetries ?? 5;
     this.baseDelayMs = options?.baseDelayMs ?? 100;
@@ -169,7 +173,7 @@ export class D1BookingLock {
   private async acquire(lockKey: string): Promise<void> {
     for (let attempt = 0; attempt < this.maxRetries; attempt++) {
       // Purge stale locks first to handle crashed workers
-      const staleThreshold = new Date(Date.now() - this.lockTtlMs).toISOString();
+      const staleThreshold = new Date().toISOString();
       await this.db.run(
         `DELETE FROM ${this.tableName} WHERE lock_key = ? AND expires_at < ?`,
         [lockKey, staleThreshold],
@@ -185,8 +189,12 @@ export class D1BookingLock {
           [lockKey, expiresAt, createdAt],
         );
         return; // Lock acquired
-      } catch {
-        // UNIQUE constraint violation — lock is held. Wait and retry.
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        // Only retry on UNIQUE constraint violations — rethrow everything else
+        if (!message.includes("UNIQUE constraint")) {
+          throw error;
+        }
         if (attempt < this.maxRetries - 1) {
           await sleep(this.backoffMs(attempt));
         }

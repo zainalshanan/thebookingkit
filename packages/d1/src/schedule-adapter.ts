@@ -92,13 +92,20 @@ export function weeklyScheduleToRules(
     const hours = schedule[day];
     if (!hours || hours.isOff || !hours.startTime || !hours.endTime) continue;
 
+    // Normalize single-digit hours: "9:00" → "09:00"
+    const startTime = normalizeTime(hours.startTime);
+    const endTime = normalizeTime(hours.endTime);
+
     // Validate HH:mm format
-    if (!isHHmm(hours.startTime) || !isHHmm(hours.endTime)) continue;
+    if (!isHHmm(startTime) || !isHHmm(endTime)) continue;
 
-    // Skip windows where start >= end (invalid configuration)
-    if (hours.startTime >= hours.endTime) continue;
+    if (startTime >= endTime) {
+      throw new RangeError(
+        `weeklyScheduleToRules: inverted time window for "${day}" — startTime "${startTime}" is not before endTime "${endTime}".`,
+      );
+    }
 
-    const key = `${hours.startTime}|${hours.endTime}`;
+    const key = `${startTime}|${endTime}`;
     const existing = groups.get(key) ?? [];
     existing.push(day);
     groups.set(key, existing);
@@ -182,7 +189,14 @@ export function intersectSchedulesToRules(
   return weeklyScheduleToRules(effective as WeeklySchedule, timezone);
 }
 
-/** Validate "HH:mm" time format. */
+/** Normalize single-digit hours to two digits: "9:00" → "09:00". */
+function normalizeTime(value: string): string {
+  const match = value.match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return value;
+  return `${match[1].padStart(2, "0")}:${match[2]}`;
+}
+
+/** Validate "HH:mm" time format with range-checked hours and minutes. */
 function isHHmm(value: string): boolean {
-  return /^\d{2}:\d{2}$/.test(value);
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
 }

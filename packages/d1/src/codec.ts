@@ -144,12 +144,10 @@ export const D1DateCodec = {
       return utcDate.toISOString();
     }
 
-    // Fallback: try native Date parsing as a last resort
-    const fallback = new Date(value);
-    if (isNaN(fallback.getTime())) {
-      throw new RangeError(`Cannot encode unrecognized date string: "${value}"`);
-    }
-    return fallback.toISOString();
+    throw new RangeError(
+      `Cannot encode unrecognized date string: "${value}". ` +
+      `Expected ISO 8601 format: "YYYY-MM-DDTHH:mm:ss.sssZ" (UTC) or "YYYY-MM-DDTHH:mm:ss" (local with timezone option).`,
+    );
   },
 
   /**
@@ -190,15 +188,18 @@ export const D1DateCodec = {
       return d;
     }
 
-    // Last resort
-    const d = new Date(raw);
-    if (isNaN(d.getTime())) {
+    // Date-only strings like "2026-03-10" are ambiguous — reject them explicitly
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
       throw new D1DateDecodeError(
         raw,
-        "String does not match YYYY-MM-DDTHH:mm:ss[.sss]Z or YYYY-MM-DDTHH:mm:ss format.",
+        "Date-only strings are ambiguous. Store full UTC-Z datetimes: \"2026-03-10T00:00:00.000Z\".",
       );
     }
-    return d;
+
+    throw new D1DateDecodeError(
+      raw,
+      "String does not match YYYY-MM-DDTHH:mm:ss[.sss]Z or YYYY-MM-DDTHH:mm:ss format.",
+    );
   },
 
   /**

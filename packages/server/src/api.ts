@@ -390,12 +390,21 @@ export function validateSlotQueryParams(params: {
   timezone?: string;
 }): ValidationResult {
   const errors: ValidationDetail[] = [];
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
   if (!params.providerId && !params.teamId) {
     errors.push({
       field: "providerId",
       message: "Either providerId or teamId is required",
     });
+  }
+
+  if (params.providerId && !UUID_RE.test(params.providerId)) {
+    errors.push({ field: "providerId", message: "providerId must be a valid UUID" });
+  }
+
+  if (params.eventTypeId && !UUID_RE.test(params.eventTypeId)) {
+    errors.push({ field: "eventTypeId", message: "eventTypeId must be a valid UUID" });
   }
 
   if (!params.start) {
@@ -416,8 +425,15 @@ export function validateSlotQueryParams(params: {
   if (params.start && params.end) {
     const start = new Date(params.start);
     const end = new Date(params.end);
-    if (!isNaN(start.getTime()) && !isNaN(end.getTime()) && end <= start) {
-      errors.push({ field: "end", message: "end must be after start" });
+    if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+      if (end <= start) {
+        errors.push({ field: "end", message: "end must be after start" });
+      } else {
+        const maxRangeMs = 90 * 24 * 60 * 60 * 1000;
+        if (end.getTime() - start.getTime() > maxRangeMs) {
+          errors.push({ field: "end", message: "date range must not exceed 90 days" });
+        }
+      }
     }
   }
 

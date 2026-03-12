@@ -101,6 +101,30 @@ npx @thebookingkit/cli add <component-name>
 - Branch strategy: `main` <- `develop` <- `feature/*` | `fix/*` | `docs/*`
 - Squash merge to `main`; changelog via Changesets
 
+## Change Workflow — Registry Components
+
+When modifying any component in `registry/ui/src/components/`:
+
+1. **Build** — Run `turbo build --filter=@thebookingkit/ui` (or the relevant package build script) to verify the component compiles without errors.
+2. **Test** — Run `turbo test --filter=@thebookingkit/ui` to ensure all component tests pass.
+3. **Sync copies** — Copy the updated source to `apps/docs/public/registry/components/<component>.tsx` so the docs site serves the latest version for the CLI `add` command.
+4. **Update docs** — If the component's props, behavior, or usage changed, update the corresponding MDX file in `apps/docs/src/content/docs/components/`.
+5. **Update demo** — If the demo app (`apps/demo/`) uses the component, update it there too. Run `turbo dev --filter=demo` to verify.
+6. **Changelog** — Add a changeset entry via `npx changeset` describing what changed and why.
+7. **Commit** — Do NOT commit without explicit permission from the owner. Stage the changes and present a summary for review first.
+
+## Change Workflow — Packages (`packages/*`)
+
+When modifying any package (`@thebookingkit/core`, `@thebookingkit/d1`, `@thebookingkit/db`, `@thebookingkit/cli`, `@thebookingkit/embed`):
+
+1. **Build** — Run the package's build script (e.g., `cd packages/d1 && npm run build` or `turbo build --filter=@thebookingkit/d1`). The package MUST compile cleanly before anything else.
+2. **Test** — Run the package's test suite (e.g., `npm test` or `turbo test --filter=@thebookingkit/d1`). All tests must pass. If you changed behavior, add or update tests to cover it.
+3. **Changelog** — Run `npx changeset` and create an entry. Use `patch` for bug fixes, `minor` for new features/exports, `major` for breaking changes.
+4. **Update docs** — If exported APIs, types, or behaviors changed, update the relevant documentation in `apps/docs/`. Check for outdated examples in MDX files.
+5. **Update consumers** — If the change affects the demo app or registry components, update those too and verify they still work.
+6. **Publish** — Do NOT publish (`npm publish` / `npx changeset publish`) without explicit permission from the owner. Present the changeset summary and version bump for review first.
+7. **Commit** — Do NOT commit without explicit permission from the owner. Stage all changes and present a summary for review.
+
 ## Project Status
 
 This project is in the planning/documentation phase. The `docs/` directory contains the full PRD (`PRD.md`) and 16 epic specifications (`E-01` through `E-16`) with detailed user stories and acceptance criteria. MVP scope covers Epics 1-6 (database schema, slot engine, event types, booking flow, admin dashboard, notifications/calendar sync).

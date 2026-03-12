@@ -194,12 +194,13 @@ export function validateQuestionResponses(
   for (const q of questions) {
     const value = responses[q.key];
 
-    if (q.isRequired && (value === undefined || value === null || value === "")) {
+    const isEmpty = value === undefined || value === null || value === "" || (Array.isArray(value) && value.length === 0);
+    if (q.isRequired && isEmpty) {
       errors.push(`"${q.label}" is required.`);
       continue;
     }
 
-    if (value === undefined || value === null || value === "") continue;
+    if (isEmpty) continue;
 
     if (q.type === "email" && typeof value === "string") {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
@@ -222,6 +223,13 @@ export function validateQuestionResponses(
     if (q.type === "single_select" && typeof value === "string" && q.options) {
       if (!q.options.includes(value)) {
         errors.push(`"${q.label}" must be one of: ${q.options.join(", ")}.`);
+      }
+    }
+
+    if (q.type === "multi_select" && Array.isArray(value) && q.options) {
+      const invalid = value.filter((v) => !q.options!.includes(v));
+      if (invalid.length > 0) {
+        errors.push(`"${q.label}" contains invalid options: ${invalid.join(", ")}.`);
       }
     }
   }

@@ -140,6 +140,16 @@ export function filterSlotsByLimits(
       if (count >= limits.maxBookingsPerWeek) return false;
     }
 
+    // After all checks pass, increment counters so subsequent slots see updated counts
+    if (limits.maxBookingsPerDay != null) {
+      const dayK = utcDateKey(slot.start);
+      dailyCounts.set(dayK, (dailyCounts.get(dayK) ?? 0) + 1);
+    }
+    if (limits.maxBookingsPerWeek != null) {
+      const weekK = utcWeekKey(slot.start);
+      weeklyCounts.set(weekK, (weeklyCounts.get(weekK) ?? 0) + 1);
+    }
+
     return true;
   });
 }

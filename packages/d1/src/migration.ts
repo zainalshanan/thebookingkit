@@ -122,6 +122,14 @@ export function migrateRowDates(
  * @param updates - The column/value pairs to update (from `migrateRowDates`).
  * @returns SQL string and params array ready for `db.run(sql, params)`.
  */
+function validateIdentifier(name: string, label: string): void {
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
+    throw new RangeError(
+      `buildMigrationSql: invalid ${label} "${name}". Must match /^[a-zA-Z_][a-zA-Z0-9_]*$/.`,
+    );
+  }
+}
+
 export function buildMigrationSql(
   tableName: string,
   primaryKey: string,
@@ -131,6 +139,12 @@ export function buildMigrationSql(
   const entries = Object.entries(updates);
   if (entries.length === 0) {
     throw new Error("buildMigrationSql: updates object is empty — nothing to migrate.");
+  }
+
+  validateIdentifier(tableName, "tableName");
+  validateIdentifier(primaryKey, "primaryKey");
+  for (const [col] of entries) {
+    validateIdentifier(col, "column name");
   }
 
   const setClauses = entries.map(([col]) => `${col} = ?`).join(", ");

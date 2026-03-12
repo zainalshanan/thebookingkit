@@ -401,11 +401,12 @@ export function validateBreakBlock(
 export function breakBlockToOverride(
   block: BreakBlockInput,
 ): AvailabilityOverrideInput {
+  const pad = (n: number) => String(n).padStart(2, "0");
   return {
     date: block.startTime,
     isUnavailable: true,
-    startTime: null,
-    endTime: null,
+    startTime: `${pad(block.startTime.getHours())}:${pad(block.startTime.getMinutes())}`,
+    endTime: `${pad(block.endTime.getHours())}:${pad(block.endTime.getMinutes())}`,
   };
 }
 

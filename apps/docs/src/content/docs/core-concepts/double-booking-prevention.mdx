@@ -18,7 +18,7 @@ EXCLUDE USING gist (
   provider_id WITH =,
   tstzrange(starts_at, ends_at) WITH &&
 )
-WHERE (status NOT IN ('cancelled', 'rejected'));
+WHERE (status NOT IN ('cancelled', 'rejected', 'rescheduled'));
 ```
 
 This constraint is enforced at the database level — even if your application has a bug, Postgres will reject overlapping bookings with a constraint violation error.
