@@ -1,9 +1,9 @@
 ---
 title: Schema Overview
-description: 23 PostgreSQL tables managed by Drizzle ORM.
+description: 26 PostgreSQL tables managed by Drizzle ORM.
 ---
 
-The Booking Kit's database schema consists of 23 tables managed by Drizzle ORM with full TypeScript type inference.
+The Booking Kit's database schema consists of 26 tables managed by Drizzle ORM with full TypeScript type inference.
 
 ## Table groups
 
@@ -46,14 +46,21 @@ The Booking Kit's database schema consists of 23 tables managed by Drizzle ORM w
 
 | Table | Description |
 |---|---|
-| `recurring_series` | Recurring booking series metadata (frequency, count). |
-| `seat_attendees` | Individual attendees for group/seat bookings. |
+| `recurring_bookings` | Recurring booking series metadata (frequency, count). |
+| `booking_seats` | Individual attendees for group/seat bookings. |
 
-### API & auth tables
+### Email & customer tables
 
 | Table | Description |
 |---|---|
-| `api_keys` | API keys with scopes, rate limits, and expiry. |
+| `email_delivery_log` | Log of email delivery attempts with status. |
+| `customer_preferences` | Customer email preferences and opt-out status. |
+
+### Walk-In tables
+
+| Table | Description |
+|---|---|
+| `walk_in_queue` | Walk-in queue entries with status and wait time estimates. |
 
 ### Multi-tenancy tables
 
@@ -85,24 +92,136 @@ EXCLUDE USING gist (
 ) WHERE (status NOT IN ('cancelled', 'rejected'))
 ```
 
-Requires the `btree_gist` extension.
+This constraint prevents overlapping bookings for the same provider, except for cancelled and rejected bookings. Requires the `btree_gist` extension.
 
 ### Enums
 
 | Enum | Values |
 |---|---|
 | `booking_status` | `pending`, `confirmed`, `completed`, `cancelled`, `rescheduled`, `no_show`, `rejected` |
-| `payment_status` | `pending`, `succeeded`, `failed`, `refunded`, `partially_refunded` |
-| `payment_type` | `booking`, `cancellation_fee`, `no_show_fee`, `refund` |
+| `payment_status` | `pending`, `authorized`, `succeeded`, `failed`, `refunded`, `partially_refunded`, `released` |
+| `payment_type` | `prepayment`, `no_show_hold`, `cancellation_fee` |
 | `assignment_strategy` | `round_robin`, `collective`, `managed`, `fixed` |
 | `recurring_frequency` | `weekly`, `biweekly`, `monthly` |
-| `seat_status` | `confirmed`, `cancelled`, `waitlisted` |
-| `workflow_trigger` | `booking.created`, `booking.confirmed`, `booking.cancelled`, etc. |
+| `seat_status` | `confirmed`, `cancelled` |
+| `workflow_trigger` | `booking_created`, `booking_confirmed`, `booking_cancelled`, `booking_rescheduled`, `before_event`, `after_event`, `payment_received`, `payment_failed`, `no_show_confirmed`, `form_submitted` |
+| `booking_source` | `online`, `walk_in`, `phone`, `admin` |
+| `walk_in_status` | `queued`, `in_service`, `completed`, `no_show`, `cancelled` |
+
+## Example queries
+
+Insert a booking:
+
+```typescript
+import { db } from "@/db";
+import { bookings } from "@thebookingkit/db";
+import { v4 as uuid } from "uuid";
+
+const newBooking = await db
+  .insert(bookings)
+  .values({
+    id: uuid(),
+    providerId: "provider-uuid",
+    startsAt: new Date("2026-03-10T14:00:00.000Z"),
+    endsAt: new Date("2026-03-10T14:30:00.000Z"),
+    customerEmail: "customer@example.com",
+    customerName: "John Doe",
+    customerPhone: "+1-555-0123",
+    status: "pending",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  })
+  .returning();
+
+console.log("Booking created:", newBooking[0].id);
+```
+
+Query bookings with related data:
+
+```typescript
+import { db } from "@/db";
+import { bookings } from "@thebookingkit/db";
+import { eq } from "drizzle-orm";
+
+const booking = await db.query.bookings.findFirst({
+  where: eq(bookings.id, "booking-uuid"),
+  with: {
+    provider: true,
+    eventType: true,
+    payments: true,
+    bookingEvents: true,
+  },
+});
+```
+
+Find available providers with their schedules:
+
+```typescript
+import { db } from "@/db";
+import { providers, availabilityRules } from "@thebookingkit/db";
+import { eq } from "drizzle-orm";
+
+const provider = await db.query.providers.findFirst({
+  where: eq(providers.userId, "user-123"),
+  with: {
+    availabilityRules: true,
+    availabilityOverrides: true,
+    bookings: {
+      where: eq(bookings.status, "confirmed"),
+    },
+  },
+});
+```
+
+Create an availability rule:
+
+```typescript
+import { db } from "@/db";
+import { availabilityRules } from "@thebookingkit/db";
+import { v4 as uuid } from "uuid";
+
+const rule = await db
+  .insert(availabilityRules)
+  .values({
+    id: uuid(),
+    providerId: "provider-uuid",
+    rrule: "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+    startTime: "09:00",
+    endTime: "17:00",
+    timezone: "America/New_York",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  })
+  .returning();
+```
+
+Find bookings on a specific date:
+
+```typescript
+import { db } from "@/db";
+import { bookings } from "@thebookingkit/db";
+import { eq, and, gte, lt } from "drizzle-orm";
+
+const providerId = "provider-uuid";
+const dayStart = new Date(Date.UTC(2026, 2, 10, 0, 0, 0));
+const dayEnd = new Date(Date.UTC(2026, 2, 10, 23, 59, 59, 999));
+
+const dayBookings = await db.query.bookings.findMany({
+  where: and(
+    eq(bookings.providerId, providerId),
+    gte(bookings.startsAt, dayStart),
+    lt(bookings.endsAt, dayEnd),
+    eq(bookings.status, "confirmed")
+  ),
+});
+
+console.log(`${dayBookings.length} confirmed bookings on March 10`);
+```
 
 ## Schema location
 
 ```
 packages/db/src/schema/
-├── tables.ts    # All 23 table definitions
+├── tables.ts    # All 26 table definitions
 └── enums.ts     # All enum definitions
 ```

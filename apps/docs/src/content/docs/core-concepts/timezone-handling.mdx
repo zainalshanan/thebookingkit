@@ -137,6 +137,175 @@ The Booking Kit handles DST transitions correctly:
 - **Fall back:** The extra hour during fall-back does not create duplicate slots
 - **Recurring bookings:** Weekly series maintain the same local time across DST boundaries (e.g., "every Monday at 9am" stays at 9am local time)
 
+## Practical Examples
+
+### Converting between timezones
+
+```typescript
+import { normalizeToUTC, utcToLocal } from "@thebookingkit/core";
+
+// Convert a local time (9 AM Eastern) to UTC
+const utc = normalizeToUTC("2026-03-10T09:00:00", "America/New_York");
+console.log(utc.toISOString());
+// Output: "2026-03-10T14:00:00.000Z" (Eastern is UTC-5 in March)
+
+// Convert UTC back to local time
+const local = utcToLocal(new Date("2026-03-10T14:00:00.000Z"), "America/New_York");
+console.log(local);
+// Output: "2026-03-10T09:00:00" (back to 9 AM Eastern)
+
+// Cross-timezone example
+const tokyoTime = utcToLocal(new Date("2026-03-10T14:00:00.000Z"), "Asia/Tokyo");
+console.log(tokyoTime);
+// Output: "2026-03-10T23:00:00" (11 PM JST, UTC+9)
+```
+
+### Handling DST transitions
+
+The Booking Kit handles DST correctly across time changes:
+
+```typescript
+import { normalizeToUTC } from "@thebookingkit/core";
+
+// Before spring forward (DST) — EST (UTC-5)
+const beforeDST = normalizeToUTC("2026-03-08T09:00:00", "America/New_York");
+console.log(beforeDST.toISOString());
+// Output: "2026-03-08T14:00:00.000Z"
+
+// After spring forward — EDT (UTC-4)
+const afterDST = normalizeToUTC("2026-03-09T09:00:00", "America/New_York");
+console.log(afterDST.toISOString());
+// Output: "2026-03-09T13:00:00.000Z" (one hour earlier in UTC)
+
+// Recurring bookings stay at the same local time
+// Every Monday at 9 AM local time, even when DST changes
+```
+
+### Validating timezones
+
+```typescript
+import { isValidTimezone, InvalidTimezoneError } from "@thebookingkit/core";
+
+isValidTimezone("America/New_York");    // true
+isValidTimezone("Europe/London");       // true
+isValidTimezone("Asia/Tokyo");          // true
+
+isValidTimezone("US/Eastern");          // true (also IANA-compliant)
+isValidTimezone("EST");                 // false (abbreviation, not IANA)
+isValidTimezone("Invalid/Zone");        // false
+
+// Use in validation logic
+try {
+  if (!isValidTimezone(userTimezone)) {
+    throw new InvalidTimezoneError(`Invalid timezone: ${userTimezone}`);
+  }
+  // Proceed with timezone
+} catch (error) {
+  console.error(error.message);
+}
+```
+
+### Getting timezone offset
+
+```typescript
+import { getTimezoneOffset } from "@thebookingkit/core";
+
+// Get offset in minutes for a specific date
+// March 10 is in EDT (UTC-4)
+const marchOffset = getTimezoneOffset("America/New_York", new Date("2026-03-10"));
+console.log(marchOffset);  // Output: -240 (UTC-4 = -240 minutes)
+
+// July 10 is in EDT (UTC-4)
+const julyOffset = getTimezoneOffset("America/New_York", new Date("2026-07-10"));
+console.log(julyOffset);   // Output: -240 (still EDT in July)
+
+// Tokyo doesn't observe DST
+const tokyoOffset = getTimezoneOffset("Asia/Tokyo", new Date("2026-03-10"));
+console.log(tokyoOffset);  // Output: 540 (UTC+9 = 540 minutes, all year)
+```
+
+### Cross-timezone booking flow
+
+Complete example: customer in Tokyo booking with provider in New York:
+
+```typescript
+import { getAvailableSlots, normalizeToUTC, utcToLocal } from "@thebookingkit/core";
+import type { AvailabilityRuleInput } from "@thebookingkit/core";
+
+// Provider in New York, available Mon-Fri 9am-5pm EST
+const providerRules: AvailabilityRuleInput[] = [
+  {
+    rrule: "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+    startTime: "09:00",
+    endTime: "17:00",
+    timezone: "America/New_York",
+  },
+];
+
+// Customer is in Tokyo
+const customerTimezone = "Asia/Tokyo";
+
+// Compute available slots for the customer
+const slots = getAvailableSlots(
+  providerRules,
+  [],
+  [],
+  {
+    start: new Date("2026-03-09T00:00:00.000Z"),
+    end: new Date("2026-03-13T23:59:59.999Z"),
+  },
+  customerTimezone  // Slots will show local Tokyo times
+);
+
+// Customer sees times in their local timezone
+console.log(slots[0]);
+// {
+//   startTime: "2026-03-09T14:00:00.000Z",      // UTC
+//   endTime: "2026-03-09T14:30:00.000Z",
+//   localStart: "2026-03-09T23:00:00",          // 11 PM Tokyo time
+//   localEnd: "2026-03-09T23:30:00",
+// }
+
+// When customer selects a slot in their time, convert to UTC for booking
+const selectedLocalTime = "2026-03-10T08:00:00";  // Customer selects 8 AM Tokyo
+const selectedUTC = normalizeToUTC(selectedLocalTime, customerTimezone);
+console.log(selectedUTC.toISOString());
+// Output: "2026-03-09T23:00:00.000Z" (11 PM New York time previous day)
+```
+
+### Preventing timezone pitfalls
+
+```typescript
+import { getAvailableSlots } from "@thebookingkit/core";
+
+// ✅ Correct: UTC dates with Z suffix
+const correctRange = {
+  start: new Date("2026-03-09T00:00:00.000Z"),
+  end: new Date("2026-03-09T23:59:59.999Z"),
+};
+
+// ✅ Also correct: using Date.UTC()
+const alsoCorrect = {
+  start: new Date(Date.UTC(2026, 2, 9, 0, 0, 0)),
+  end: new Date(Date.UTC(2026, 2, 9, 23, 59, 59, 999)),
+};
+
+// ❌ WRONG: Missing Z suffix, parsed as server's local time
+const wrong = {
+  start: new Date("2026-03-09T00:00:00"),
+  end: new Date("2026-03-09T23:59:59"),
+};
+
+// Pass UTC dates to getAvailableSlots
+const slots = getAvailableSlots(
+  rules,
+  [],
+  [],
+  correctRange,  // Always use UTC!
+  "America/New_York"
+);
+```
+
 ## Libraries used
 
 The Booking Kit uses `date-fns` and `date-fns-tz` for all date/time operations:

@@ -18,7 +18,7 @@ EXCLUDE USING gist (
   provider_id WITH =,
   tstzrange(starts_at, ends_at) WITH &&
 )
-WHERE (status NOT IN ('cancelled', 'rejected', 'rescheduled'));
+WHERE (status NOT IN ('cancelled', 'rejected'));
 ```
 
 This constraint is enforced at the database level — even if your application has a bug, Postgres will reject overlapping bookings with a constraint violation error.
@@ -28,15 +28,23 @@ This constraint is enforced at the database level — even if your application h
 For additional safety, booking creation runs in `SERIALIZABLE` isolation with automatic retry:
 
 ```typescript
-import { withSerializableRetry } from "@thebookingkit/core";
+import { withSerializableRetry } from "@thebookingkit/server";
+import { isSlotAvailable, BookingConflictError } from "@thebookingkit/core";
 
 const booking = await withSerializableRetry(async (tx) => {
-  // Check availability
-  const available = isSlotAvailable(rules, overrides, bookings, start, end);
-  if (!available) throw new BookingConflictError();
+  // Check availability within the transaction
+  const available = isSlotAvailable(rules, overrides, existingBookings, start, end);
+  if (!available.available) throw new BookingConflictError("Slot no longer available");
 
   // Create the booking
-  return tx.insert(bookings).values({ ... }).returning();
+  return tx.insert(bookings).values({
+    providerId,
+    startsAt: start,
+    endsAt: end,
+    customerEmail,
+    customerName,
+    status: "pending",
+  }).returning();
 });
 ```
 
@@ -68,19 +76,142 @@ Retry delays use **jittered exponential backoff**: `min(baseDelay * 2^attempt + 
 
 The `EXCLUDE` constraint is the final safety net — if somehow both transactions pass the application check, the constraint prevents the second insert.
 
+## Complete example
+
+Full booking flow with double-booking prevention:
+
+```typescript
+import { withSerializableRetry } from "@thebookingkit/server";
+import { isSlotAvailable, BookingConflictError } from "@thebookingkit/core";
+import { eq, inArray } from "drizzle-orm";
+import { db } from "@/db";
+import { bookings, availabilityRules, availabilityOverrides } from "@thebookingkit/db";
+
+async function createBookingWithPrevention(
+  providerId: string,
+  slotStart: Date,
+  slotEnd: Date,
+  customerEmail: string,
+  customerName: string
+) {
+  return await withSerializableRetry(
+    async (tx) => {
+      // Fetch rules, overrides, and existing bookings within the transaction
+      const rules = await tx.query.availabilityRules
+        .findMany({ where: eq(availabilityRules.providerId, providerId) });
+
+      const overrides = await tx.query.availabilityOverrides
+        .findMany({ where: eq(availabilityOverrides.providerId, providerId) });
+
+      const existingBookings = await tx.query.bookings
+        .findMany({
+          where: and(
+            eq(bookings.providerId, providerId),
+            inArray(bookings.status, ["confirmed", "pending"])
+          ),
+        });
+
+      // Check if the slot is available
+      const available = isSlotAvailable(
+        rules.map(r => ({
+          rrule: r.rrule,
+          startTime: r.startTime,
+          endTime: r.endTime,
+          timezone: r.timezone,
+          validFrom: r.validFrom,
+          validUntil: r.validUntil,
+        })),
+        overrides.map(o => ({
+          date: o.date,
+          startTime: o.startTime,
+          endTime: o.endTime,
+          isUnavailable: o.isUnavailable,
+        })),
+        existingBookings,
+        slotStart,
+        slotEnd,
+        15, // bufferBefore (15 min)
+        15  // bufferAfter (15 min)
+      );
+
+      if (!available.available) {
+        throw new BookingConflictError(
+          `Slot not available: ${available.reason}`
+        );
+      }
+
+      // Create the booking (this insert is atomic within the SERIALIZABLE transaction)
+      const [newBooking] = await tx
+        .insert(bookings)
+        .values({
+          providerId,
+          startsAt: slotStart,
+          endsAt: slotEnd,
+          customerEmail,
+          customerName,
+          status: "pending",
+        })
+        .returning();
+
+      return newBooking;
+    },
+    {
+      maxRetries: 3,
+      baseDelay: 50,
+      maxDelay: 1000,
+    }
+  );
+}
+```
+
 ## Error handling
 
 ```typescript
 import { BookingConflictError, SerializationRetryExhaustedError } from "@thebookingkit/core";
 
 try {
-  const booking = await createBooking(slotStart, slotEnd, providerId);
+  const booking = await createBookingWithPrevention(
+    providerId,
+    slotStart,
+    slotEnd,
+    "customer@example.com",
+    "John Doe"
+  );
+  console.log("Booking created:", booking.id);
 } catch (error) {
   if (error instanceof BookingConflictError) {
     // Slot was taken — show "slot no longer available" to customer
+    console.error("Slot is no longer available. Please select another time.");
+    return { error: "slot_unavailable" };
   }
+
   if (error instanceof SerializationRetryExhaustedError) {
-    // All retries failed — extremely high contention, ask customer to try again
+    // All retries failed — extremely high contention
+    console.error("System is very busy. Please try again in a few seconds.");
+    return { error: "try_again_later" };
   }
+
+  throw error;
 }
 ```
+
+## Concurrent booking scenario
+
+When two customers try to book simultaneously:
+
+```
+Time    Customer A                          Customer B
+0ms     START SERIALIZABLE TX               START SERIALIZABLE TX
+50ms    Check availability ✓                Check availability ✓
+100ms   INSERT booking ✓                    INSERT booking
+150ms   COMMIT                              (blocked waiting for A's tx)
+200ms                                       PostgreSQL detects serialization conflict
+250ms                                       withSerializableRetry catches error 40001
+300ms                                       Retry: Check availability ✗ (A's booking found)
+350ms                                       FAIL with BookingConflictError
+```
+
+At no point are two overlapping bookings created:
+1. The `SERIALIZABLE` isolation ensures one transaction commits first
+2. The application-level check on retry sees the first booking and rejects
+3. The database `EXCLUDE` constraint serves as a safety net

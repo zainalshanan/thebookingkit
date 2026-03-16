@@ -127,26 +127,103 @@ await lock.withLock(`provider:${id}`, async () => {
 
 ## Implementing an adapter
 
-```typescript
-// Example: Custom email adapter using SendGrid
-import sgMail from "@sendgrid/mail";
+### Email adapter with SendGrid
 
-const sendGridAdapter: EmailAdapter = {
+```typescript
+import sgMail from "@sendgrid/mail";
+import type { EmailAdapter } from "@thebookingkit/core";
+
+export const sendGridEmailAdapter: EmailAdapter = {
   async sendEmail(options) {
     sgMail.setApiKey(process.env.SENDGRID_API_KEY!);
 
-    const [response] = await sgMail.send({
-      to: options.to,
-      from: options.from || "noreply@example.com",
-      subject: options.subject,
-      html: options.html,
-      text: options.text,
-    });
+    try {
+      const [response] = await sgMail.send({
+        to: options.to,
+        from: options.from || "bookings@example.com",
+        subject: options.subject,
+        html: options.html,
+        text: options.text,
+        replyTo: options.replyTo,
+      });
+
+      return {
+        messageId: response.headers["x-message-id"] as string,
+        status: "sent" as const,
+      };
+    } catch (error) {
+      console.error("SendGrid error:", error);
+      return {
+        status: "failed" as const,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  },
+};
+```
+
+### Auth adapter with Supabase
+
+```typescript
+import { createClient } from "@supabase/supabase-js";
+import type { AuthAdapter, AuthSession, AuthUser } from "@thebookingkit/core";
+
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_ANON_KEY!
+);
+
+export const supabaseAuthAdapter: AuthAdapter = {
+  async getSession(request: Request): Promise<AuthSession | null> {
+    const token = request.headers.get("authorization")?.split("Bearer ")[1];
+    if (!token) return null;
+
+    const { data, error } = await supabase.auth.getUser(token);
+    if (error || !data.user) return null;
 
     return {
-      messageId: response.headers["x-message-id"],
-      status: "sent" as const,
+      userId: data.user.id,
+      email: data.user.email!,
+      role: "user",
     };
+  },
+
+  async getUser(userId: string): Promise<AuthUser | null> {
+    const { data, error } = await supabase.auth.admin.getUserById(userId);
+    if (error || !data.user) return null;
+
+    return {
+      id: data.user.id,
+      email: data.user.email!,
+      name: data.user.user_metadata?.name,
+    };
+  },
+};
+```
+
+### Job adapter with Trigger.dev
+
+```typescript
+import { TriggerClient, eventTrigger } from "@trigger.dev/sdk/v3";
+import type { JobAdapter } from "@thebookingkit/core";
+
+const client = new TriggerClient({ id: "booking-kit" });
+
+export const triggerJobAdapter: JobAdapter = {
+  async enqueue(jobName: string, payload: unknown, options?: { delay?: number }) {
+    await client.sendEvent({
+      name: jobName,
+      payload,
+      timestamp: new Date(Date.now() + (options?.delay || 0)),
+    });
+  },
+
+  async scheduleAt(jobName: string, payload: unknown, runAt: Date) {
+    await client.sendEvent({
+      name: jobName,
+      payload,
+      timestamp: runAt,
+    });
   },
 };
 ```
@@ -156,9 +233,39 @@ const sendGridAdapter: EmailAdapter = {
 Pass adapters to the functions that need them:
 
 ```typescript
-import { sendConfirmationEmail } from "@thebookingkit/core";
+import { sendConfirmationEmail } from "@thebookingkit/server";
+import { sendGridEmailAdapter } from "@/adapters/email";
 
-await sendConfirmationEmail(bookingPayload, sendGridAdapter);
+// Email will be sent via SendGrid
+await sendConfirmationEmail(
+  bookingPayload,
+  sendGridEmailAdapter
+);
 ```
 
-Adapters are injected at the call site, not globally configured. This makes testing easy — pass a mock adapter in tests.
+### Adapter composition for testing
+
+```typescript
+import type { EmailAdapter } from "@thebookingkit/core";
+
+// Mock adapter for testing
+const mockEmailAdapter: EmailAdapter = {
+  async sendEmail(options) {
+    console.log(`[MOCK] Sending email to ${options.to}: ${options.subject}`);
+    return {
+      messageId: "mock-" + Date.now(),
+      status: "sent" as const,
+    };
+  },
+};
+
+// Use in tests
+describe("Booking confirmation", () => {
+  it("sends confirmation email", async () => {
+    await sendConfirmationEmail(bookingData, mockEmailAdapter);
+    // Email was logged to console for verification
+  });
+});
+```
+
+Adapters are injected at the call site, making them easy to test and swap between providers.

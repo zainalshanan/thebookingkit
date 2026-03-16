@@ -146,7 +146,152 @@ const occurrences = parseRecurrence(
 );
 
 // Returns: DateOccurrence[]
-// [{ date: "2026-03-02", startTime: "09:00", endTime: "17:00" }, ...]
+// [
+//   { date: "2026-03-02", startTime: "09:00", endTime: "17:00" },  // Monday
+//   { date: "2026-03-04", startTime: "09:00", endTime: "17:00" },  // Wednesday
+//   { date: "2026-03-06", startTime: "09:00", endTime: "17:00" },  // Friday
+//   ...
+// ]
+```
+
+## Practical Examples
+
+### Creating common patterns
+
+```typescript
+import type { AvailabilityRuleInput } from "@thebookingkit/core";
+
+// Mon-Fri 9am-5pm (standard business hours)
+const businessHours: AvailabilityRuleInput = {
+  rrule: "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+  startTime: "09:00",
+  endTime: "17:00",
+  timezone: "America/New_York",
+};
+
+// Evenings only (5pm-9pm, Mon-Fri)
+const eveningsOnly: AvailabilityRuleInput = {
+  rrule: "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+  startTime: "17:00",
+  endTime: "21:00",
+  timezone: "America/New_York",
+};
+
+// Weekends only (Sat-Sun 10am-6pm)
+const weekendOnly: AvailabilityRuleInput = {
+  rrule: "RRULE:FREQ=WEEKLY;BYDAY=SA,SU",
+  startTime: "10:00",
+  endTime: "18:00",
+  timezone: "Europe/London",
+};
+
+// Specific time only (Tuesdays and Thursdays 2pm-4pm for consultations)
+const consultationHours: AvailabilityRuleInput = {
+  rrule: "RRULE:FREQ=WEEKLY;BYDAY=TU,TH",
+  startTime: "14:00",
+  endTime: "16:00",
+  timezone: "America/Los_Angeles",
+};
+
+// Daily recurring (every single day 9am-5pm)
+const dailyAvailability: AvailabilityRuleInput = {
+  rrule: "RRULE:FREQ=DAILY",
+  startTime: "09:00",
+  endTime: "17:00",
+  timezone: "America/Chicago",
+};
+```
+
+### Seasonal availability
+
+```typescript
+import type { AvailabilityRuleInput } from "@thebookingkit/core";
+
+// Only available during summer (June 1 - August 31)
+const summerOnly: AvailabilityRuleInput = {
+  rrule: "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+  startTime: "09:00",
+  endTime: "17:00",
+  timezone: "America/New_York",
+  validFrom: new Date("2026-06-01"),
+  validUntil: new Date("2026-08-31"),
+};
+
+// Available from March 15 onwards (no end date)
+const openingDate: AvailabilityRuleInput = {
+  rrule: "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+  startTime: "10:00",
+  endTime: "18:00",
+  timezone: "Australia/Sydney",
+  validFrom: new Date("2026-03-15"),
+};
+```
+
+### Split schedules with lunch breaks
+
+For a provider with morning and afternoon hours, use two rules:
+
+```typescript
+import type { AvailabilityRuleInput } from "@thebookingkit/core";
+
+const morningShift: AvailabilityRuleInput = {
+  rrule: "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+  startTime: "09:00",
+  endTime: "12:00",
+  timezone: "Europe/Paris",
+};
+
+const afternoonShift: AvailabilityRuleInput = {
+  rrule: "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+  startTime: "13:00",
+  endTime: "17:00",
+  timezone: "Europe/Paris",
+};
+
+// When computing slots, pass both rules
+const rules = [morningShift, afternoonShift];
+```
+
+### Using with slot computation
+
+```typescript
+import { getAvailableSlots, parseRecurrence } from "@thebookingkit/core";
+import type { AvailabilityRuleInput } from "@thebookingkit/core";
+
+const rule: AvailabilityRuleInput = {
+  rrule: "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+  startTime: "09:00",
+  endTime: "17:00",
+  timezone: "America/New_York",
+};
+
+// First, you can inspect what dates the rule covers
+const occurrences = parseRecurrence(
+  rule.rrule,
+  {
+    start: new Date("2026-03-01T00:00:00.000Z"),
+    end: new Date("2026-03-31T23:59:59.999Z"),
+  },
+  rule.startTime,
+  rule.endTime
+);
+
+console.log(`Rule covers ${occurrences.length} days in March`);
+
+// Then compute available slots
+const slots = getAvailableSlots(
+  [rule],
+  [],
+  [],
+  {
+    start: new Date("2026-03-09T00:00:00.000Z"),
+    end: new Date("2026-03-13T23:59:59.999Z"),
+  },
+  "America/New_York",
+  { duration: 30 }
+);
+
+console.log(`${slots.length} slots available`);
 ```
 
 ## Database storage

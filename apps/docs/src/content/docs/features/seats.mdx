@@ -15,13 +15,13 @@ isGroupEvent({ maxSeats: 20 }); // true
 isGroupEvent({ maxSeats: 1 });  // false
 
 // Compute remaining capacity
-const availability = computeSeatAvailability({
-  maxSeats: 20,
-  attendees: existingAttendees,  // SeatAttendee[]
-});
+const availability = computeSeatAvailability(
+  20,                    // maxSeats
+  existingAttendees      // SeatAttendee[]
+);
 
 // Returns: SeatAvailability
-// { totalSeats: 20, bookedSeats: 12, remainingSeats: 8, isFull: false }
+// { maxSeats: 20, bookedSeats: 12, availableSeats: 8, isFull: false }
 ```
 
 ## Reserving seats
@@ -30,14 +30,14 @@ const availability = computeSeatAvailability({
 import { canReserveSeat, validateSeatReservation, SeatError } from "@thebookingkit/core";
 
 // Quick check
-canReserveSeat(availability, 3); // true if 3+ seats remain
+canReserveSeat(20, existingAttendees, 3); // true if 3+ seats remain
 
 // Full validation (throws SeatError if invalid)
-validateSeatReservation({
-  maxSeats: 20,
-  currentAttendees: existingAttendees,
-  requestedSeats: 3,
-});
+validateSeatReservation(
+  20,                            // maxSeats
+  existingAttendees,             // current attendees
+  "attendee@example.com"         // attendee email to validate
+);
 ```
 
 ## Group event summary
@@ -45,15 +45,16 @@ validateSeatReservation({
 ```typescript
 import { computeGroupEventSummary, formatSeatCount } from "@thebookingkit/core";
 
-const summary = computeGroupEventSummary({
-  maxSeats: 20,
-  attendees: existingAttendees,
-  slotStart: new Date("2026-03-10T14:00:00Z"),
-  slotEnd: new Date("2026-03-10T15:00:00Z"),
-});
+const summary = computeGroupEventSummary(
+  "booking-123",                      // bookingId
+  new Date("2026-03-10T14:00:00Z"),   // startsAt
+  new Date("2026-03-10T15:00:00Z"),   // endsAt
+  20,                                 // maxSeats
+  existingAttendees                   // attendees
+);
 
 // Returns: GroupEventSummary
-// { totalSeats, bookedSeats, remainingSeats, attendeeList, isFull }
+// { bookingId, startsAt, endsAt, maxSeats, attendees, confirmedCount, cancelledCount }
 
 formatSeatCount(8, 20); // "8 / 20 seats booked"
 ```

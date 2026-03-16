@@ -116,6 +116,197 @@ Existing bookings and their buffer time are subtracted from the available window
 
 The remaining windows are sliced into individual slots of the configured `duration` at the configured `slotInterval`.
 
+## Examples
+
+### Basic slot computation
+
+Compute available slots for a provider working Mon-Fri 9am-5pm:
+
+```typescript
+import { getAvailableSlots } from "@thebookingkit/core";
+import type { AvailabilityRuleInput } from "@thebookingkit/core";
+
+const rules: AvailabilityRuleInput[] = [
+  {
+    rrule: "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+    startTime: "09:00",
+    endTime: "17:00",
+    timezone: "America/New_York",
+  },
+];
+
+const slots = getAvailableSlots(
+  rules,
+  [],                                          // no overrides
+  [],                                          // no existing bookings
+  {
+    start: new Date("2026-03-09T00:00:00.000Z"),
+    end: new Date("2026-03-13T23:59:59.999Z"),
+  },
+  "America/New_York",                          // customer timezone
+  {
+    duration: 30,       // 30-minute slots
+    bufferBefore: 0,
+    bufferAfter: 0,
+    slotInterval: 30,
+  }
+);
+
+console.log(slots.length);
+// Output: 80 slots (4 working days × 8 hours × 2 slots per hour)
+
+console.log(slots[0]);
+// Output: {
+//   startTime: "2026-03-09T14:00:00.000Z",
+//   endTime: "2026-03-09T14:30:00.000Z",
+//   localStart: "2026-03-09T09:00:00",
+//   localEnd: "2026-03-09T09:30:00",
+// }
+```
+
+### Checking single slot availability
+
+Check if a specific time slot is available without computing all slots:
+
+```typescript
+import { isSlotAvailable } from "@thebookingkit/core";
+import type { BookingInput } from "@thebookingkit/core";
+
+const existingBookings: BookingInput[] = [
+  {
+    startsAt: new Date("2026-03-10T14:00:00.000Z"),
+    endsAt: new Date("2026-03-10T14:30:00.000Z"),
+    status: "confirmed",
+  },
+];
+
+// Check if 2:30 PM is available on March 10
+const result = isSlotAvailable(
+  rules,
+  [],
+  existingBookings,
+  new Date("2026-03-10T14:30:00.000Z"),  // slot start
+  new Date("2026-03-10T15:00:00.000Z"),  // slot end
+  0,                                      // bufferBefore
+  15                                      // bufferAfter
+);
+
+if (result.available) {
+  console.log("Slot is available!");
+} else {
+  console.log(`Not available: ${result.reason}`);
+  // Output: "Not available: already_booked"
+  // (the 2:30 PM slot overlaps with the buffer after the 2:00 PM booking)
+}
+```
+
+### Full pipeline with rules, overrides, and bookings
+
+Compute slots for a provider with a day off, shortened hours on one day, and an existing booking:
+
+```typescript
+import { getAvailableSlots } from "@thebookingkit/core";
+import type {
+  AvailabilityRuleInput,
+  AvailabilityOverrideInput,
+  BookingInput,
+} from "@thebookingkit/core";
+
+const rules: AvailabilityRuleInput[] = [
+  {
+    rrule: "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+    startTime: "09:00",
+    endTime: "17:00",
+    timezone: "America/New_York",
+  },
+];
+
+// Override: block Wednesday (team meeting)
+const overrides: AvailabilityOverrideInput[] = [
+  {
+    date: new Date("2026-03-11"), // Wednesday
+    isUnavailable: true,
+  },
+  {
+    date: new Date("2026-03-12"), // Thursday - shorten to morning only
+    startTime: "09:00",
+    endTime: "12:00",
+    isUnavailable: false,
+  },
+];
+
+// Existing bookings reduce available slots
+const bookings: BookingInput[] = [
+  {
+    startsAt: new Date("2026-03-10T14:00:00.000Z"),
+    endsAt: new Date("2026-03-10T15:00:00.000Z"),
+    status: "confirmed",
+  },
+];
+
+const slots = getAvailableSlots(
+  rules,
+  overrides,
+  bookings,
+  {
+    start: new Date("2026-03-09T00:00:00.000Z"),
+    end: new Date("2026-03-13T23:59:59.999Z"),
+  },
+  "America/New_York",
+  {
+    duration: 30,
+    bufferBefore: 15,  // 15-min gap before each booking
+    bufferAfter: 15,   // 15-min gap after each booking
+    slotInterval: 30,
+  }
+);
+
+// Monday: 16 slots (9am-5pm, 30-min slots)
+// Tuesday: 16 slots
+// Wednesday: 0 slots (blocked)
+// Thursday: 6 slots (9am-12pm only)
+// Friday: 15 slots (1 hour lost to existing booking at 2-3pm + buffers)
+console.log(slots.length);  // Output: 53
+```
+
+### Handling buffer time
+
+Buffer time creates "guard zones" around bookings:
+
+```typescript
+import { getAvailableSlots } from "@thebookingkit/core";
+
+// Booking from 2:00 PM to 3:00 PM UTC
+const bookings = [
+  {
+    startsAt: new Date("2026-03-10T14:00:00.000Z"),
+    endsAt: new Date("2026-03-10T15:00:00.000Z"),
+    status: "confirmed",
+  },
+];
+
+const slots = getAvailableSlots(
+  rules,
+  [],
+  bookings,
+  { start: new Date("2026-03-10T00:00:00.000Z"), end: new Date("2026-03-10T23:59:59.999Z") },
+  "America/New_York",
+  {
+    duration: 30,
+    bufferBefore: 15,  // 15 min before: unavailable 1:45 PM - 2:00 PM
+    bufferAfter: 15,   // 15 min after: unavailable 3:00 PM - 3:15 PM
+    slotInterval: 30,
+  }
+);
+
+// The 1:30 PM, 2:00 PM, 2:30 PM, and 3:00 PM slots are unavailable:
+// 1:30 PM: overlaps with bufferBefore (ends at 2:00 PM, starts at 1:30 PM)
+// 2:00 PM: actual booking
+// 2:30 PM: actual booking
+// 3:00 PM: overlaps with bufferAfter (starts at 3:00 PM, ends at 3:15 PM)
+// 3:15 PM: first available slot after the booking
+```
+
 ## Pure computation
 
 The slot engine is a pure function — it takes data in and returns slots out. It makes no database calls. Your application is responsible for:

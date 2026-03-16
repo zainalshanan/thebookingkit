@@ -12,19 +12,35 @@ The Booking Kit's webhook system delivers signed HTTP payloads to subscriber end
 Every webhook payload is signed with the subscription's secret:
 
 ```typescript
-import { signWebhookPayload, verifyWebhookSignature, SIGNATURE_HEADER, TIMESTAMP_HEADER } from "@thebookingkit/core";
+import { signWebhookPayload, verifyWebhookSignature, SIGNATURE_HEADER, TIMESTAMP_HEADER } from "@thebookingkit/server";
 
 // Signing (sender side)
-const signature = signWebhookPayload(payload, secret, timestamp);
+const payload = {
+  trigger: "booking.created",
+  bookingId: "booking-123",
+  customerEmail: "user@example.com",
+};
+const secret = "whsec_abc123...";
+const timestamp = Date.now();
+
+const signature = signWebhookPayload(JSON.stringify(payload), secret, timestamp);
+console.log("Signature:", signature);
 
 // Verification (receiver side)
 const result = verifyWebhookSignature(
-  payload,
-  signature,    // From X-The Booking Kit-Signature header
-  timestamp,    // From X-The Booking Kit-Timestamp header
+  JSON.stringify(payload),
+  signature,
+  timestamp,
   secret,
+  300  // tolerance window in seconds
 );
-// Returns: WebhookVerificationResult { valid, reason? }
+
+if (result.valid) {
+  console.log("Webhook is authentic");
+} else {
+  console.error("Invalid webhook:", result.reason);
+  // reason: "invalid_signature" | "timestamp_too_old" | "missing_timestamp"
+}
 ```
 
 ### Replay protection
@@ -42,19 +58,105 @@ The timestamp is included in the signature computation. `verifyWebhookSignature(
 | `booking.completed` | Completed booking data |
 | `booking.no_show` | No-show booking data |
 
-## Creating envelopes
+## Creating webhooks
+
+Register a webhook subscription:
 
 ```typescript
-import { createWebhookEnvelope } from "@thebookingkit/core";
+import { db } from "@/db";
+import { webhookSubscriptions } from "@thebookingkit/db";
+import { v4 as uuid } from "uuid";
 
-const envelope = createWebhookEnvelope(
-  "booking.created",
-  bookingData,
-  subscription,
-);
+const subscription = await db
+  .insert(webhookSubscriptions)
+  .values({
+    id: uuid(),
+    providerId: "provider-uuid",
+    url: "https://example.com/webhooks/booking",
+    secret: "whsec_" + crypto.randomUUID(),
+    triggers: ["booking.created", "booking.confirmed", "booking.cancelled"],
+    active: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  })
+  .returning();
 
-// Returns: WebhookEnvelope
-// { id, trigger, payload, signature, timestamp, subscriptionId }
+console.log("Webhook registered:", subscription[0].id);
+```
+
+Sending a webhook:
+
+```typescript
+import { signWebhookPayload } from "@thebookingkit/server";
+
+async function sendWebhook(subscription, bookingData) {
+  const payload = {
+    trigger: "booking.created",
+    bookingId: bookingData.id,
+    customerEmail: bookingData.customerEmail,
+    startsAt: bookingData.startsAt,
+    endsAt: bookingData.endsAt,
+  };
+
+  const timestamp = Date.now();
+  const signature = signWebhookPayload(
+    JSON.stringify(payload),
+    subscription.secret,
+    timestamp
+  );
+
+  const response = await fetch(subscription.url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-The-Booking-Kit-Signature": signature,
+      "X-The-Booking-Kit-Timestamp": timestamp.toString(),
+    },
+    body: JSON.stringify(payload),
+  });
+
+  return response.ok;
+}
+```
+
+## Receiving and verifying webhooks
+
+Handle incoming webhooks with verification:
+
+```typescript
+import { verifyWebhookSignature } from "@thebookingkit/server";
+import { NextRequest, NextResponse } from "next/server";
+
+export async function POST(request: NextRequest) {
+  // Get webhook secret from environment
+  const secret = process.env.WEBHOOK_SECRET!;
+
+  // Get headers
+  const signature = request.headers.get("x-the-booking-kit-signature");
+  const timestamp = request.headers.get("x-the-booking-kit-timestamp");
+
+  if (!signature || !timestamp) {
+    return NextResponse.json({ error: "Missing headers" }, { status: 400 });
+  }
+
+  // Read and verify payload
+  const body = await request.text();
+  const result = verifyWebhookSignature(body, signature, parseInt(timestamp), secret);
+
+  if (!result.valid) {
+    return NextResponse.json({ error: result.reason }, { status: 401 });
+  }
+
+  // Process webhook
+  const payload = JSON.parse(body);
+  console.log(`Received ${payload.trigger} webhook`);
+
+  if (payload.trigger === "booking.created") {
+    // Send confirmation email, create calendar event, etc.
+  }
+
+  return NextResponse.json({ success: true });
+}
 ```
 
 ## Retry logic
@@ -62,41 +164,47 @@ const envelope = createWebhookEnvelope(
 Failed deliveries are retried with exponential backoff:
 
 ```typescript
-import { getRetryDelay, isSuccessResponse, DEFAULT_RETRY_CONFIG } from "@thebookingkit/core";
+import { getRetryDelay, isSuccessResponse, DEFAULT_RETRY_CONFIG } from "@thebookingkit/server";
 
 // Default config: 3 retries, 60s base delay, 3600s max delay
-const delay = getRetryDelay(attemptNumber, DEFAULT_RETRY_CONFIG);
-// Attempt 0: ~60s, Attempt 1: ~120s, Attempt 2: ~240s
+const delay = getRetryDelay(0, DEFAULT_RETRY_CONFIG);  // ~60s
+const delay1 = getRetryDelay(1, DEFAULT_RETRY_CONFIG); // ~120s
+const delay2 = getRetryDelay(2, DEFAULT_RETRY_CONFIG); // ~240s
 
+// Check if response is successful
 isSuccessResponse(200); // true (2xx)
+isSuccessResponse(201); // true
 isSuccessResponse(500); // false
+isSuccessResponse(404); // false
 ```
 
 ## Subscription management
 
 ```typescript
-import { validateWebhookSubscription, matchWebhookSubscriptions } from "@thebookingkit/core";
+import { validateWebhookSubscription, matchWebhookSubscriptions } from "@thebookingkit/server";
+import type { WebhookSubscription } from "@thebookingkit/core";
 
-// Validate a subscription
-validateWebhookSubscription({
-  url: "https://example.com/webhooks",
-  triggers: ["booking.created", "booking.cancelled"],
-  secret: "whsec_...",
-});
+// Validate a subscription before saving
+try {
+  validateWebhookSubscription({
+    url: "https://example.com/webhooks",
+    triggers: ["booking.created", "booking.confirmed"],
+    secret: "whsec_...",
+  });
+  console.log("Subscription is valid");
+} catch (error) {
+  console.error("Invalid subscription:", error.message);
+}
 
-// Find subscriptions matching a trigger
+// Find subscriptions matching a trigger event
+const allSubscriptions: WebhookSubscription[] = [
+  { url: "https://a.com", triggers: ["booking.created"], secret: "..." },
+  { url: "https://b.com", triggers: ["booking.confirmed"], secret: "..." },
+  { url: "https://c.com", triggers: ["booking.created", "booking.cancelled"], secret: "..." },
+];
+
 const matching = matchWebhookSubscriptions(allSubscriptions, "booking.created");
-```
-
-## Custom payload templates
-
-```typescript
-import { resolvePayloadTemplate } from "@thebookingkit/core";
-
-const customPayload = resolvePayloadTemplate(
-  { event: "{{trigger}}", customer: "{{booking.customerName}}" },
-  context
-);
+console.log(matching.length); // 2 (a.com and c.com)
 ```
 
 ## UI component

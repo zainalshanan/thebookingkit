@@ -24,29 +24,81 @@ Define tiered fee schedules based on how far in advance a booking is cancelled:
 
 ```typescript
 import { evaluateCancellationFee, validateCancellationPolicy } from "@thebookingkit/core";
+import type { CancellationPolicy, CancellationFeeResult } from "@thebookingkit/core";
 
-const policy: CancellationPolicy = {
-  tiers: [
-    { hoursBeforeStart: 48, feePercent: 0 },    // Free cancellation 48h+
-    { hoursBeforeStart: 24, feePercent: 25 },   // 25% fee 24-48h before
-    { hoursBeforeStart: 0,  feePercent: 50 },   // 50% fee same day
-  ],
-  noShowFeePercent: 100,                          // Full charge for no-shows
-};
+// Free cancellation if 48+ hours notice, escalating fees for closer cancellations
+const policy: CancellationPolicy = [
+  { hoursBefore: 48, feePercentage: 0 },    // Free cancellation 48h+
+  { hoursBefore: 24, feePercentage: 25 },   // 25% fee 24-48h before
+  { hoursBefore: 0,  feePercentage: 50 },   // 50% fee same day
+];
 
 // Validate the policy structure
-validateCancellationPolicy(policy);
+try {
+  validateCancellationPolicy(policy);
+  console.log("Policy is valid");
+} catch (error) {
+  console.error("Invalid policy:", error.message);
+}
 
 // Compute the fee for a specific cancellation
-const fee = evaluateCancellationFee(
+const fee: CancellationFeeResult = evaluateCancellationFee(
   policy,
-  5000,                               // booking price in cents ($50)
-  new Date("2026-03-10T14:00:00Z"),   // appointment start time
-  new Date("2026-03-09T10:00:00Z"),   // cancellation time (28h before)
+  5000,                                  // booking price in cents ($50.00)
+  new Date("2026-03-10T14:00:00.000Z"),  // appointment start time (UTC)
+  new Date("2026-03-09T10:00:00.000Z")   // cancellation time (28 hours before)
 );
 
-// Returns: CancellationFeeResult
-// { feeCents: 1250, feePercent: 25, tier: { hoursBeforeStart: 24, feePercent: 25 } }
+console.log(fee);
+// Output: {
+//   feeCents: 1250,              // 25% of $50 = $12.50
+//   feePercentage: 25,
+//   refundCents: 3750,           // Customer gets $37.50 back
+//   matchedTier: { hoursBefore: 24, feePercentage: 25 }
+// }
+```
+
+Tiered cancellation scenarios:
+
+```typescript
+import { evaluateCancellationFee } from "@thebookingkit/core";
+import type { CancellationPolicy } from "@thebookingkit/core";
+
+const policy: CancellationPolicy = [
+  { hoursBefore: 48, feePercentage: 0 },
+  { hoursBefore: 24, feePercentage: 25 },
+  { hoursBefore: 0,  feePercentage: 50 },
+];
+
+const appointmentStart = new Date("2026-03-10T14:00:00.000Z");
+const priceCents = 10000;  // $100
+
+// Scenario 1: Cancel 72 hours before (free)
+const fee1 = evaluateCancellationFee(
+  policy,
+  priceCents,
+  appointmentStart,
+  new Date("2026-03-07T14:00:00.000Z")  // 72 hours before
+);
+console.log(`Fee: $${fee1.feeCents / 100} (${fee1.feePercentage}%)`);  // Fee: $0 (0%)
+
+// Scenario 2: Cancel 36 hours before (25% fee)
+const fee2 = evaluateCancellationFee(
+  policy,
+  priceCents,
+  appointmentStart,
+  new Date("2026-03-09T02:00:00.000Z")  // 36 hours before
+);
+console.log(`Fee: $${fee2.feeCents / 100} (${fee2.feePercentage}%)`);  // Fee: $25 (25%)
+
+// Scenario 3: Cancel 6 hours before (50% fee)
+const fee3 = evaluateCancellationFee(
+  policy,
+  priceCents,
+  appointmentStart,
+  new Date("2026-03-10T08:00:00.000Z")  // 6 hours before
+);
+console.log(`Fee: $${fee3.feeCents / 100} (${fee3.feePercentage}%)`);  // Fee: $50 (50%)
 ```
 
 ## Payment utilities
@@ -60,23 +112,70 @@ import {
   formatPaymentAmount,
   computePaymentSummary,
 } from "@thebookingkit/core";
+import type { PaymentRecord, CancellationPolicy } from "@thebookingkit/core";
 
+// Check if an event type requires payment
 requiresPayment({ priceCents: 5000 });           // true
-requiresPayment({ priceCents: 0 });               // false
+requiresPayment({ priceCents: 0 });              // false
+requiresPayment({ priceCents: null });           // false
 
-hasNoShowFee(policy);                              // true (noShowFeePercent > 0)
+// Check if policy has no-show fees
+const policy: CancellationPolicy = [
+  { hoursBefore: 24, feePercentage: 25 },
+  { hoursBefore: 0,  feePercentage: 100 },  // Full fee for no-shows
+];
+hasNoShowFee(policy);                        // true
 
-validatePaymentAmount(5000);                       // true
-validatePaymentAmount(-100);                       // throws PaymentValidationError
+// Validate payment amounts
+validatePaymentAmount(5000);                 // true
+validatePaymentAmount(0);                    // true
+validatePaymentAmount(-100);                 // throws PaymentValidationError
 
-validateCurrency("usd");                           // true
-validateCurrency("xyz");                           // throws PaymentValidationError
+// Validate currency codes
+validateCurrency("usd");                     // true
+validateCurrency("gbp");                     // true
+validateCurrency("xyz");                     // throws PaymentValidationError
 
-formatPaymentAmount(5000, "usd");                  // "$50.00"
-formatPaymentAmount(1250, "gbp");                  // "£12.50"
+// Format amounts for display
+formatPaymentAmount(5000, "usd");            // "$50.00"
+formatPaymentAmount(1250, "gbp");            // "£12.50"
+formatPaymentAmount(100, "jpy");             // "¥100" (no decimal places)
 
-const summary = computePaymentSummary(payments);
-// Returns: PaymentSummary { totalPaid, totalRefunded, netAmount, payments[] }
+// Compute payment summary for a provider's dashboard
+const paymentRecords: PaymentRecord[] = [
+  {
+    id: "pay-1",
+    bookingId: "booking-1",
+    stripePaymentIntentId: "pi_123abc",
+    amountCents: 5000,
+    currency: "usd",
+    status: "succeeded",
+    paymentType: "prepayment",
+    refundAmountCents: 0,
+    createdAt: new Date("2026-03-01"),
+  },
+  {
+    id: "pay-2",
+    bookingId: "booking-2",
+    stripePaymentIntentId: "pi_456def",
+    amountCents: 8000,
+    currency: "usd",
+    status: "refunded",
+    paymentType: "prepayment",
+    refundAmountCents: 8000,
+    createdAt: new Date("2026-03-05"),
+  },
+];
+
+const summary = computePaymentSummary(paymentRecords);
+console.log(summary);
+// {
+//   totalRevenueCents: 5000,
+//   totalRefundedCents: 8000,
+//   netRevenueCents: -3000,
+//   countByStatus: { succeeded: 1, refunded: 1 },
+//   totalPayments: 2
+// }
 ```
 
 ## UI components

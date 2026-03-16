@@ -1,0 +1,170 @@
+---
+title: RRULE Generator
+description: Interactive tool to generate RRULE strings for availability rules in The Booking Kit.
+---
+
+import RRuleGenerator from "../../../components/RRuleGenerator.tsx";
+
+The Booking Kit uses the [iCalendar RRULE standard](https://datatracker.ietf.org/doc/html/rfc5545#section-3.3.10) to define recurring availability windows. An RRULE is a compact string like `FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR` that encodes an infinite recurrence pattern — the `@thebookingkit/core` slot engine expands it into concrete time windows when computing available slots.
+
+Use the generator below to build an RRULE visually, then copy the output directly into your code.
+
+<RRuleGenerator client:load />
+
+## What is an RRULE?
+
+An RRULE (Recurrence Rule) is part of the RFC 5545 iCalendar specification. It describes a repeating schedule using a set of key-value pairs joined by semicolons:
+
+```
+FREQ=WEEKLY;BYDAY=MO,WE,FR;INTERVAL=1
+```
+
+The Booking Kit wraps each RRULE in an `AvailabilityRuleInput` object that adds a concrete time range and timezone:
+
+```typescript
+interface AvailabilityRuleInput {
+  rrule: string;            // iCalendar RRULE string (without the "RRULE:" prefix)
+  startTime: string;        // "HH:mm" — when availability opens each occurrence
+  endTime: string;          // "HH:mm" — when availability closes each occurrence
+  timezone: string;         // IANA timezone identifier
+  validFrom?: Date | null;  // Optional: rule becomes active from this date
+  validUntil?: Date | null; // Optional: rule expires after this date
+}
+```
+
+## How The Booking Kit uses RRULEs
+
+The slot engine processes availability rules through a three-step pipeline:
+
+1. **Base Layer** — `parseRecurrence()` expands the RRULE into concrete date windows within a query range.
+2. **Mask Layer** — `AvailabilityOverride` and `OutOfOffice` entries are applied on top to block or reshape specific days.
+3. **Filter Layer** — Existing bookings are subtracted, buffer times are applied, and booking limits are enforced.
+
+This means an RRULE defines the *template* for when someone is available — overrides handle the exceptions.
+
+## RRULE component breakdown
+
+| Part | Example | Meaning |
+|---|---|---|
+| `FREQ` | `FREQ=WEEKLY` | How often the pattern repeats |
+| `BYDAY` | `BYDAY=MO,TU,WE,TH,FR` | Which days of the week |
+| `INTERVAL` | `INTERVAL=2` | Every 2nd week / month / etc. |
+| `COUNT` | `COUNT=10` | End after 10 occurrences |
+| `UNTIL` | `UNTIL=20261231T000000Z` | End by a specific date (UTC) |
+| `BYMONTHDAY` | `BYMONTHDAY=15` | Day of the month (for MONTHLY) |
+| `BYMONTH` | `BYMONTH=6` | Month of the year (for YEARLY) |
+| `EXDATE` | `EXDATE:20260325T000000Z` | Exclude specific UTC datetimes |
+
+Note: `EXDATE` is written on a new line, not separated by a semicolon:
+
+```
+FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR
+EXDATE:20260325T000000Z,20260401T000000Z
+```
+
+## Common patterns
+
+### Standard business hours
+
+```typescript
+{
+  rrule: "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+  startTime: "09:00",
+  endTime: "17:00",
+  timezone: "America/New_York",
+}
+```
+
+### Weekends only
+
+```typescript
+{
+  rrule: "FREQ=WEEKLY;BYDAY=SA,SU",
+  startTime: "10:00",
+  endTime: "18:00",
+  timezone: "Europe/London",
+}
+```
+
+### Every other week (bi-weekly)
+
+```typescript
+{
+  rrule: "FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE,FR",
+  startTime: "09:00",
+  endTime: "17:00",
+  timezone: "America/Chicago",
+}
+```
+
+### First Monday of every month
+
+```typescript
+{
+  rrule: "FREQ=MONTHLY;BYDAY=1MO",
+  startTime: "10:00",
+  endTime: "16:00",
+  timezone: "America/New_York",
+}
+```
+
+### Seasonal availability (summer months only)
+
+Combine an RRULE with `validFrom` / `validUntil` instead of embedding dates in the rule itself — this keeps the rule reusable across years:
+
+```typescript
+{
+  rrule: "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+  startTime: "07:00",
+  endTime: "15:00",
+  timezone: "America/Denver",
+  validFrom: new Date("2026-06-01"),
+  validUntil: new Date("2026-08-31"),
+}
+```
+
+## Split schedules (lunch break)
+
+Each `AvailabilityRuleInput` represents a single contiguous time block. To model a schedule with a gap (e.g. no bookings 12–1 PM), create two rules for the same days:
+
+```typescript
+const morningBlock: AvailabilityRuleInput = {
+  rrule: "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+  startTime: "09:00",
+  endTime: "12:00",
+  timezone: "America/New_York",
+};
+
+const afternoonBlock: AvailabilityRuleInput = {
+  rrule: "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+  startTime: "13:00",
+  endTime: "17:00",
+  timezone: "America/New_York",
+};
+```
+
+## Saving rules to the database
+
+Pass the `AvailabilityRuleInput` objects to `setAvailabilityRules()` from `@thebookingkit/core`:
+
+```typescript
+import { setAvailabilityRules } from "@thebookingkit/core";
+
+await setAvailabilityRules(db, providerId, [
+  {
+    rrule: "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+    startTime: "09:00",
+    endTime: "17:00",
+    timezone: "America/New_York",
+  },
+]);
+```
+
+The rules are stored in the `availability_rules` table and referenced by the slot engine whenever `getAvailableSlots()` is called for that provider.
+
+## Further reading
+
+- [Core Concepts: Availability Rules](/core-concepts/availability-rules) — full reference for rules and overrides
+- [Core Concepts: Slot Engine](/core-concepts/slot-engine) — how slots are computed from rules
+- [Core Concepts: Timezone Handling](/core-concepts/timezone-handling) — why timezone matters in the RRULE object
+- [RFC 5545 §3.3.10](https://datatracker.ietf.org/doc/html/rfc5545#section-3.3.10) — the full iCalendar RRULE specification

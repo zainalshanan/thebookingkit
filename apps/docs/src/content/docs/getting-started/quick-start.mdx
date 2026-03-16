@@ -140,8 +140,164 @@ function BookingPage() {
 }
 ```
 
+## Complete example: Build a booking page
+
+```typescript
+'use client';
+
+import { useState, useEffect } from 'react';
+import { getAvailableSlots, isSlotAvailable } from '@thebookingkit/core';
+import type { AvailabilityRuleInput, Slot } from '@thebookingkit/core';
+
+export default function BookingPage() {
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
+  const [slots, setSlots] = useState<Slot[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // Provider's availability (example: Mon-Fri 9am-5pm Eastern)
+  const rules: AvailabilityRuleInput[] = [
+    {
+      rrule: 'RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR',
+      startTime: '09:00',
+      endTime: '17:00',
+      timezone: 'America/New_York',
+    },
+  ];
+
+  // Load provider's bookings from your database
+  const [existingBookings, setExistingBookings] = useState([]);
+
+  useEffect(() => {
+    if (!selectedDate) return;
+
+    setLoading(true);
+
+    // Compute available slots for the selected date
+    const dateStart = new Date(selectedDate);
+    dateStart.setUTCHours(0, 0, 0, 0);
+
+    const dateEnd = new Date(selectedDate);
+    dateEnd.setUTCHours(23, 59, 59, 999);
+
+    const availableSlots = getAvailableSlots(
+      rules,
+      [],
+      existingBookings,
+      { start: dateStart, end: dateEnd },
+      'America/New_York',
+      { duration: 30, bufferAfter: 15 }
+    );
+
+    setSlots(availableSlots);
+    setLoading(false);
+  }, [selectedDate]);
+
+  const handleSlotSelect = async (slot: Slot) => {
+    setSelectedSlot(slot);
+
+    // Verify the slot is still available before booking
+    const slotStart = new Date(slot.startTime);
+    const slotEnd = new Date(slot.endTime);
+
+    const available = isSlotAvailable(
+      rules,
+      [],
+      existingBookings,
+      slotStart,
+      slotEnd,
+      0,
+      15
+    );
+
+    if (!available.available) {
+      alert('This slot is no longer available. Please select another.');
+      return;
+    }
+
+    // Proceed with booking
+    await submitBooking(slot);
+  };
+
+  const submitBooking = async (slot: Slot) => {
+    const response = await fetch('/api/bookings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customerName: 'John Doe',
+        customerEmail: 'john@example.com',
+        startsAt: slot.startTime,
+        endsAt: slot.endTime,
+      }),
+    });
+
+    if (response.ok) {
+      alert('Booking confirmed!');
+    } else {
+      alert('Booking failed. Please try again.');
+    }
+  };
+
+  return (
+    <div className="max-w-2xl mx-auto p-6">
+      <h1 className="text-3xl font-bold mb-6">Book an Appointment</h1>
+
+      {/* Date Picker */}
+      <div className="mb-8">
+        <label className="block text-sm font-medium mb-2">Select a date:</label>
+        <input
+          type="date"
+          onChange={(e) => setSelectedDate(e.target.valueAsDate)}
+          className="px-4 py-2 border rounded"
+          min={new Date().toISOString().split('T')[0]}
+        />
+      </div>
+
+      {/* Slot Selection */}
+      {selectedDate && (
+        <div>
+          <h2 className="text-xl font-semibold mb-4">Available times</h2>
+          {loading ? (
+            <p>Loading slots...</p>
+          ) : slots.length === 0 ? (
+            <p>No availability on this date</p>
+          ) : (
+            <div className="grid grid-cols-4 gap-2">
+              {slots.map((slot, i) => (
+                <button
+                  key={i}
+                  onClick={() => handleSlotSelect(slot)}
+                  className={`px-4 py-2 rounded ${
+                    selectedSlot === slot
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-200 hover:bg-gray-300'
+                  }`}
+                >
+                  {slot.localStart.split('T')[1]}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Booking Summary */}
+      {selectedSlot && (
+        <div className="mt-8 p-4 border rounded bg-gray-50">
+          <h3 className="font-semibold mb-2">Booking Summary</h3>
+          <p>Date: {new Date(selectedSlot.startTime).toLocaleDateString()}</p>
+          <p>Time: {selectedSlot.localStart.split('T')[1]} - {selectedSlot.localEnd.split('T')[1]}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
 ## Next steps
 
 - [Architecture](/getting-started/architecture) — Understand the three-layer model
 - [Slot Engine](/core-concepts/slot-engine) — Deep dive into slot computation
 - [Event Types](/features/event-types) — Configure duration, questions, and limits
+- [Team Scheduling](/features/team-scheduling) — Handle multiple providers
+- [Payments](/features/payments) — Accept payments and manage fees

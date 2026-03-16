@@ -9,17 +9,43 @@ All exports from `@thebookingkit/core`.
 
 ```typescript
 import { getAvailableSlots, isSlotAvailable } from "@thebookingkit/core";
+
+// Compute available slots for a date range
+const slots = getAvailableSlots(
+  rules,
+  overrides,
+  existingBookings,
+  { start: new Date("2026-03-09"), end: new Date("2026-03-13") },
+  "America/New_York",
+  { duration: 30, bufferAfter: 15 }
+);
+
+// Check if a single slot is available
+const available = isSlotAvailable(
+  rules,
+  overrides,
+  existingBookings,
+  new Date("2026-03-10T14:00:00.000Z"),
+  new Date("2026-03-10T14:30:00.000Z")
+);
 ```
 
 | Function | Description |
 |---|---|
 | `getAvailableSlots(rules, overrides, bookings, dateRange, timezone, options?)` | Compute available time slots |
-| `isSlotAvailable(rules, overrides, bookings, start, end)` | Check if a specific slot is open |
+| `isSlotAvailable(rules, overrides, bookings, start, end, bufferBefore?, bufferAfter?)` | Check if a specific slot is open |
 
 ## RRULE Parser
 
 ```typescript
 import { parseRecurrence, InvalidRRuleError } from "@thebookingkit/core";
+
+const occurrences = parseRecurrence(
+  "RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR",
+  { start: new Date("2026-03-01"), end: new Date("2026-03-31") },
+  "09:00",
+  "17:00"
+);
 ```
 
 | Function | Description |
@@ -29,8 +55,20 @@ import { parseRecurrence, InvalidRRuleError } from "@thebookingkit/core";
 ## Timezone
 
 ```typescript
-import { normalizeToUTC, utcToLocal, isValidTimezone, getTimezoneOffset, InvalidTimezoneError } from "@thebookingkit/core";
+import { normalizeToUTC, utcToLocal, isValidTimezone, getTimezoneOffset } from "@thebookingkit/core";
+
+const utc = normalizeToUTC("2026-03-10T09:00:00", "America/New_York");
+const local = utcToLocal(new Date("2026-03-10T14:00:00.000Z"), "America/New_York");
+const valid = isValidTimezone("America/New_York");
+const offset = getTimezoneOffset("America/New_York", new Date());
 ```
+
+| Function | Description |
+|---|---|
+| `normalizeToUTC(localTime, timezone)` | Convert local time to UTC Date |
+| `utcToLocal(utcDate, timezone)` | Convert UTC Date to local time string |
+| `isValidTimezone(timezone)` | Validate IANA timezone string |
+| `getTimezoneOffset(timezone, date)` | Get UTC offset in minutes |
 
 ## Booking Limits
 
@@ -55,16 +93,10 @@ import { validateEventType, generateSlug, validateQuestionResponses, EventTypeVa
 import { getInitialBookingStatus, getAutoRejectDeadline, isPendingBookingOverdue, CONFIRMATION_TIMEOUT_HOURS } from "@thebookingkit/core";
 ```
 
-## Booking Tokens
-
-```typescript
-import { generateBookingToken, verifyBookingToken } from "@thebookingkit/core";
-```
-
 ## Auth Middleware
 
 ```typescript
-import { withAuth, assertProviderOwnership, assertCustomerAccess } from "@thebookingkit/core";
+import { withAuth, assertProviderOwnership, assertCustomerAccess } from "@thebookingkit/server";
 ```
 
 | Function | Description |
@@ -76,38 +108,100 @@ import { withAuth, assertProviderOwnership, assertCustomerAccess } from "@theboo
 ## Serialization Retry
 
 ```typescript
-import { withSerializableRetry, SerializationRetryExhaustedError } from "@thebookingkit/core";
+import { withSerializableRetry, SerializationRetryExhaustedError } from "@thebookingkit/server";
+```
+
+## Booking Tokens
+
+```typescript
+import { generateBookingToken, verifyBookingToken } from "@thebookingkit/server";
 ```
 
 ## Team Scheduling
 
 ```typescript
 import { getTeamSlots, assignHost, resolveManagedEventType, isFieldLocked, propagateTemplateChanges } from "@thebookingkit/core";
+
+// Compute team slots
+const slots = getTeamSlots(teamMembers, dateRange, timezone, options);
+
+// Assign host for a booking
+const host = assignHost(teamMembers, bookingCounts, "round_robin");
+
+// Check field locks in managed templates
+const locked = isFieldLocked(template, "durationMinutes");
 ```
+
+| Function | Description |
+|---|---|
+| `getTeamSlots(members, dateRange, timezone, options)` | Compute available slots across team |
+| `assignHost(members, counts, strategy)` | Assign team member to booking |
+| `resolveManagedEventType(template, overrides)` | Resolve template for member |
+| `isFieldLocked(template, field)` | Check if field is locked |
+| `propagateTemplateChanges(template, eventTypes)` | Propagate template updates |
 
 ## Payments
 
 ```typescript
-import { evaluateCancellationFee, validateCancellationPolicy, computePaymentSummary, requiresPayment, hasNoShowFee, validatePaymentAmount, validateCurrency, formatPaymentAmount, PaymentValidationError } from "@thebookingkit/core";
+import { evaluateCancellationFee, validateCancellationPolicy, computePaymentSummary, requiresPayment, formatPaymentAmount } from "@thebookingkit/core";
+
+const policy = [
+  { hoursBefore: 48, feePercentage: 0 },
+  { hoursBefore: 0, feePercentage: 50 },
+];
+
+const fee = evaluateCancellationFee(policy, 5000, appointmentStart, cancellationTime);
+const summary = computePaymentSummary(paymentRecords);
+const formatted = formatPaymentAmount(5000, "usd");  // "$50.00"
 ```
 
-## Workflows
-
-```typescript
-import { resolveTemplateVariables, evaluateConditions, validateWorkflow, matchWorkflows, DEFAULT_TEMPLATES, TEMPLATE_VARIABLES, WorkflowValidationError } from "@thebookingkit/core";
-```
+| Function | Description |
+|---|---|
+| `evaluateCancellationFee(policy, amountCents, start, cancelTime)` | Calculate cancellation fee |
+| `validateCancellationPolicy(policy)` | Validate policy structure |
+| `computePaymentSummary(payments)` | Aggregate payment data |
+| `requiresPayment(eventType)` | Check if payment required |
+| `formatPaymentAmount(cents, currency)` | Format amount for display |
 
 ## Webhooks
 
 ```typescript
-import { signWebhookPayload, verifyWebhookSignature, createWebhookEnvelope, resolvePayloadTemplate, matchWebhookSubscriptions, getRetryDelay, isSuccessResponse, validateWebhookSubscription, WebhookValidationError, DEFAULT_RETRY_CONFIG, WEBHOOK_TRIGGERS, SIGNATURE_HEADER, TIMESTAMP_HEADER } from "@thebookingkit/core";
+import { signWebhookPayload, verifyWebhookSignature, matchWebhookSubscriptions } from "@thebookingkit/server";
+
+const signature = signWebhookPayload(JSON.stringify(payload), secret, timestamp);
+const result = verifyWebhookSignature(body, signature, timestamp, secret);
+const matching = matchWebhookSubscriptions(subscriptions, "booking.created");
 ```
+
+| Function | Description |
+|---|---|
+| `signWebhookPayload(payload, secret, timestamp)` | Sign webhook with HMAC |
+| `verifyWebhookSignature(payload, sig, ts, secret, tolerance?)` | Verify webhook signature |
+| `matchWebhookSubscriptions(subscriptions, trigger)` | Find subscriptions for trigger |
+| `getRetryDelay(attempt, config)` | Calculate retry delay |
 
 ## Recurring Bookings
 
 ```typescript
-import { generateOccurrences, checkRecurringAvailability, cancelFutureOccurrences, isValidFrequency, RecurringBookingError } from "@thebookingkit/core";
+import { generateOccurrences, checkRecurringAvailability, cancelFutureOccurrences } from "@thebookingkit/core";
+
+const occurrences = generateOccurrences({
+  startsAt: new Date(),
+  durationMinutes: 30,
+  frequency: "weekly",
+  count: 8,
+});
+
+const availability = checkRecurringAvailability(occurrences, rules, overrides, bookings);
+const cancelled = cancelFutureOccurrences(seriesBookings, new Date("2026-04-01"));
 ```
+
+| Function | Description |
+|---|---|
+| `generateOccurrences(input)` | Generate series occurrences |
+| `checkRecurringAvailability(occurrences, rules, overrides, bookings)` | Validate availability |
+| `cancelFutureOccurrences(bookings, fromDate)` | Cancel future bookings |
+| `isValidFrequency(frequency)` | Validate frequency string |
 
 ## Seats / Group Bookings
 
@@ -118,13 +212,13 @@ import { computeSeatAvailability, canReserveSeat, isGroupEvent, computeGroupEven
 ## Notifications
 
 ```typescript
-import { sendConfirmationEmail, sendReminderEmail, sendCancellationEmail, sendRescheduleEmail, scheduleAutoReject, syncBookingToCalendar, deleteBookingFromCalendar, formatDateTimeForEmail, formatDurationForEmail } from "@thebookingkit/core";
+import { sendConfirmationEmail, sendReminderEmail, sendCancellationEmail, sendRescheduleEmail, scheduleAutoReject, syncBookingToCalendar, deleteBookingFromCalendar, formatDateTimeForEmail, formatDurationForEmail } from "@thebookingkit/server";
 ```
 
 ## Email Templates
 
 ```typescript
-import { interpolateTemplate, CONFIRMATION_EMAIL_HTML, CONFIRMATION_EMAIL_TEXT, REMINDER_EMAIL_HTML, CANCELLATION_EMAIL_HTML, RESCHEDULE_EMAIL_HTML } from "@thebookingkit/core";
+import { interpolateTemplate, CONFIRMATION_EMAIL_HTML, CONFIRMATION_EMAIL_TEXT, REMINDER_EMAIL_HTML, CANCELLATION_EMAIL_HTML, RESCHEDULE_EMAIL_HTML } from "@thebookingkit/server";
 ```
 
 ## Routing Forms
@@ -142,19 +236,19 @@ import { validateEmbedConfig, generateEmbedSnippet, generateAllSnippets, buildEm
 ## REST API Utilities
 
 ```typescript
-import { createErrorResponse, createSuccessResponse, createPaginatedResponse, generateApiKey, hashApiKey, verifyApiKey, hasScope, isKeyExpired, checkRateLimit, encodeCursor, decodeCursor, validateSlotQueryParams, parseSortParam, API_ERROR_CODES } from "@thebookingkit/core";
+import { createErrorResponse, createSuccessResponse, createPaginatedResponse, generateApiKey, hashApiKey, verifyApiKey, hasScope, isKeyExpired, checkRateLimit, encodeCursor, decodeCursor, validateSlotQueryParams, parseSortParam, API_ERROR_CODES } from "@thebookingkit/server";
 ```
 
 ## CLI Utilities
 
 ```typescript
-import { COMPONENT_REGISTRY, findComponent, resolveComponentDependencies, listComponents, createManifestEntry, hasLocalModifications, generateSlotkitConfig, generateEnvTemplate, parseMigrationFiles, getPendingMigrations, DEFAULT_MANIFEST } from "@thebookingkit/core";
+import { COMPONENT_REGISTRY, findComponent, resolveComponentDependencies, listComponents, createManifestEntry, hasLocalModifications, generateThebookingkitConfig, generateEnvTemplate, parseMigrationFiles, getPendingMigrations, DEFAULT_MANIFEST } from "@thebookingkit/cli";
 ```
 
 ## Multi-Tenancy
 
 ```typescript
-import { resolveEffectiveSettings, getRolePermissions, roleHasPermission, assertOrgPermission, assertTenantScope, buildOrgBookingUrl, parseOrgBookingPath, TenantAuthorizationError, GLOBAL_DEFAULTS } from "@thebookingkit/core";
+import { resolveEffectiveSettings, getRolePermissions, roleHasPermission, assertOrgPermission, assertTenantScope, buildOrgBookingUrl, parseOrgBookingPath, TenantAuthorizationError, GLOBAL_DEFAULTS } from "@thebookingkit/server";
 ```
 
 ## Errors
@@ -166,6 +260,6 @@ import { BookingConflictError, SerializationRetryExhaustedError, UnauthorizedErr
 ## Adapters
 
 ```typescript
-import type { AuthAdapter, EmailAdapter, CalendarAdapter, JobAdapter, PaymentAdapter, StorageAdapter, SmsAdapter } from "@thebookingkit/core";
-import { generateICSAttachment, JOB_NAMES } from "@thebookingkit/core";
+import type { AuthAdapter, EmailAdapter, CalendarAdapter, JobAdapter, PaymentAdapter, StorageAdapter, SmsAdapter } from "@thebookingkit/server";
+import { generateICSAttachment, JOB_NAMES } from "@thebookingkit/server";
 ```

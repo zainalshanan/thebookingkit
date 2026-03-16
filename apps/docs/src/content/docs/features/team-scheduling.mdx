@@ -13,13 +13,38 @@ Distributes bookings evenly across team members. Considers each member's existin
 
 ```typescript
 import { assignHost } from "@thebookingkit/core";
+import type { TeamMemberInput, MemberBookingCount } from "@thebookingkit/core";
 
-const result = assignHost(
-  teamMembers,
-  bookingCounts,    // { [memberId]: count }
-  "round_robin"
-);
-// Returns: { memberId, memberName }
+const teamMembers: TeamMemberInput[] = [
+  {
+    userId: "alice",
+    role: "member",
+    priority: 1,
+    weight: 100,
+    rules: aliceRules,
+    overrides: aliceOverrides,
+    bookings: aliceBookings,
+  },
+  {
+    userId: "bob",
+    role: "member",
+    priority: 2,
+    weight: 100,
+    rules: bobRules,
+    overrides: bobOverrides,
+    bookings: bobBookings,
+  },
+];
+
+// Track booking counts for load balancing
+const bookingCounts: MemberBookingCount[] = [
+  { userId: "alice", confirmedCount: 5 },
+  { userId: "bob", confirmedCount: 7 },
+];
+
+const result = assignHost(teamMembers, bookingCounts, "round_robin");
+// Returns: { hostId: "alice", reason: "alice selected via round-robin (load balanced)" }
+// Alice gets assigned because Bob has more bookings
 ```
 
 ### Collective
@@ -28,14 +53,42 @@ All team members must be available for the slot. Used for group interviews, pane
 
 ```typescript
 import { getTeamSlots } from "@thebookingkit/core";
+import type { TeamMemberInput } from "@thebookingkit/core";
+
+const teamMembers: TeamMemberInput[] = [
+  {
+    userId: "alice",
+    role: "member",
+    priority: 1,
+    weight: 100,
+    rules: [mondayFriday9to5],
+    overrides: [],
+    bookings: aliceBookings,
+  },
+  {
+    userId: "bob",
+    role: "member",
+    priority: 2,
+    weight: 100,
+    rules: [mondayFriday9to5],
+    overrides: [],
+    bookings: bobBookings,
+  },
+];
 
 const slots = getTeamSlots(
-  teamMembers,      // Each member's rules, overrides, bookings
-  dateRange,
-  timezone,
+  teamMembers,
+  {
+    start: new Date("2026-03-09T00:00:00.000Z"),
+    end: new Date("2026-03-13T23:59:59.999Z"),
+  },
+  "America/New_York",
   { strategy: "collective", duration: 60 }
 );
-// Returns only slots where ALL members are free
+
+// Returns only slots where BOTH Alice and Bob are available
+// If Alice is booked 2-3pm and Bob is booked 3-4pm,
+// those slots are excluded from the results
 ```
 
 ### Managed
@@ -43,13 +96,41 @@ const slots = getTeamSlots(
 Organization-level event type templates with field locking. Admins create templates; members get auto-generated event types with locked fields.
 
 ```typescript
-import { resolveManagedEventType, isFieldLocked } from "@thebookingkit/core";
+import { resolveManagedEventType, isFieldLocked, propagateTemplateChanges } from "@thebookingkit/core";
+import type { ManagedEventTypeTemplate } from "@thebookingkit/core";
 
-const resolved = resolveManagedEventType(template, memberOverrides);
-// Template fields marked as locked cannot be overridden
+// Admin creates a template with some fields locked
+const template: ManagedEventTypeTemplate = {
+  title: "Team Consultation",
+  durationMinutes: 30,
+  bufferBefore: 0,
+  bufferAfter: 15,
+  customQuestions: [],
+  priceCents: 5000,
+  lockedFields: [
+    { field: "title", locked: true },
+    { field: "durationMinutes", locked: true },
+    { field: "description", locked: false },  // Members can customize
+    { field: "priceCents", locked: false },   // Members can set own price
+  ],
+};
 
-isFieldLocked(template, "durationMinutes"); // true — member can't change
-isFieldLocked(template, "description");     // false — member can customize
+// Check what members can and can't modify
+isFieldLocked(template, "title");            // true
+isFieldLocked(template, "durationMinutes");  // true
+isFieldLocked(template, "description");      // false
+isFieldLocked(template, "priceCents");       // false
+
+// When admin updates the template
+const updatedTemplate: ManagedEventTypeTemplate = {
+  ...template,
+  durationMinutes: 45,  // Changed from 30 to 45 minutes
+};
+
+// Propagate changes (locked fields only)
+const updates = propagateTemplateChanges(updatedTemplate, memberEventTypes);
+// All members' duration changes to 45 minutes
+// Members' custom prices are NOT overwritten
 ```
 
 ### Fixed
@@ -58,45 +139,66 @@ Direct booking with a specific team member. No automatic assignment.
 
 ## Team slots
 
+Complete example with all team members:
+
 ```typescript
 import { getTeamSlots } from "@thebookingkit/core";
+import type { TeamMemberInput } from "@thebookingkit/core";
+
+const teamMembers: TeamMemberInput[] = [
+  {
+    userId: "alice",
+    role: "admin",
+    priority: 1,
+    weight: 100,
+    rules: [
+      {
+        rrule: "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+        startTime: "09:00",
+        endTime: "17:00",
+        timezone: "America/New_York",
+      },
+    ],
+    overrides: [],
+    bookings: aliceBookings,
+  },
+  {
+    userId: "bob",
+    role: "member",
+    priority: 2,
+    weight: 100,
+    rules: [
+      {
+        rrule: "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+        startTime: "10:00",
+        endTime: "18:00",
+        timezone: "America/New_York",
+      },
+    ],
+    overrides: [],
+    bookings: bobBookings,
+  },
+];
 
 const slots = getTeamSlots(
-  [
-    {
-      memberId: "alice",
-      memberName: "Alice",
-      rules: aliceRules,
-      overrides: aliceOverrides,
-      bookings: aliceBookings,
-    },
-    {
-      memberId: "bob",
-      memberName: "Bob",
-      rules: bobRules,
-      overrides: bobOverrides,
-      bookings: bobBookings,
-    },
-  ],
-  { start: new Date("2026-03-09"), end: new Date("2026-03-14") },
+  teamMembers,
+  {
+    start: new Date("2026-03-09T00:00:00.000Z"),
+    end: new Date("2026-03-13T23:59:59.999Z"),
+  },
   "America/New_York",
   { strategy: "round_robin", duration: 30 }
 );
 
-// Returns: TeamSlot[]
-// { startTime, endTime, localStart, localEnd, availableMembers[] }
-```
-
-## Template propagation
-
-When an admin updates a managed template, changes propagate to all member event types:
-
-```typescript
-import { propagateTemplateChanges } from "@thebookingkit/core";
-
-const updates = propagateTemplateChanges(template, memberEventTypes);
-// Returns changes to apply to each member's event type
-// Only locked fields are updated; unlocked fields keep member's values
+// Example result
+console.log(slots[0]);
+// {
+//   startTime: "2026-03-09T14:00:00.000Z",
+//   endTime: "2026-03-09T14:30:00.000Z",
+//   localStart: "2026-03-09T09:00:00",
+//   localEnd: "2026-03-09T09:30:00",
+//   availableMembers: ["alice", "bob"]  // both members are free at this time
+// }
 ```
 
 ## UI component

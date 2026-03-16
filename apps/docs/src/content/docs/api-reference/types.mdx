@@ -52,6 +52,7 @@ interface SlotComputeOptions {
   bufferAfter?: number;    // Default: 0
   slotInterval?: number;   // Default: same as duration
   eventTypeId?: string;
+  now?: Date;              // Reference point for filtering past slots (default: current time)
 }
 
 /** Slot availability check result */
@@ -66,43 +67,49 @@ type SlotAvailabilityResult =
 type AssignmentStrategy = "round_robin" | "collective" | "managed" | "fixed";
 
 interface TeamMemberInput {
-  memberId: string;
-  memberName: string;
+  userId: string;
+  role: "admin" | "member";
+  priority: number;
+  weight: number;
+  isFixed?: boolean;
   rules: AvailabilityRuleInput[];
   overrides: AvailabilityOverrideInput[];
   bookings: BookingInput[];
 }
 
 interface TeamSlot extends Slot {
-  availableMembers: { memberId: string; memberName: string }[];
+  availableMembers: string[];  // User IDs
+}
+
+interface MemberBookingCount {
+  userId: string;
+  confirmedCount: number;
 }
 
 interface AssignmentResult {
-  memberId: string;
-  memberName: string;
+  hostId: string;
+  reason: string;
 }
 ```
 
 ## Payment types
 
 ```typescript
-interface CancellationPolicy {
-  tiers: CancellationPolicyTier[];
-  noShowFeePercent: number;
-}
+type CancellationPolicy = CancellationPolicyTier[];
 
 interface CancellationPolicyTier {
-  hoursBeforeStart: number;
-  feePercent: number;
+  hoursBefore: number;
+  feePercentage: number;
 }
 
 interface CancellationFeeResult {
   feeCents: number;
-  feePercent: number;
-  tier: CancellationPolicyTier;
+  feePercentage: number;
+  refundCents: number;
+  matchedTier: CancellationPolicyTier;
 }
 
-type PaymentType = "booking" | "cancellation_fee" | "no_show_fee" | "refund";
+type PaymentType = "prepayment" | "no_show_hold" | "cancellation_fee";
 ```
 
 ## Webhook types
