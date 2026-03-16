@@ -7,22 +7,23 @@ The Booking Kit is organized into three layers that can be used independently or
 
 ## System layers
 
-```
-┌─────────────────────────────────────────────────────┐
-│                   Your Next.js App                   │
-├──────────┬──────────────────┬────────────────────────┤
-│  @thebookingkit/ui               │     API Routes          │
-│  21 React components       │     (your code)         │
-│  Copy-paste, you own them  │                         │
-├──────────┴──────────────────┤                        │
-│        @thebookingkit/core        │                        │
-│  Slot engine, scheduling    │                        │
-│  math, business logic       │                        │
-├─────────────────────────────┼────────────────────────┤
-│        @thebookingkit/db          │    Adapter Interfaces   │
-│  Drizzle schema, 23 tables  │    Auth · Email · Jobs  │
-│  PostgreSQL 15+             │    Calendar · Payment   │
-└─────────────────────────────┴────────────────────────┘
+```text
+┌───────────────────────────────────────────────────┐
+│                  Your Next.js App                  │
+├─────────────────────────┬─────────────────────────┤
+│   @thebookingkit/ui     │      API Routes         │
+│   21 React components   │      (your code)        │
+│   Copy-paste, you own   │                         │
+├─────────────────────────┤                         │
+│   @thebookingkit/core   │                         │
+│   Slot engine,          │                         │
+│   scheduling math,      │                         │
+│   business logic        │                         │
+├─────────────────────────┼─────────────────────────┤
+│   @thebookingkit/db     │   Adapter Interfaces    │
+│   Drizzle schema,       │   Auth · Email · Jobs   │
+│   26 tables, Postgres   │   Calendar · Payment    │
+└─────────────────────────┴─────────────────────────┘
 ```
 
 ### 1. Logic layer (`@thebookingkit/core`)
@@ -61,7 +62,7 @@ Drizzle ORM schema with 23 PostgreSQL tables:
 
 The core algorithm follows a three-step model:
 
-```
+```text
 RRULE rules  →  Base windows  →  Apply overrides  →  Subtract bookings  →  Available slots
                  (expand)         (mask)               (filter + buffer)
 ```
