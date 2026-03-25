@@ -1,5 +1,33 @@
 # @thebookingkit/db
 
+## 0.2.0
+
+### Minor Changes — Resource & Capacity Booking (2026-03-17)
+
+Adds three new tables and a migration for resource-based booking.
+
+### New Features
+
+#### Schema (`schema/tables.ts`)
+
+- **`resources`** table — Bookable physical units (tables, rooms, courts) with `type`, `capacity`, `location`, and `is_active` fields.
+- **`resourceAvailabilityRules`** table — RRULE-based recurring availability per resource (mirrors `availabilityRules`).
+- **`resourceAvailabilityOverrides`** table — Date-specific availability exceptions per resource (mirrors `availabilityOverrides`).
+- **`bookings.resource_id`** — Nullable FK to `resources` with `ON DELETE SET NULL`. Existing bookings are unaffected.
+- **`EXCLUDE USING gist`** constraint on `(resource_id, tstzrange(starts_at, ends_at))` prevents overlapping bookings on the same resource. Scoped with `WHERE resource_id IS NOT NULL`.
+
+#### Migration (`0005_resources.sql`)
+
+- Creates all three tables with indexes
+- Adds `resource_id` column and index to `bookings`
+- Adds resource EXCLUDE constraint
+- Updates `create_booking()` function with optional `p_resource_id UUID DEFAULT NULL` parameter (backward-compatible)
+- All statements use `IF NOT EXISTS` for idempotent re-runs
+
+#### Type Exports
+
+- `Resource`, `NewResource`, `ResourceAvailabilityRule`, `NewResourceAvailabilityRule`, `ResourceAvailabilityOverride`, `NewResourceAvailabilityOverride`
+
 ## 0.1.5
 
 ### Minor Changes — QA Audit (2026-03-12)

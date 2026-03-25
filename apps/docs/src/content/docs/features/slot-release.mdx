@@ -1,0 +1,391 @@
+---
+title: Slot Release Strategies
+description: Control when time slots become visible to customers — fill earlier gaps first, use rolling windows, or incentivize with discounts.
+---
+
+Slot release strategies let you control the visibility and presentation of available time slots to customers. Use them to fill earlier time windows first, release slots on a rolling schedule, or incentivize off-peak booking with automatic discounts.
+
+## Why use slot release strategies
+
+Different booking businesses have different needs:
+
+- **Barbershop:** Fill morning slots first (harder to book), then unlock afternoon as mornings fill
+- **Restaurant:** Release dinner reservations 48 hours in advance, no further out
+- **Therapist:** Show all slots but discount 7am time slots at 20% off to incentivize early bookings
+
+Strategies are **optional** — omit `slotRelease` from `SlotComputeOptions` and all available slots are returned with no filtering or modification.
+
+## Quick start
+
+Enable a rolling window strategy to limit slot visibility:
+
+```typescript
+import { getAvailableSlots } from "@thebookingkit/core";
+import type { SlotComputeOptions } from "@thebookingkit/core";
+
+const options: SlotComputeOptions = {
+  duration: 60,
+  slotRelease: {
+    strategy: "rolling_window",
+    windowSize: 48,
+    unit: "hours",
+  },
+};
+
+const slots = getAvailableSlots(
+  provider,
+  {
+    start: new Date("2026-03-15T00:00:00.000Z"),
+    end: new Date("2026-03-30T23:59:59.999Z"),
+  },
+  "America/New_York",
+  options
+);
+
+// Only slots within the next 48 hours are returned
+```
+
+## Rolling window
+
+Show slots only within a sliding time horizon from the current moment.
+
+**Use case:** Restaurant releases dinner slots 48 hours in advance; no far-future bookings.
+
+### Configuration
+
+```typescript
+import type { RollingWindowConfig } from "@thebookingkit/core";
+
+const config: RollingWindowConfig = {
+  strategy: "rolling_window",
+  windowSize: 48,
+  unit: "hours",  // "hours" or "days" (default: "hours")
+};
+```
+
+### How it works
+
+Given `now` (current time), only slots whose `start` time falls at or before `now + windowSize` (in the given `unit`) are returned. Slots beyond the horizon are filtered out. Input order is preserved.
+
+- `windowSize: 24, unit: "hours"` → show slots for the next 24 hours only
+- `windowSize: 7, unit: "days"` → show slots for the next 7 days only
+- `windowSize: 2, unit: "days"` → show slots for the next 2 days (48 hours)
+
+### Example: Restaurant dinner booking
+
+```typescript
+import { getAvailableSlots } from "@thebookingkit/core";
+import type { SlotComputeOptions } from "@thebookingkit/core";
+
+const restaurantOptions: SlotComputeOptions = {
+  duration: 90,  // 90-minute seatings
+  bufferBefore: 15,
+  bufferAfter: 10,
+  slotRelease: {
+    strategy: "rolling_window",
+    windowSize: 48,
+    unit: "hours",
+  },
+};
+
+const dinerSlots = getAvailableSlots(
+  tableProvider,
+  {
+    start: new Date("2026-03-01T00:00:00.000Z"),
+    end: new Date("2026-04-30T23:59:59.999Z"),
+  },
+  "America/Chicago",
+  restaurantOptions
+);
+
+// Even though the date range spans 60 days,
+// only slots within the next 48 hours are returned to the customer
+console.log(dinerSlots.length); // Typically much smaller than unpaginated full range
+```
+
+## Fill earlier first
+
+Hide later time windows until earlier ones reach a fill-rate threshold.
+
+**Use case:** Barbershop wants mornings full first. Unlock 12:00pm window only when 9am–12pm is 70% booked. Unlock 5pm only when afternoon is 70% booked.
+
+### Configuration
+
+```typescript
+import type { FillEarlierFirstConfig } from "@thebookingkit/core";
+
+const config: FillEarlierFirstConfig = {
+  strategy: "fill_earlier_first",
+  threshold: 70,  // 0–100
+  windowBoundaries: ["12:00", "17:00"],  // HH:mm in provider timezone
+};
+```
+
+### How it works
+
+1. Each calendar day (in provider local time) is partitioned into time windows using `windowBoundaries`.
+2. Window 0 (before first boundary) is always visible.
+3. Window N+1 becomes visible only when window N's fill rate ≥ `threshold` percent.
+4. **Fill rate** = (overlapping active bookings in window) / (candidate slots in window)
+5. **Empty window** (0 candidate slots) = 100% full, immediately releases next window.
+
+### Cascading release
+
+With boundaries `["09:00", "12:00", "17:00"]`, your day has 4 windows:
+
+| Window | Time | Visible when |
+|--------|------|---|
+| 0 | 00:00–09:00 | Always |
+| 1 | 09:00–12:00 | (default: yes) |
+| 2 | 12:00–17:00 | Window 1 fill rate ≥ threshold |
+| 3 | 17:00–24:00 | Windows 1 AND 2 both ≥ threshold |
+
+### Example: Barber shop with morning priority
+
+```typescript
+import { getAvailableSlots } from "@thebookingkit/core";
+import type { SlotComputeOptions } from "@thebookingkit/core";
+
+// Barber wants to fill mornings first, then afternoons
+const barberOptions: SlotComputeOptions = {
+  duration: 30,
+  slotRelease: {
+    strategy: "fill_earlier_first",
+    threshold: 70,  // Morning window must be 70% booked
+    windowBoundaries: ["12:00"],  // Split at noon
+  },
+};
+
+const morningSlots = getAvailableSlots(
+  barber,
+  {
+    start: new Date("2026-03-15T00:00:00.000Z"),
+    end: new Date("2026-03-15T23:59:59.999Z"),
+  },
+  "America/New_York",
+  barberOptions
+);
+
+// Result includes both morning and afternoon slots (both windows start visible)
+// As morning slots get booked, the algorithm recalculates.
+// When morning fill rate hits 70%, afternoon slots become visible to new queries.
+```
+
+### DST handling
+
+Window boundaries are applied in provider local time via `toZonedTime()`, so "12:00" always means local noon even on Daylight Saving Time transitions.
+
+## Discount incentive
+
+Return all slots but annotate hard-to-fill windows with a discount percentage.
+
+**Use case:** Therapist wants to incentivize early bookings. 7am–9am slots are unpopular, so tag them with a 20% discount. 9am–5pm slots are more popular, tag them with 10% off if needed.
+
+### Configuration
+
+```typescript
+import type { DiscountIncentiveConfig } from "@thebookingkit/core";
+
+const config: DiscountIncentiveConfig = {
+  strategy: "discount_incentive",
+  windowBoundaries: ["09:00", "17:00"],  // Optional; omit for day-level windows
+  tiers: [
+    { fillRateBelowPercent: 30, discountPercent: 20 },  // < 30% booked → 20% off
+    { fillRateBelowPercent: 60, discountPercent: 10 },  // < 60% booked → 10% off
+  ],
+};
+```
+
+### How it works
+
+1. All slots are returned unchanged (no filtering).
+2. For each slot, its window's fill rate is computed.
+3. Tiers are evaluated in order; the **first matching tier** (whose `fillRateBelowPercent` exceeds the window's actual fill rate) wins.
+4. That tier's `discountPercent` is attached to the slot via `Slot.releaseMetadata.discountPercent`.
+5. Slots in windows with no matching tier have no `releaseMetadata` entry.
+
+### Tier matching (first-match-wins)
+
+Given tiers:
+
+```typescript
+{ fillRateBelowPercent: 30, discountPercent: 20 }
+{ fillRateBelowPercent: 60, discountPercent: 10 }
+```
+
+- If window fill rate is **< 30%** → first tier matches → 20% discount
+- If window fill rate is **30–59%** → second tier matches → 10% discount
+- If window fill rate is **≥ 60%** → no tier matches → no discount
+
+### Example: Therapist early-bird pricing
+
+```typescript
+import { getAvailableSlots } from "@thebookingkit/core";
+import type { SlotComputeOptions, Slot } from "@thebookingkit/core";
+
+const therapistOptions: SlotComputeOptions = {
+  duration: 45,
+  slotRelease: {
+    strategy: "discount_incentive",
+    windowBoundaries: ["09:00", "17:00"],
+    tiers: [
+      { fillRateBelowPercent: 30, discountPercent: 20 },
+      { fillRateBelowPercent: 60, discountPercent: 10 },
+    ],
+  },
+};
+
+const allSlots = getAvailableSlots(
+  therapist,
+  {
+    start: new Date("2026-03-15T00:00:00.000Z"),
+    end: new Date("2026-03-15T23:59:59.999Z"),
+  },
+  "America/New_York",
+  therapistOptions
+);
+
+// Process slots and display discount badges
+for (const slot of allSlots) {
+  const discount = slot.releaseMetadata?.discountPercent;
+  console.log(`${slot.localStart}–${slot.localEnd}`,
+    discount ? `${discount}% off` : "regular price"
+  );
+}
+
+// Output:
+// 7:00am–7:45am: 20% off (early morning, < 30% booked)
+// 8:30am–9:15am: 10% off (pre-business hours, < 60% booked)
+// 10:00am–10:45am: regular price (core hours, ≥ 60% booked)
+// 4:30pm–5:15pm: 10% off (late afternoon, < 60% booked)
+```
+
+### Filling a discount window
+
+When a window is empty (0 candidate slots), its fill rate is 100% (vacuously full). This prevents discounts from being attached to non-existent slots.
+
+## With resource booking
+
+Slot release strategies work seamlessly with resource-based booking via `getResourceAvailableSlots()`:
+
+```typescript
+import { getResourceAvailableSlots } from "@thebookingkit/core";
+import type { SlotComputeOptions } from "@thebookingkit/core";
+
+const restaurantOptions: SlotComputeOptions = {
+  duration: 90,
+  slotRelease: {
+    strategy: "rolling_window",
+    windowSize: 48,
+    unit: "hours",
+  },
+};
+
+const slots = getResourceAvailableSlots(
+  tables,  // ResourceInput[]
+  {
+    start: new Date("2026-03-15T00:00:00.000Z"),
+    end: new Date("2026-03-30T23:59:59.999Z"),
+  },
+  "America/Chicago",
+  restaurantOptions
+);
+
+// Only slots within 48 hours are returned
+// Fill rates are computed pool-level (across all tables)
+```
+
+Fill rates for resource pools are calculated the same way: across all active bookings in all resources. A window's fill rate = (total bookings overlapping window) / (total candidate slots in window).
+
+## Composability
+
+Slot release strategies compose cleanly with other Booking Kit features:
+
+**With booking limits:**
+
+```typescript
+import { getAvailableSlots, filterSlotsByLimits } from "@thebookingkit/core";
+
+// 1. Apply booking limits first (filters by event type, max per day, etc.)
+let slots = getAvailableSlots(
+  provider,
+  dateRange,
+  timezone,
+  { duration: 30 } // no slotRelease yet
+);
+
+slots = filterSlotsByLimits(slots, provider, limitConfig);
+
+// 2. Then apply slot release strategy
+slots = getAvailableSlots(
+  provider,
+  dateRange,
+  timezone,
+  {
+    duration: 30,
+    slotRelease: { strategy: "rolling_window", windowSize: 24, unit: "hours" },
+  }
+);
+```
+
+**With buffer time:**
+
+Buffer times (before/after each booking) are applied during slot computation, before the release strategy is evaluated. A slot is included in `applySlotRelease()` only after buffer conflicts have already been checked.
+
+```typescript
+const options: SlotComputeOptions = {
+  duration: 30,
+  bufferBefore: 15,      // Applied first
+  bufferAfter: 10,       // Applied first
+  slotRelease: {         // Applied second
+    strategy: "fill_earlier_first",
+    threshold: 70,
+    windowBoundaries: ["12:00"],
+  },
+};
+```
+
+## API reference
+
+### SlotComputeOptions
+
+```typescript
+interface SlotComputeOptions {
+  duration?: number;
+  bufferBefore?: number;
+  bufferAfter?: number;
+  eventTypeId?: string;
+  slotInterval?: number;
+  now?: Date;
+  slotRelease?: SlotReleaseConfig;  // Optional; omit for all slots visible
+}
+```
+
+### SlotReleaseConfig
+
+Discriminated union type:
+
+```typescript
+type SlotReleaseConfig =
+  | FillEarlierFirstConfig
+  | RollingWindowConfig
+  | DiscountIncentiveConfig;
+```
+
+### Slot.releaseMetadata
+
+```typescript
+interface Slot {
+  startTime: string;
+  endTime: string;
+  localStart: string;
+  localEnd: string;
+  releaseMetadata?: { discountPercent: number };  // Only populated by discount_incentive
+}
+```
+
+## Related
+
+- [Availability Rules](/docs/guides/availability) — RRULE and override patterns
+- [Resource & Capacity Booking](/docs/features/resource-booking) — Apply release strategies to resource pools
+- [Team Scheduling](/docs/features/team-scheduling) — Works alongside team-based slot computation

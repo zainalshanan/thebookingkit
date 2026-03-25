@@ -3,6 +3,7 @@ import { HeroSection } from "@/components/hero-section";
 import { BookingSection } from "@/components/booking-section";
 import { EngineShowcaseSection } from "@/components/engine-showcase-section";
 import { TeamSchedulingSection } from "@/components/team-scheduling-section";
+import { ResourceBookingSection } from "@/components/resource-booking-section";
 import { AdvancedFeaturesSection } from "@/components/advanced-features-section";
 import { PackageEcosystemSection } from "@/components/package-ecosystem-section";
 import { UILibrarySection } from "@/components/ui-library-section";
@@ -17,6 +18,7 @@ export default function DemoPage() {
       <BookingSection />
       <EngineShowcaseSection />
       <TeamSchedulingSection />
+      <ResourceBookingSection />
       <AdvancedFeaturesSection />
       <PackageEcosystemSection />
       <UILibrarySection />

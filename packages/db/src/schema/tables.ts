@@ -268,6 +268,9 @@ export const bookings = pgTable(
     recurringBookingId: uuid("recurring_booking_id").references(
       () => recurringBookings.id,
     ),
+    resourceId: uuid("resource_id").references(() => resources.id, {
+      onDelete: "set null",
+    }),
     metadata: jsonb("metadata").default({}),
     ...timestamps(),
   },
@@ -277,6 +280,7 @@ export const bookings = pgTable(
     index("bookings_customer_email_idx").on(table.customerEmail),
     index("bookings_starts_at_idx").on(table.startsAt),
     index("bookings_status_idx").on(table.status),
+    index("bookings_resource_id_idx").on(table.resourceId),
   ],
 );
 
@@ -501,6 +505,78 @@ export const customerPreferences = pgTable("customer_preferences", {
     .notNull()
     .defaultNow(),
 });
+
+// ---------------------------------------------------------------------------
+// Resources (E-22) — bookable physical/virtual units (tables, rooms, courts)
+// ---------------------------------------------------------------------------
+export const resources = pgTable(
+  "resources",
+  {
+    id: idColumn(),
+    organizationId: uuid("organization_id").references(() => organizations.id),
+    name: text("name").notNull(),
+    slug: varchar("slug", { length: 255 }).notNull().unique(),
+    type: varchar("type", { length: 100 }).notNull(),
+    capacity: integer("capacity").notNull().default(1),
+    location: text("location"),
+    isActive: boolean("is_active").notNull().default(true),
+    metadata: jsonb("metadata").default({}),
+    ...timestamps(),
+  },
+  (table) => [
+    index("resources_organization_id_idx").on(table.organizationId),
+    index("resources_type_idx").on(table.type),
+    index("resources_slug_idx").on(table.slug),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// Resource Availability Rules (RRULE-based, mirrors availability_rules)
+// ---------------------------------------------------------------------------
+export const resourceAvailabilityRules = pgTable(
+  "resource_availability_rules",
+  {
+    id: idColumn(),
+    resourceId: uuid("resource_id")
+      .notNull()
+      .references(() => resources.id, { onDelete: "cascade" }),
+    rrule: text("rrule").notNull(),
+    startTime: varchar("start_time", { length: 5 }), // "09:00"
+    endTime: varchar("end_time", { length: 5 }), // "17:00"
+    timezone: varchar("timezone", { length: 100 }),
+    validFrom: timestamp("valid_from", { withTimezone: true }),
+    validUntil: timestamp("valid_until", { withTimezone: true }),
+    ...timestamps(),
+  },
+  (table) => [
+    index("resource_availability_rules_resource_id_idx").on(table.resourceId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// Resource Availability Overrides (date-specific, mirrors availability_overrides)
+// ---------------------------------------------------------------------------
+export const resourceAvailabilityOverrides = pgTable(
+  "resource_availability_overrides",
+  {
+    id: idColumn(),
+    resourceId: uuid("resource_id")
+      .notNull()
+      .references(() => resources.id, { onDelete: "cascade" }),
+    date: timestamp("date", { mode: "date", withTimezone: true }).notNull(),
+    startTime: varchar("start_time", { length: 5 }), // null if fully unavailable
+    endTime: varchar("end_time", { length: 5 }),
+    isUnavailable: boolean("is_unavailable").notNull().default(false),
+    reason: text("reason"),
+    ...timestamps(),
+  },
+  (table) => [
+    index("resource_availability_overrides_resource_id_idx").on(
+      table.resourceId,
+    ),
+    index("resource_availability_overrides_date_idx").on(table.date),
+  ],
+);
 
 // ---------------------------------------------------------------------------
 // Walk-In Queue (E-19)

@@ -1,6 +1,15 @@
-import { fromZonedTime, toZonedTime, format } from "date-fns-tz";
-import { addMinutes, isWithinInterval, areIntervalsOverlapping } from "date-fns";
+import { addMinutes, areIntervalsOverlapping } from "date-fns";
+import { fromZonedTime } from "date-fns-tz";
 import { parseRecurrence } from "./rrule-parser.js";
+import {
+  expandRules,
+  applyOverrides,
+  generateCandidateSlots,
+  formatSlots,
+  formatDateOnly,
+  formatDateInTimezone,
+} from "./slot-pipeline.js";
+import { applySlotRelease } from "./slot-release.js";
 import type {
   Slot,
   DateRange,
@@ -45,79 +54,15 @@ export function getAvailableSlots(
   const now = options?.now ?? new Date();
 
   // --- Step 1: Base Layer — Expand RRULE into raw time windows ---
-  const rawWindows: Array<{ start: Date; end: Date }> = [];
-
-  for (const rule of rules) {
-    // Check validity period
-    if (rule.validFrom && dateRange.end < rule.validFrom) continue;
-    if (rule.validUntil && dateRange.start > rule.validUntil) continue;
-
-    const occurrences = parseRecurrence(rule.rrule, dateRange, rule.startTime, rule.endTime);
-
-    for (const occ of occurrences) {
-      // Convert local times to UTC using the rule's timezone
-      const startLocal = `${occ.date}T${occ.startTime}:00`;
-      const endLocal = `${occ.date}T${occ.endTime}:00`;
-
-      const windowStart = fromZonedTime(startLocal, rule.timezone);
-      let windowEnd = fromZonedTime(endLocal, rule.timezone);
-
-      // C1 fix: if the end time is on the same calendar day as the start time
-      // but numerically earlier (e.g. 22:00 -> 02:00), the window crosses
-      // midnight. Advance windowEnd by 24 hours so the slot loop terminates
-      // correctly instead of producing zero slots.
-      if (windowEnd <= windowStart) {
-        windowEnd = addMinutes(windowEnd, 24 * 60);
-      }
-
-      rawWindows.push({ start: windowStart, end: windowEnd });
-    }
-  }
+  const rawWindows = expandRules(rules, dateRange);
 
   // --- Step 2: Mask Layer — Apply overrides ---
   // Use provider's timezone for date comparisons (overrides are local dates)
   const providerTz = rules.length > 0 ? rules[0].timezone : "UTC";
-  let maskedWindows = [...rawWindows];
-
-  for (const override of overrides) {
-    const overrideDate = formatDateOnly(override.date);
-
-    if (override.isUnavailable) {
-      // Remove all windows whose start falls on this local date
-      maskedWindows = maskedWindows.filter(
-        (w) => formatDateInTimezone(w.start, providerTz) !== overrideDate,
-      );
-    } else if (override.startTime && override.endTime) {
-      // First remove existing windows on this local date
-      maskedWindows = maskedWindows.filter(
-        (w) => formatDateInTimezone(w.start, providerTz) !== overrideDate,
-      );
-
-      // Then add the override window
-      const startLocal = `${overrideDate}T${override.startTime}:00`;
-      const endLocal = `${overrideDate}T${override.endTime}:00`;
-
-      maskedWindows.push({
-        start: fromZonedTime(startLocal, providerTz),
-        end: fromZonedTime(endLocal, providerTz),
-      });
-    }
-  }
+  const maskedWindows = applyOverrides(rawWindows, overrides, providerTz);
 
   // --- Generate individual slots from windows ---
-  const candidateSlots: Array<{ start: Date; end: Date }> = [];
-
-  for (const window of maskedWindows) {
-    let slotStart = window.start;
-
-    while (true) {
-      const slotEnd = addMinutes(slotStart, duration);
-      if (slotEnd > window.end) break;
-
-      candidateSlots.push({ start: slotStart, end: slotEnd });
-      slotStart = addMinutes(slotStart, slotInterval);
-    }
-  }
+  const candidateSlots = generateCandidateSlots(maskedWindows, duration, slotInterval);
 
   // --- Step 3: Filter Layer — Subtract bookings + buffer ---
   const activeBookings = existingBookings.filter(
@@ -149,15 +94,38 @@ export function getAvailableSlots(
     return true;
   });
 
+  // --- Step 4B: Slot Release Strategy (opt-in, E-23) ---
+  // Applied after conflict filtering, before formatting. When slotRelease is
+  // undefined this block is skipped entirely — zero overhead for existing callers.
+  let slotsForFormatting = availableSlots;
+  let discountMap = new Map<number, number>();
+
+  if (options?.slotRelease) {
+    const releaseResult = applySlotRelease(
+      availableSlots,
+      options.slotRelease,
+      existingBookings,
+      providerTz,
+      now,
+    );
+    slotsForFormatting = releaseResult.slots;
+    discountMap = releaseResult.discountMap;
+  }
+
   // --- Format and sort ---
-  return availableSlots
-    .sort((a, b) => a.start.getTime() - b.start.getTime())
-    .map((slot) => ({
-      startTime: slot.start.toISOString(),
-      endTime: slot.end.toISOString(),
-      localStart: formatInTimezone(slot.start, customerTimezone),
-      localEnd: formatInTimezone(slot.end, customerTimezone),
-    }));
+  const formatted = formatSlots(slotsForFormatting, customerTimezone);
+
+  // Apply discount metadata from discount_incentive strategy (no-op for others)
+  if (discountMap.size > 0) {
+    for (const slot of formatted) {
+      const discount = discountMap.get(new Date(slot.startTime).getTime());
+      if (discount !== undefined) {
+        slot.releaseMetadata = { discountPercent: discount };
+      }
+    }
+  }
+
+  return formatted;
 }
 
 /**
@@ -274,24 +242,4 @@ export function isSlotAvailable(
   }
 
   return { available: true };
-}
-
-/** Format a Date as YYYY-MM-DD in UTC (used for override.date which is already a local date) */
-function formatDateOnly(date: Date): string {
-  const y = date.getUTCFullYear();
-  const m = String(date.getUTCMonth() + 1).padStart(2, "0");
-  const d = String(date.getUTCDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
-/** Format a UTC Date as YYYY-MM-DD in a specific timezone */
-function formatDateInTimezone(date: Date, timezone: string): string {
-  const zonedDate = toZonedTime(date, timezone);
-  return format(zonedDate, "yyyy-MM-dd", { timeZone: timezone });
-}
-
-/** Format a UTC Date in the given timezone */
-function formatInTimezone(date: Date, timezone: string): string {
-  const zonedDate = toZonedTime(date, timezone);
-  return format(zonedDate, "yyyy-MM-dd'T'HH:mm:ss", { timeZone: timezone });
 }

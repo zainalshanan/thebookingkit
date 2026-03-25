@@ -101,6 +101,18 @@ export {
   migrateRowDates,
   buildMigrationSql,
   BOOKING_LOCKS_DDL,
+  RESOURCE_DDL,
   type MigrationColumn,
   type TableMigrationPlan,
 } from "./migration.js";
+
+// Resource helpers (E-22 resource-capacity booking)
+export {
+  d1ResourceAvailabilityRowsToInputs,
+  d1ResourceOverrideRowsToInputs,
+  D1ResourceBookingLock,
+  createD1ResourceBookingLock,
+  type D1ResourceRow,
+  type D1ResourceAvailabilityRuleRow,
+  type D1ResourceAvailabilityOverrideRow,
+} from "./resource-helpers.js";

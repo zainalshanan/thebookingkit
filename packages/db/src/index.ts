@@ -35,6 +35,9 @@ import {
   emailDeliveryLog,
   customerPreferences,
   walkInQueue,
+  resources,
+  resourceAvailabilityRules,
+  resourceAvailabilityOverrides,
 } from "./schema/index.js";
 
 // --- Select types (read from DB) ---
@@ -61,6 +64,9 @@ export type WebhookDelivery = InferSelectModel<typeof webhookDeliveries>;
 export type EmailDeliveryLogEntry = InferSelectModel<typeof emailDeliveryLog>;
 export type CustomerPreference = InferSelectModel<typeof customerPreferences>;
 export type WalkInQueue = InferSelectModel<typeof walkInQueue>;
+export type Resource = InferSelectModel<typeof resources>;
+export type ResourceAvailabilityRule = InferSelectModel<typeof resourceAvailabilityRules>;
+export type ResourceAvailabilityOverride = InferSelectModel<typeof resourceAvailabilityOverrides>;
 
 // --- Insert types (write to DB) ---
 export type NewOrganization = InferInsertModel<typeof organizations>;
@@ -86,3 +92,6 @@ export type NewWebhookDelivery = InferInsertModel<typeof webhookDeliveries>;
 export type NewEmailDeliveryLogEntry = InferInsertModel<typeof emailDeliveryLog>;
 export type NewCustomerPreference = InferInsertModel<typeof customerPreferences>;
 export type NewWalkInQueue = InferInsertModel<typeof walkInQueue>;
+export type NewResource = InferInsertModel<typeof resources>;
+export type NewResourceAvailabilityRule = InferInsertModel<typeof resourceAvailabilityRules>;
+export type NewResourceAvailabilityOverride = InferInsertModel<typeof resourceAvailabilityOverrides>;

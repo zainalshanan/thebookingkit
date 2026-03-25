@@ -45,6 +45,8 @@ export default defineConfig({
                     { label: 'Team Scheduling', slug: 'features/team-scheduling' },
                     { label: 'Recurring Bookings', slug: 'features/recurring-bookings' },
                     { label: 'Seat & Group Bookings', slug: 'features/seats' },
+                    { label: 'Resource & Capacity Booking', slug: 'features/resource-booking' },
+                    { label: 'Slot Release Strategies', slug: 'features/slot-release' },
                     { label: 'Payments & Stripe', slug: 'features/payments' },
                     { label: 'Workflow Automation', slug: 'features/workflows' },
                     { label: 'Webhooks', slug: 'features/webhooks' },

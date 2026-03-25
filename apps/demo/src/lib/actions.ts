@@ -18,6 +18,9 @@ import {
   evaluateRoutingRules,
   evaluateCancellationFee,
   resolveKioskSettings,
+  getResourceAvailableSlots,
+  assignResource,
+  getResourcePoolSummary,
   type Slot,
   type TeamSlot,
   type AvailabilityOverrideInput,
@@ -32,6 +35,9 @@ import {
   type RoutingResponses,
   type CancellationPolicy,
   type KioskSettings,
+  type ResourceSlot,
+  type ResourceAssignmentStrategy,
+  type ResourcePoolSummary,
 } from "@thebookingkit/core";
 import {
   AVAILABILITY_RULES,
@@ -43,6 +49,11 @@ import {
   type StoredBooking,
 } from "./barber-data";
 import { SERVICES, BARBER_SHOP } from "./constants";
+import {
+  getResourcePool,
+  getResourceBookingCounts,
+  RESTAURANT,
+} from "./restaurant-data";
 
 // ---------------------------------------------------------------------------
 // Customer Actions
@@ -756,5 +767,193 @@ export async function fetchKioskDemo(viewType: string): Promise<KioskDemoResult>
       resizable: false,
       offHoursDimming: true,
     },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Resource Booking Actions
+// ---------------------------------------------------------------------------
+
+export interface ResourceSlotResult {
+  startTime: string;
+  endTime: string;
+  localStart: string;
+  localEnd: string;
+  availableCount: number;
+  totalCapacity: number;
+  availableResources: { resourceId: string; resourceName: string; resourceType: string; remainingCapacity: number }[];
+}
+
+/**
+ * Fetch available resource slots for the restaurant pool, filtered by party size.
+ *
+ * @param dateISO - The date to compute slots for (YYYY-MM-DD)
+ * @param partySize - Minimum table capacity required
+ * @param timezone - Customer IANA timezone for local time formatting
+ */
+export async function fetchResourceSlots(
+  dateISO: string,
+  partySize: number,
+  timezone: string,
+): Promise<ResourceSlotResult[]> {
+  const dayStart = new Date(dateISO);
+  dayStart.setUTCHours(0, 0, 0, 0);
+  const dayEnd = new Date(dateISO);
+  dayEnd.setUTCHours(23, 59, 59, 999);
+
+  const resources = getResourcePool();
+
+  const slots: ResourceSlot[] = getResourceAvailableSlots(
+    resources,
+    { start: dayStart, end: dayEnd },
+    timezone,
+    {
+      duration: 90,
+      slotInterval: 30,
+      minCapacity: partySize,
+    },
+  );
+
+  return slots.map((s) => ({
+    startTime: s.startTime,
+    endTime: s.endTime,
+    localStart: s.localStart,
+    localEnd: s.localEnd,
+    availableCount: s.availableResources.length,
+    totalCapacity: s.availableResources.reduce((sum, r) => sum + r.remainingCapacity, 0),
+    availableResources: s.availableResources,
+  }));
+}
+
+export interface ResourceAssignmentDemoResult {
+  success: boolean;
+  resourceId?: string;
+  resourceName?: string;
+  strategy: string;
+  reason?: string;
+  error?: string;
+  errorCode?: string;
+}
+
+/**
+ * Fetch a resource assignment for the given time window, party size, and strategy.
+ *
+ * @param dateISO - The date (YYYY-MM-DD)
+ * @param startISO - Slot start ISO string
+ * @param endISO - Slot end ISO string
+ * @param partySize - Party size for capacity matching
+ * @param strategy - Assignment strategy
+ */
+export async function fetchResourceAssignment(
+  dateISO: string,
+  startISO: string,
+  endISO: string,
+  partySize: number,
+  strategy: ResourceAssignmentStrategy,
+): Promise<ResourceAssignmentDemoResult> {
+  const resources = getResourcePool();
+  const pastCounts = getResourceBookingCounts();
+
+  try {
+    const result = assignResource(resources, new Date(startISO), new Date(endISO), {
+      requestedCapacity: partySize,
+      strategy,
+      pastCounts,
+    });
+
+    const strategyLabels: Record<string, string> = {
+      best_fit: "Smallest table that fits the party",
+      first_available: "First free table in floor order",
+      largest_first: "Largest table available",
+      round_robin: "Table with fewest bookings this service",
+    };
+
+    return {
+      success: true,
+      resourceId: result.resourceId,
+      resourceName: result.resourceName,
+      strategy,
+      reason: strategyLabels[strategy] ?? result.reason,
+    };
+  } catch (err: unknown) {
+    const errorMessages: Record<string, string> = {
+      no_matching_type: "No tables of this type exist in the restaurant.",
+      no_capacity: `No tables can seat a party of ${partySize}.`,
+      all_booked: "All eligible tables are booked at this time.",
+    };
+    const code = err instanceof Error ? err.message : "all_booked";
+    return {
+      success: false,
+      strategy,
+      error: errorMessages[code] ?? "Unable to assign a table at this time.",
+      errorCode: code,
+    };
+  }
+}
+
+export interface ResourcePoolSummaryResult {
+  totalResources: number;
+  availableResources: number;
+  utilizationPercent: number;
+  byType: Record<string, { total: number; available: number }>;
+  slots: {
+    localStart: string;
+    availableResources: number;
+    utilizationPercent: number;
+  }[];
+}
+
+/**
+ * Fetch a pool utilization summary for the restaurant for an entire service day.
+ *
+ * @param dateISO - The date (YYYY-MM-DD)
+ * @param timezone - Customer IANA timezone for local time formatting
+ */
+export async function fetchResourcePoolSummary(
+  dateISO: string,
+  timezone: string,
+): Promise<ResourcePoolSummaryResult> {
+  const dayStart = new Date(dateISO);
+  dayStart.setUTCHours(0, 0, 0, 0);
+  const dayEnd = new Date(dateISO);
+  dayEnd.setUTCHours(23, 59, 59, 999);
+
+  const resources = getResourcePool();
+
+  const summaries: ResourcePoolSummary[] = getResourcePoolSummary(
+    resources,
+    { start: dayStart, end: dayEnd },
+    timezone,
+    { duration: 90, slotInterval: 30 },
+  );
+
+  if (summaries.length === 0) {
+    return {
+      totalResources: resources.length,
+      availableResources: resources.length,
+      utilizationPercent: 0,
+      byType: {},
+      slots: [],
+    };
+  }
+
+  // Use the first slot's byType for the header summary
+  const first = summaries[0];
+  const totalResources = first.totalResources;
+
+  // Aggregate the overall available count across the day (minimum represents peak occupancy)
+  const minAvailable = Math.min(...summaries.map((s) => s.availableResources));
+  const peakUtilization = Math.max(...summaries.map((s) => s.utilizationPercent));
+
+  return {
+    totalResources,
+    availableResources: minAvailable,
+    utilizationPercent: peakUtilization,
+    byType: first.byType,
+    slots: summaries.map((s) => ({
+      localStart: s.localStart,
+      availableResources: s.availableResources,
+      utilizationPercent: s.utilizationPercent,
+    })),
   };
 }

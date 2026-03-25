@@ -27,6 +27,24 @@ export class SerializationRetryExhaustedError extends Error {
 }
 
 /**
+ * Thrown when no resource can be assigned to a booking.
+ * The `reason` property narrows the failure mode for the caller.
+ */
+export class ResourceUnavailableError extends Error {
+  public readonly code = "RESOURCE_UNAVAILABLE" as const;
+  public readonly reason: "no_capacity" | "no_matching_type" | "all_booked";
+
+  constructor(
+    reason: "no_capacity" | "no_matching_type" | "all_booked",
+    message?: string,
+  ) {
+    super(message ?? `Resource unavailable: ${reason}`);
+    this.name = "ResourceUnavailableError";
+    this.reason = reason;
+  }
+}
+
+/**
  * Thrown when authorization fails.
  */
 export class UnauthorizedError extends Error {

@@ -13,6 +13,46 @@ import { Aside } from '@astrojs/starlight/components';
 
 All notable changes to The Booking Kit will be documented in this file.
 
+## 0.2.0 (2026-03-17)
+
+### Resource & Capacity-Based Booking
+
+The Booking Kit now supports **resource-based booking** — book restaurant tables, yoga mats, meeting rooms, tennis courts, coworking desks, and any physical bookable unit with capacity-aware scheduling.
+
+#### @thebookingkit/core
+
+- **New:** `getResourceAvailableSlots()` — capacity-aware slot computation across resource pools (per-resource pipeline, then merge)
+- **New:** `assignResource()` — auto-assign best resource with 4 strategies: `best_fit`, `first_available`, `round_robin`, `largest_first`
+- **New:** `isResourceSlotAvailable()` — quick availability check for a specific resource or any-in-pool
+- **New:** `getResourcePoolSummary()` — admin utilization metrics with per-type breakdown
+- **New:** `ResourceUnavailableError` with typed reasons (`no_capacity`, `no_matching_type`, `all_booked`)
+- **New:** 9 resource types: `ResourceInput`, `ResourceSlot`, `AvailableResource`, `ResourceAssignmentStrategy`, and more
+- **New:** Shared pipeline extraction (`slot-pipeline.ts`) — RRULE expansion and override masking shared between provider and resource engines
+- **Extended:** `BookingInput` with optional `resourceId` and `guestCount` (backward-compatible)
+- **Performance:** 50-resource / 30-day computation in ~45ms
+
+#### @thebookingkit/db
+
+- **New:** `resources` table — bookable physical units with type, capacity, and location
+- **New:** `resource_availability_rules` and `resource_availability_overrides` tables
+- **New:** `bookings.resource_id` nullable FK with `EXCLUDE USING gist` constraint (scoped to `resource_id IS NOT NULL`)
+- **New:** Updated `create_booking()` function with optional `p_resource_id` parameter
+- **New:** Migration `0005_resources.sql` (idempotent)
+
+#### @thebookingkit/d1
+
+- **New:** `d1ResourceAvailabilityRowsToInputs()` and `d1ResourceOverrideRowsToInputs()` converters
+- **New:** `D1ResourceBookingLock` for resource-scoped advisory locking
+- **New:** `RESOURCE_DDL` constant for SQLite table creation
+
+#### Documentation & Demo
+
+- **New:** Feature guide: [Resource & Capacity Booking](/features/resource-booking)
+- **New:** API reference: [Resource Engine API](/api-reference/resource-engine)
+- **New:** Interactive restaurant reservation demo (Olive & Vine Bistro) with party size selection, table assignment, and pool utilization
+
+---
+
 ## 0.1.5 (2026-03-12)
 
 ### QA Audit — 49 Critical & High Priority Bug Fixes

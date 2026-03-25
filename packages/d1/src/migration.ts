@@ -173,3 +173,83 @@ CREATE TABLE IF NOT EXISTS booking_locks (
   created_at TEXT NOT NULL
 );
 `.trim();
+
+/**
+ * Ready-to-use SQL statements that create the three resource tables required
+ * by E-22 resource-capacity booking in a SQLite / Cloudflare D1 database.
+ *
+ * Differences from the PostgreSQL schema in `@thebookingkit/db`:
+ * - Dates stored as TEXT (UTC-Z format via D1DateCodec) — no native TIMESTAMPTZ.
+ * - No `EXCLUDE USING gist` range constraint — use `D1ResourceBookingLock` instead.
+ * - No `btree_gist` extension dependency.
+ * - `is_active` stored as INTEGER (0/1) — SQLite has no native BOOLEAN type.
+ * - `metadata` stored as TEXT (JSON string) — SQLite has no native JSONB type.
+ *
+ * Run this once as part of your D1 migration setup:
+ *
+ * ```ts
+ * // Run all three statements (split on ";\n\n")
+ * for (const stmt of RESOURCE_DDL.split(";\n\n")) {
+ *   const trimmed = stmt.trim();
+ *   if (trimmed) await db.run(trimmed + ";");
+ * }
+ * ```
+ *
+ * Or use it with the Cloudflare D1 `batch()` API:
+ *
+ * ```ts
+ * const stmts = RESOURCE_DDL
+ *   .split(";\n\n")
+ *   .map(s => s.trim())
+ *   .filter(Boolean)
+ *   .map(s => db.prepare(s + ";"));
+ * await db.batch(stmts);
+ * ```
+ */
+export const RESOURCE_DDL = `
+CREATE TABLE IF NOT EXISTS resources (
+  id          TEXT PRIMARY KEY,
+  name        TEXT NOT NULL,
+  type        TEXT NOT NULL,
+  capacity    INTEGER NOT NULL DEFAULT 1,
+  is_active   INTEGER NOT NULL DEFAULT 1,
+  location    TEXT,
+  metadata    TEXT,
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS resource_availability_rules (
+  id          TEXT PRIMARY KEY,
+  resource_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
+  rrule       TEXT NOT NULL,
+  start_time  TEXT NOT NULL,
+  end_time    TEXT NOT NULL,
+  timezone    TEXT NOT NULL,
+  valid_from  TEXT,
+  valid_until TEXT,
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS resource_availability_overrides (
+  id             TEXT PRIMARY KEY,
+  resource_id    TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
+  date           TEXT NOT NULL,
+  start_time     TEXT,
+  end_time       TEXT,
+  is_unavailable INTEGER NOT NULL DEFAULT 0,
+  reason         TEXT,
+  created_at     TEXT NOT NULL,
+  updated_at     TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_resource_availability_rules_resource_id
+  ON resource_availability_rules (resource_id);
+
+CREATE INDEX IF NOT EXISTS idx_resource_availability_overrides_resource_id
+  ON resource_availability_overrides (resource_id);
+
+CREATE INDEX IF NOT EXISTS idx_resources_type
+  ON resources (type);
+`.trim();

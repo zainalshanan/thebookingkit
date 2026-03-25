@@ -1,0 +1,809 @@
+---
+title: Resource Engine API
+description: API reference for resource-based booking functions — getResourceAvailableSlots, assignResource, isResourceSlotAvailable, getResourcePoolSummary.
+---
+
+For a conceptual overview of resource-based booking and practical examples, see the [Resource Booking feature guide](/features/resource-booking).
+
+## Slot Computation
+
+```typescript
+import { getResourceAvailableSlots, isResourceSlotAvailable } from "@thebookingkit/core";
+
+// Compute available slots across a resource pool
+const slots = getResourceAvailableSlots(
+  resources,
+  { start: new Date("2026-03-09"), end: new Date("2026-03-13") },
+  "America/New_York",
+  { duration: 60, minCapacity: 4 }
+);
+
+// Check if a specific slot is available
+const available = isResourceSlotAvailable(
+  resources,
+  "resource-123",
+  new Date("2026-03-10T14:00:00.000Z"),
+  new Date("2026-03-10T15:00:00.000Z")
+);
+```
+
+## getResourceAvailableSlots
+
+Compute capacity-aware available slots for a pool of bookable resources.
+
+```typescript
+function getResourceAvailableSlots(
+  resources: ResourceInput[],
+  dateRange: DateRange,
+  customerTimezone: string,
+  options?: ResourceSlotOptions
+): ResourceSlot[]
+```
+
+### Description
+
+The function runs the three-step pipeline (expand rules, apply overrides, generate slots) independently for each active resource, then merges results by time slot. A slot is included in the result only if at least one resource has remaining capacity of ≥ 1 at that time.
+
+**Filtering:**
+- Inactive resources (`isActive !== true`) are excluded.
+- `options.resourceType` limits computation to a specific type.
+- `options.minCapacity` filters out resources too small for the party.
+- `options.bufferBefore`/`bufferAfter` apply per resource.
+- Slots whose end is before `options.now` (default: current time) are discarded.
+
+**Merge semantics:**
+Each `ResourceSlot` carries `availableResources` — the list of resources still available at that time with per-resource `remainingCapacity`. Slots are sorted chronologically; ties are broken by total remaining capacity (highest first).
+
+### Parameters
+
+| Name | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `resources` | `ResourceInput[]` | Yes | — | The pool of bookable resources with their scheduling data |
+| `dateRange` | `DateRange` | Yes | — | UTC date range to compute slots within |
+| `customerTimezone` | `string` | Yes | — | IANA timezone for `localStart`/`localEnd` formatting |
+| `options` | `ResourceSlotOptions` | No | — | Duration, buffer, interval, type filter, and capacity filter |
+
+### Return Type
+
+```typescript
+type Result = ResourceSlot[];
+
+interface ResourceSlot {
+  /** Start time in UTC ISO-8601 */
+  startTime: string;
+  /** End time in UTC ISO-8601 */
+  endTime: string;
+  /** Start time formatted in customer's local timezone */
+  localStart: string;
+  /** End time formatted in customer's local timezone */
+  localEnd: string;
+  /** Resources still available at this slot, with their remaining capacities */
+  availableResources: AvailableResource[];
+}
+
+interface AvailableResource {
+  /** Unique identifier of the resource */
+  resourceId: string;
+  /** Display name of the resource */
+  resourceName: string;
+  /** Free-form type string (e.g. "table", "room") */
+  resourceType: string;
+  /** Remaining capacity after accounting for overlapping bookings' guest counts */
+  remainingCapacity: number;
+}
+```
+
+### Example
+
+```typescript
+const resources = [
+  {
+    id: "table-1",
+    name: "Table 1",
+    type: "dining_table",
+    capacity: 4,
+    isActive: true,
+    rules: [
+      {
+        rrule: "RRULE:FREQ=DAILY;BYDAY=MO,TU,WE,TH,FR,SA,SU",
+        startTime: "11:00",
+        endTime: "22:00",
+        timezone: "America/New_York"
+      }
+    ],
+    overrides: [],
+    bookings: [
+      {
+        startsAt: new Date("2026-03-10T12:00:00.000Z"),
+        endsAt: new Date("2026-03-10T13:00:00.000Z"),
+        status: "confirmed",
+        guestCount: 2
+      }
+    ]
+  },
+  {
+    id: "table-2",
+    name: "Table 2",
+    type: "dining_table",
+    capacity: 6,
+    isActive: true,
+    rules: [
+      {
+        rrule: "RRULE:FREQ=DAILY;BYDAY=MO,TU,WE,TH,FR,SA,SU",
+        startTime: "11:00",
+        endTime: "22:00",
+        timezone: "America/New_York"
+      }
+    ],
+    overrides: [],
+    bookings: []
+  }
+];
+
+const slots = getResourceAvailableSlots(
+  resources,
+  {
+    start: new Date("2026-03-10T00:00:00.000Z"),
+    end: new Date("2026-03-10T23:59:59.999Z")
+  },
+  "America/New_York",
+  { duration: 90, minCapacity: 4 }
+);
+
+// Result:
+// [
+//   {
+//     startTime: "2026-03-10T15:00:00.000Z",
+//     endTime: "2026-03-10T16:30:00.000Z",
+//     localStart: "3/10/2026, 11:00 AM",
+//     localEnd: "3/10/2026, 12:30 PM",
+//     availableResources: [
+//       { resourceId: "table-1", resourceName: "Table 1", resourceType: "dining_table", remainingCapacity: 2 },
+//       { resourceId: "table-2", resourceName: "Table 2", resourceType: "dining_table", remainingCapacity: 4 }
+//     ]
+//   },
+//   // ... more slots
+// ]
+```
+
+---
+
+## assignResource
+
+Automatically select the best resource from a pool for a given time window.
+
+```typescript
+function assignResource(
+  resources: ResourceInput[],
+  startTime: Date,
+  endTime: Date,
+  options?: ResourceSlotOptions
+): ResourceAssignmentResult
+```
+
+### Description
+
+The function applies the requested allocation strategy after narrowing the pool to resources that are:
+- Active
+- Match the optional `resourceType`
+- Have sufficient capacity for the party (`requestedCapacity`)
+- Are free at the requested time (no overlapping active bookings within buffer boundaries)
+
+**Assignment strategies:**
+- `"best_fit"` (default) — smallest resource whose `capacity >= requestedCapacity`
+- `"first_available"` — first free resource in array order
+- `"round_robin"` — resource with the lowest `bookingCount` in `options.pastCounts`
+- `"largest_first"` — resource with the highest `capacity`
+
+**Error escalation:**
+1. No resource matches the requested `resourceType` → throws `ResourceUnavailableError("no_matching_type")`
+2. No matching resource has sufficient `capacity` → throws `ResourceUnavailableError("no_capacity")`
+3. All capacity-sufficient resources are booked → throws `ResourceUnavailableError("all_booked")`
+
+### Parameters
+
+| Name | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `resources` | `ResourceInput[]` | Yes | — | The pool of bookable resources |
+| `startTime` | `Date` | Yes | — | Requested booking start time (UTC) |
+| `endTime` | `Date` | Yes | — | Requested booking end time (UTC) |
+| `options` | `ResourceSlotOptions` | No | — | Strategy, capacity, buffer, and round-robin counts |
+
+### Return Type
+
+```typescript
+interface ResourceAssignmentResult {
+  /** Unique identifier of the assigned resource */
+  resourceId: string;
+  /** Display name of the assigned resource */
+  resourceName: string;
+  /** Human-readable reason for the selection (e.g. "best_fit", "round_robin") */
+  reason: string;
+}
+```
+
+### Thrown Errors
+
+```typescript
+class ResourceUnavailableError extends Error {
+  code: "RESOURCE_UNAVAILABLE";
+  reason: "no_capacity" | "no_matching_type" | "all_booked";
+}
+```
+
+### Example
+
+```typescript
+const resources = [
+  {
+    id: "desk-1",
+    name: "Desk 1",
+    type: "standing_desk",
+    capacity: 1,
+    isActive: true,
+    rules: [/* ... */],
+    overrides: [],
+    bookings: [
+      {
+        startsAt: new Date("2026-03-10T09:00:00.000Z"),
+        endsAt: new Date("2026-03-10T10:00:00.000Z"),
+        status: "confirmed"
+      }
+    ]
+  },
+  {
+    id: "desk-2",
+    name: "Desk 2",
+    type: "standing_desk",
+    capacity: 1,
+    isActive: true,
+    rules: [/* ... */],
+    overrides: [],
+    bookings: []
+  }
+];
+
+try {
+  const assigned = assignResource(
+    resources,
+    new Date("2026-03-10T09:30:00.000Z"),
+    new Date("2026-03-10T10:30:00.000Z"),
+    {
+      strategy: "first_available",
+      requestedCapacity: 1,
+      bufferAfter: 15
+    }
+  );
+
+  // Result: { resourceId: "desk-2", resourceName: "Desk 2", reason: "first_available" }
+} catch (error) {
+  if (error instanceof ResourceUnavailableError) {
+    console.error(`Failed to assign: ${error.reason}`);
+  }
+}
+```
+
+---
+
+## isResourceSlotAvailable
+
+Quick availability check for a single time window, either for a specific resource or for any resource in the pool.
+
+```typescript
+function isResourceSlotAvailable(
+  resources: ResourceInput[],
+  resourceId: string | undefined,
+  startTime: Date,
+  endTime: Date,
+  bufferBefore?: number,
+  bufferAfter?: number,
+  options?: ResourceSlotOptions
+): ResourceSlotAvailabilityResult
+```
+
+### Description
+
+When `resourceId` is provided, the check is scoped to that one resource and returns:
+1. Not found or inactive → `{ available: false, reason: "resource_inactive" }`
+2. Override blocks the date → `{ available: false, reason: "blocked_date" }`
+3. Start/end falls outside all availability windows → `{ available: false, reason: "outside_availability" }`
+4. Overlapping booking (exact overlap) → `{ available: false, reason: "resource_booked" }`
+5. Overlapping booking (buffer-only) → `{ available: false, reason: "buffer_conflict" }`
+6. Otherwise → `{ available: true, remainingCapacity }`
+
+When `resourceId` is `undefined`, the check is a pool-level query: any active resource that passes all checks is sufficient; the best (highest) `remainingCapacity` across passing resources is returned.
+
+### Parameters
+
+| Name | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `resources` | `ResourceInput[]` | Yes | — | The resource pool to search |
+| `resourceId` | `string \| undefined` | Yes | — | Resource to check, or `undefined` for a pool-level check |
+| `startTime` | `Date` | Yes | — | Proposed slot start time (UTC) |
+| `endTime` | `Date` | Yes | — | Proposed slot end time (UTC) |
+| `bufferBefore` | `number` | No | `0` | Buffer minutes before the slot |
+| `bufferAfter` | `number` | No | `0` | Buffer minutes after the slot |
+| `options` | `ResourceSlotOptions` | No | — | Optional `options.now` for test determinism |
+
+### Return Type
+
+```typescript
+type ResourceSlotAvailabilityResult =
+  | {
+      available: true;
+      remainingCapacity: number;
+    }
+  | {
+      available: false;
+      reason:
+        | "outside_availability"
+        | "resource_booked"
+        | "blocked_date"
+        | "buffer_conflict"
+        | "resource_inactive";
+    };
+```
+
+### Example: Specific Resource Check
+
+```typescript
+const resources = [
+  {
+    id: "room-301",
+    name: "Conference Room 301",
+    type: "conference_room",
+    capacity: 12,
+    isActive: true,
+    rules: [
+      {
+        rrule: "RRULE:FREQ=DAILY;BYDAY=MO,TU,WE,TH,FR",
+        startTime: "08:00",
+        endTime: "18:00",
+        timezone: "America/New_York"
+      }
+    ],
+    overrides: [
+      {
+        date: new Date("2026-03-10T00:00:00.000Z"),
+        isUnavailable: true
+      }
+    ],
+    bookings: [
+      {
+        startsAt: new Date("2026-03-11T14:00:00.000Z"),
+        endsAt: new Date("2026-03-11T15:00:00.000Z"),
+        status: "confirmed",
+        guestCount: 6
+      }
+    ]
+  }
+];
+
+const result = isResourceSlotAvailable(
+  resources,
+  "room-301",
+  new Date("2026-03-11T15:30:00.000Z"),
+  new Date("2026-03-11T16:30:00.000Z"),
+  15, // bufferBefore
+  15  // bufferAfter
+);
+
+// Result: { available: true, remainingCapacity: 6 }
+```
+
+### Example: Pool-Level Check
+
+```typescript
+const result = isResourceSlotAvailable(
+  resources,
+  undefined, // Check any resource in the pool
+  new Date("2026-03-11T15:30:00.000Z"),
+  new Date("2026-03-11T16:30:00.000Z"),
+  15,
+  15
+);
+
+// Result: { available: true, remainingCapacity: 12 }
+```
+
+---
+
+## getResourcePoolSummary
+
+Produce a utilization summary for each available time slot across the resource pool.
+
+```typescript
+function getResourcePoolSummary(
+  resources: ResourceInput[],
+  dateRange: DateRange,
+  customerTimezone: string,
+  options?: ResourceSlotOptions
+): ResourcePoolSummary[]
+```
+
+### Description
+
+The function runs the same per-resource pipeline as `getResourceAvailableSlots` but instead of returning slots with resource lists it returns aggregated metrics for each unique slot time:
+- Total resource count
+- Available count
+- Utilization percentage
+- Per-type breakdown
+
+Designed for admin dashboards that need a live capacity overview (e.g. a restaurant host screen or gym manager board). The function is pure and deterministic when `options.now` is provided, making it safe for polling.
+
+### Parameters
+
+| Name | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `resources` | `ResourceInput[]` | Yes | — | The pool of bookable resources with their scheduling data |
+| `dateRange` | `DateRange` | Yes | — | UTC date range for the summary |
+| `customerTimezone` | `string` | Yes | — | IANA timezone for `localStart`/`localEnd` formatting |
+| `options` | `ResourceSlotOptions` | No | — | Duration, buffer, interval, type filter, and `options.now` |
+
+### Return Type
+
+```typescript
+type Result = ResourcePoolSummary[];
+
+interface ResourcePoolSummary {
+  /** Slot start time in UTC ISO-8601 */
+  startTime: string;
+  /** Slot end time in UTC ISO-8601 */
+  endTime: string;
+  /** Slot start formatted in the customer's local timezone */
+  localStart: string;
+  /** Slot end formatted in the customer's local timezone */
+  localEnd: string;
+  /** Total number of resources in the pool */
+  totalResources: number;
+  /** Number of resources still available at this slot */
+  availableResources: number;
+  /** Percentage of resources currently booked, rounded to the nearest integer */
+  utilizationPercent: number;
+  /** Per-type breakdown of total vs available resources */
+  byType: Record<string, { total: number; available: number }>;
+}
+```
+
+### Example
+
+```typescript
+const resources = [
+  {
+    id: "court-1",
+    name: "Court 1",
+    type: "tennis_court",
+    capacity: 2,
+    isActive: true,
+    rules: [
+      {
+        rrule: "RRULE:FREQ=DAILY",
+        startTime: "08:00",
+        endTime: "20:00",
+        timezone: "America/Los_Angeles"
+      }
+    ],
+    overrides: [],
+    bookings: [
+      {
+        startsAt: new Date("2026-03-10T16:00:00.000Z"),
+        endsAt: new Date("2026-03-10T17:00:00.000Z"),
+        status: "confirmed",
+        guestCount: 2
+      }
+    ]
+  },
+  {
+    id: "court-2",
+    name: "Court 2",
+    type: "tennis_court",
+    capacity: 2,
+    isActive: true,
+    rules: [
+      {
+        rrule: "RRULE:FREQ=DAILY",
+        startTime: "08:00",
+        endTime: "20:00",
+        timezone: "America/Los_Angeles"
+      }
+    ],
+    overrides: [],
+    bookings: []
+  }
+];
+
+const summary = getResourcePoolSummary(
+  resources,
+  {
+    start: new Date("2026-03-10T00:00:00.000Z"),
+    end: new Date("2026-03-10T23:59:59.999Z")
+  },
+  "America/Los_Angeles",
+  { duration: 60 }
+);
+
+// Result:
+// [
+//   {
+//     startTime: "2026-03-10T16:00:00.000Z",
+//     endTime: "2026-03-10T17:00:00.000Z",
+//     localStart: "3/10/2026, 8:00 AM",
+//     localEnd: "3/10/2026, 9:00 AM",
+//     totalResources: 2,
+//     availableResources: 1,
+//     utilizationPercent: 50,
+//     byType: {
+//       tennis_court: { total: 2, available: 1 }
+//     }
+//   },
+//   {
+//     startTime: "2026-03-10T17:00:00.000Z",
+//     endTime: "2026-03-10T18:00:00.000Z",
+//     localStart: "3/10/2026, 9:00 AM",
+//     localEnd: "3/10/2026, 10:00 AM",
+//     totalResources: 2,
+//     availableResources: 2,
+//     utilizationPercent: 0,
+//     byType: {
+//       tennis_court: { total: 2, available: 2 }
+//     }
+//   }
+// ]
+```
+
+---
+
+## Types
+
+### ResourceInput
+
+A bookable resource (table, room, court, desk) with its scheduling data.
+
+```typescript
+interface ResourceInput {
+  /** Unique identifier for this resource */
+  id: string;
+  /** Display name of the resource (e.g. "Table 5", "Studio A") */
+  name: string;
+  /** Free-form category string (e.g. "table", "room", "court", "desk") */
+  type: string;
+  /** Maximum party size this resource can accommodate */
+  capacity: number;
+  /** Whether this resource participates in slot computation */
+  isActive: boolean;
+  /** Resource availability rules (RRULE-based) */
+  rules: AvailabilityRuleInput[];
+  /** Resource availability overrides (date-specific exceptions) */
+  overrides: AvailabilityOverrideInput[];
+  /** Existing bookings on this resource for conflict checking */
+  bookings: BookingInput[];
+}
+```
+
+### ResourcePoolInput
+
+Alias for an array of `ResourceInput` objects passed to resource slot functions.
+
+```typescript
+type ResourcePoolInput = ResourceInput[];
+```
+
+### AvailableResource
+
+A single available resource within a time slot.
+
+```typescript
+interface AvailableResource {
+  /** Unique identifier of the resource */
+  resourceId: string;
+  /** Display name of the resource */
+  resourceName: string;
+  /** Free-form type string (e.g. "table", "room") */
+  resourceType: string;
+  /** Remaining capacity after accounting for overlapping bookings' guest counts */
+  remainingCapacity: number;
+}
+```
+
+### ResourceSlot
+
+A computed resource slot with available resources attached.
+
+```typescript
+interface ResourceSlot extends Slot {
+  /** Resources still available at this slot, with their remaining capacities */
+  availableResources: AvailableResource[];
+}
+
+interface Slot {
+  /** Start time in UTC ISO-8601 */
+  startTime: string;
+  /** End time in UTC ISO-8601 */
+  endTime: string;
+  /** Start time formatted in the customer's local timezone */
+  localStart: string;
+  /** End time formatted in the customer's local timezone */
+  localEnd: string;
+}
+```
+
+### ResourceAssignmentStrategy
+
+Strategy for auto-assigning a resource to a booking.
+
+```typescript
+type ResourceAssignmentStrategy =
+  | "best_fit"
+  | "first_available"
+  | "round_robin"
+  | "largest_first";
+```
+
+| Strategy | Description |
+|---|---|
+| `"best_fit"` | Smallest resource whose `capacity >= requestedCapacity` (default) |
+| `"first_available"` | First free resource in array order |
+| `"round_robin"` | Resource with the lowest `bookingCount` in `options.pastCounts` |
+| `"largest_first"` | Resource with the highest `capacity` |
+
+### ResourceAssignmentResult
+
+Result of resource auto-assignment.
+
+```typescript
+interface ResourceAssignmentResult {
+  /** Unique identifier of the assigned resource */
+  resourceId: string;
+  /** Display name of the assigned resource */
+  resourceName: string;
+  /** Human-readable reason for the selection (e.g. "best_fit", "round_robin") */
+  reason: string;
+}
+```
+
+### ResourceSlotAvailabilityResult
+
+Resource slot availability check result.
+
+```typescript
+type ResourceSlotAvailabilityResult =
+  | {
+      available: true;
+      remainingCapacity: number;
+    }
+  | {
+      available: false;
+      reason:
+        | "outside_availability"
+        | "resource_booked"
+        | "blocked_date"
+        | "buffer_conflict"
+        | "resource_inactive";
+    };
+```
+
+| Reason | Description |
+|---|---|
+| `"outside_availability"` | Slot falls outside all availability windows (rules + overrides) |
+| `"resource_booked"` | Slot overlaps with an existing booking's exact time window |
+| `"blocked_date"` | Slot date is blocked by an availability override (`isUnavailable: true`) |
+| `"buffer_conflict"` | Slot overlaps with buffer time around an existing booking (not the booking itself) |
+| `"resource_inactive"` | Resource is not active or not found in the pool |
+
+### ResourcePoolSummary
+
+Resource pool summary for a single time slot.
+
+```typescript
+interface ResourcePoolSummary {
+  /** Slot start time in UTC ISO-8601 */
+  startTime: string;
+  /** Slot end time in UTC ISO-8601 */
+  endTime: string;
+  /** Slot start formatted in the customer's local timezone */
+  localStart: string;
+  /** Slot end formatted in the customer's local timezone */
+  localEnd: string;
+  /** Total number of resources in the pool */
+  totalResources: number;
+  /** Number of resources still available at this slot */
+  availableResources: number;
+  /** Percentage of resources currently booked, rounded to the nearest integer */
+  utilizationPercent: number;
+  /** Per-type breakdown of total vs available resources */
+  byType: Record<string, { total: number; available: number }>;
+}
+```
+
+### ResourceSlotOptions
+
+Options for resource slot computation, extending the base `SlotComputeOptions`.
+
+```typescript
+interface ResourceSlotOptions extends SlotComputeOptions {
+  /** Slot duration in minutes (default: 30) */
+  duration?: number;
+  /** Buffer time in minutes before each slot (default: 0) */
+  bufferBefore?: number;
+  /** Buffer time in minutes after each slot (default: 0) */
+  bufferAfter?: number;
+  /** Slot interval in minutes (default: same as duration) */
+  slotInterval?: number;
+  /** The reference point for filtering out past slots (default: current time) */
+  now?: Date;
+  /** Only include resources that can accommodate at least this many guests */
+  minCapacity?: number;
+  /** Filter to resources of this type only */
+  resourceType?: string;
+  /** Assignment strategy used by `assignResource()` (default: "best_fit") */
+  strategy?: ResourceAssignmentStrategy;
+  /**
+   * Past booking counts per resource, used for `round_robin` balancing.
+   * Provide `{ resourceId, bookingCount }` entries for each resource.
+   */
+  pastCounts?: Array<{ resourceId: string; bookingCount: number }>;
+  /** Requested party size for `assignResource()` (default: 1) */
+  requestedCapacity?: number;
+}
+```
+
+### ResourceUnavailableError
+
+Thrown when no resource can be assigned to a booking.
+
+```typescript
+class ResourceUnavailableError extends Error {
+  code: "RESOURCE_UNAVAILABLE";
+  reason: "no_capacity" | "no_matching_type" | "all_booked";
+
+  constructor(
+    reason: "no_capacity" | "no_matching_type" | "all_booked",
+    message?: string
+  );
+}
+```
+
+| Reason | Description |
+|---|---|
+| `"no_capacity"` | No matching resource has sufficient capacity for the requested party size |
+| `"no_matching_type"` | No resource in the pool matches the requested `resourceType` |
+| `"all_booked"` | All capacity-sufficient resources are booked at the requested time |
+
+### Shared Types
+
+The resource engine uses these shared types from the core scheduling system:
+
+```typescript
+/** Availability rule input */
+interface AvailabilityRuleInput {
+  rrule: string;
+  startTime: string;    // "HH:mm"
+  endTime: string;      // "HH:mm"
+  timezone: string;     // IANA timezone
+  validFrom?: Date | null;
+  validUntil?: Date | null;
+}
+
+/** Availability override input */
+interface AvailabilityOverrideInput {
+  date: Date;
+  startTime?: string | null;
+  endTime?: string | null;
+  isUnavailable: boolean;
+}
+
+/** Existing booking input */
+interface BookingInput {
+  startsAt: Date;
+  endsAt: Date;
+  status: string;
+  resourceId?: string;      // Resource ID for resource-based bookings
+  guestCount?: number;      // Number of guests/seats (defaults to 1)
+}
+
+/** Date range for queries */
+interface DateRange {
+  start: Date;  // Must be UTC
+  end: Date;    // Must be UTC
+}
+```

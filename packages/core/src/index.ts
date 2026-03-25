@@ -4,6 +4,7 @@ export {
   SerializationRetryExhaustedError,
   UnauthorizedError,
   ForbiddenError,
+  ResourceUnavailableError,
 } from "./errors.js";
 
 // Types
@@ -16,6 +17,25 @@ export type {
   AvailabilityOverrideInput,
   BookingInput,
   SlotAvailabilityResult,
+  // Conflict detection types
+  ConflictCheckBooking,
+  ConflictDetail,
+  // Resource types (E-22)
+  ResourceInput,
+  ResourcePoolInput,
+  AvailableResource,
+  ResourceSlot,
+  ResourceAssignmentStrategy,
+  ResourceAssignmentResult,
+  ResourceSlotAvailabilityResult,
+  ResourcePoolSummary,
+  ResourceSlotOptions,
+  // Slot Release types (E-23)
+  SlotReleaseStrategy,
+  SlotReleaseConfig,
+  FillEarlierFirstConfig,
+  RollingWindowConfig,
+  DiscountIncentiveConfig,
 } from "./types.js";
 
 // RRULE Parser
@@ -175,6 +195,9 @@ export {
 
 // Kiosk Mode (E-20)
 export {
+  findConflicts,
+  canReschedule,
+  describeConflicts,
   validateKioskSettings,
   resolveKioskSettings,
   validateReschedule,
@@ -192,6 +215,21 @@ export {
   type BreakBlockInput,
   type KioskProvider,
 } from "./kiosk.js";
+
+// Resource Engine (E-22)
+export {
+  getResourceAvailableSlots,
+  assignResource,
+  isResourceSlotAvailable,
+  getResourcePoolSummary,
+} from "./resource-engine.js";
+
+// Slot Release (E-23)
+export {
+  applySlotRelease,
+  computeWindowFillRates,
+  type SlotReleaseResult,
+} from "./slot-release.js";
 
 // Embed
 export {

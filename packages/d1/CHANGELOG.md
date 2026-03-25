@@ -1,5 +1,36 @@
 # @thebookingkit/d1
 
+## 0.2.0
+
+### Minor Changes — Resource & Capacity Booking (2026-03-17)
+
+Adds D1/SQLite adapter helpers for resource-based booking.
+
+### New Features
+
+#### Resource Helpers (`resource-helpers.ts`)
+
+- **`d1ResourceAvailabilityRowsToInputs()`** — Converts D1 text-encoded resource availability rows into `AvailabilityRuleInput[]` using `D1DateCodec`.
+- **`d1ResourceOverrideRowsToInputs()`** — Converts D1 resource override rows into `AvailabilityOverrideInput[]`.
+- **`D1ResourceBookingLock`** — Resource-scoped advisory locking extending `D1BookingLock` with namespaced keys (`resource:{id}:{date}`).
+- **`createD1ResourceBookingLock()`** — Factory function for resource lock instances.
+
+#### Interfaces
+
+- `D1ResourceRow`, `D1ResourceAvailabilityRuleRow`, `D1ResourceAvailabilityOverrideRow`
+
+#### Migration (`migration.ts`)
+
+- **`RESOURCE_DDL`** constant — SQLite CREATE TABLE statements for `resources`, `resource_availability_rules`, `resource_availability_overrides` with indexes.
+
+#### Tests
+
+- 50 new tests covering row converters, date codec round-trips, lock behavior, DDL syntax, and race condition simulation.
+
+### Dependencies
+
+- Updated `@thebookingkit/core` to `^0.2.0`
+
 ## 0.1.5
 
 ### Minor Changes — QA Audit (2026-03-12)

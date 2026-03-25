@@ -1,5 +1,43 @@
 # @thebookingkit/core
 
+## 0.2.0
+
+### Minor Changes — Resource & Capacity Booking (2026-03-17)
+
+Adds resource-based booking to the scheduling engine, enabling restaurants, yoga studios, coworking spaces, and any venue with bookable physical units.
+
+### New Features
+
+#### Resource Engine (`resource-engine.ts`)
+
+- **`getResourceAvailableSlots()`** — Compute capacity-aware available slots across a pool of resources. Runs the three-step pipeline (RRULE → overrides → filter) per-resource, then merges into a pool view with `availableResources` and `remainingCapacity` per slot.
+- **`assignResource()`** — Auto-assign the best resource for a booking using four strategies: `best_fit` (smallest that fits), `first_available`, `round_robin`, and `largest_first`.
+- **`isResourceSlotAvailable()`** — Quick single-slot availability check for a specific resource or pool-level (any resource).
+- **`getResourcePoolSummary()`** — Admin dashboard utilization metrics with per-type breakdown and `utilizationPercent`.
+
+#### Shared Pipeline Extraction (`slot-pipeline.ts`)
+
+- Extracted Steps 1 (RRULE expansion) and 2 (override masking) from `slot-engine.ts` into shared internal utilities: `expandRules()`, `applyOverrides()`, `generateCandidateSlots()`, `formatSlots()`.
+- Both `getAvailableSlots()` and `getResourceAvailableSlots()` now share the same pipeline code — bug fixes propagate to both paths.
+
+#### New Types
+
+- `ResourceInput`, `ResourcePoolInput`, `AvailableResource`, `ResourceSlot`, `ResourceAssignmentStrategy`, `ResourceAssignmentResult`, `ResourceSlotAvailabilityResult`, `ResourcePoolSummary`, `ResourceSlotOptions`
+- `ResourceUnavailableError` with typed reasons: `no_capacity`, `no_matching_type`, `all_booked`
+- `BookingInput` extended with optional `resourceId` and `guestCount` fields (backward-compatible)
+
+#### Performance
+
+- Hot-loop optimization: pre-computed epoch-ms buffered bookings with zero-allocation overlap checks
+- 30-day / 50-resource computation: ~45ms (budget: 200ms)
+- Single slot check / 50 resources: ~5ms (budget: 50ms)
+
+#### Tests
+
+- 68+ unit tests covering all four functions, edge cases, and boundary conditions
+- 5 property-based invariants × 500 random cases via fast-check
+- Performance budget assertions
+
 ## 0.1.5
 
 ### Minor Changes — QA Audit (2026-03-12)
