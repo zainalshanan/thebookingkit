@@ -8,12 +8,14 @@
  * @module kiosk
  */
 
-import { addMinutes, areIntervalsOverlapping } from "date-fns";
+import { addMinutes } from "date-fns";
 import { isSlotAvailable } from "./slot-engine.js";
 import type {
   AvailabilityRuleInput,
   AvailabilityOverrideInput,
   BookingInput,
+  ConflictCheckBooking,
+  ConflictDetail,
 } from "./types.js";
 
 // ---------------------------------------------------------------------------
@@ -221,6 +223,105 @@ export function resolveKioskSettings(
 }
 
 // ---------------------------------------------------------------------------
+// Conflict Detection Primitives (backported from forza-barber-v2)
+// ---------------------------------------------------------------------------
+
+/** Statuses excluded from overlap checks — these bookings are "inactive" */
+const INACTIVE_STATUSES = ["cancelled", "no_show", "rejected"] as const;
+
+/** Booking status values that cannot be rescheduled */
+const NON_RESCHEDULABLE_STATUSES = [
+  "completed",
+  "cancelled",
+  "no_show",
+  "rejected",
+] as const;
+
+/**
+ * Find bookings that overlap with a proposed time range.
+ *
+ * Overlap rule: two half-open intervals `[aStart, aEnd)` and `[bStart, bEnd)`
+ * overlap when `aStart < bEnd AND aEnd > bStart`.
+ *
+ * Bookings with status `"cancelled"`, `"no_show"`, or `"rejected"` are
+ * excluded automatically. An optional `excludeId` lets the caller skip the
+ * booking being rescheduled so it does not conflict with itself.
+ *
+ * @param existing - Bookings to check against
+ * @param newStart - Proposed start time
+ * @param newEnd - Proposed end time
+ * @param excludeId - Booking ID to exclude (the one being rescheduled)
+ * @returns Array of detected conflicts
+ */
+export function findConflicts(
+  existing: ConflictCheckBooking[],
+  newStart: Date,
+  newEnd: Date,
+  excludeId?: string,
+): ConflictDetail[] {
+  const ns = newStart.getTime();
+  const ne = newEnd.getTime();
+
+  return existing
+    .filter((b) => {
+      if (excludeId && b.id === excludeId) return false;
+      if (INACTIVE_STATUSES.includes(b.status as (typeof INACTIVE_STATUSES)[number])) return false;
+
+      const bs = b.startsAt.getTime();
+      const be = b.endsAt.getTime();
+      return ns < be && ne > bs;
+    })
+    .map((b) => ({
+      bookingId: b.id ?? "unknown",
+      startsAt: b.startsAt,
+      endsAt: b.endsAt,
+      customerName: b.customerName,
+      type: b.type,
+    }));
+}
+
+/**
+ * Check whether a booking with the given status can be rescheduled.
+ *
+ * Only `"confirmed"` and `"pending"` bookings are reschedulable.
+ *
+ * @param status - Current booking status
+ * @returns `true` if the booking can be rescheduled
+ */
+export function canReschedule(status: string): boolean {
+  return !NON_RESCHEDULABLE_STATUSES.includes(
+    status as (typeof NON_RESCHEDULABLE_STATUSES)[number],
+  );
+}
+
+/**
+ * Produce a human-readable description of detected conflicts.
+ *
+ * @param conflicts - Conflicts from `findConflicts()`
+ * @param formatTime - Optional time formatter (defaults to `HH:MM` UTC)
+ * @returns Readable string, e.g. "Conflicts with Jane Smith (2:00 PM – 3:00 PM)"
+ */
+export function describeConflicts(
+  conflicts: ConflictDetail[],
+  formatTime?: (d: Date) => string,
+): string {
+  if (conflicts.length === 0) return "No conflicts";
+
+  const fmt =
+    formatTime ??
+    ((d: Date) =>
+      d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }));
+
+  const parts = conflicts.map((c) => {
+    const name = c.customerName || c.type || "Booking";
+    return `${name} (${fmt(c.startsAt)} – ${fmt(c.endsAt)})`;
+  });
+
+  const label = conflicts.length === 1 ? "1 conflict" : `${conflicts.length} conflicts`;
+  return `${label}: ${parts.join(", ")}`;
+}
+
+// ---------------------------------------------------------------------------
 // Reschedule Validation (E20-S04)
 // ---------------------------------------------------------------------------
 
@@ -237,14 +338,6 @@ export interface RescheduleValidation {
     endsAt: Date;
   };
 }
-
-/** Booking status values that cannot be rescheduled */
-const NON_RESCHEDULABLE_STATUSES = [
-  "completed",
-  "cancelled",
-  "no_show",
-  "rejected",
-] as const;
 
 /**
  * Validate whether a booking can be rescheduled to a new time.
@@ -295,40 +388,46 @@ export function validateReschedule(
   if (!availability.available) {
     const reason = availability.reason;
 
-    // Try to find the specific conflicting booking
+    // Use findConflicts for structured conflict detection
     if (reason === "already_booked" || reason === "buffer_conflict") {
-      const activeBookings = existingBookings.filter(
-        (b) => b.status !== "cancelled" && b.status !== "rejected",
-      );
-      for (const booking of activeBookings) {
-        const bookingStartWithBuffer = addMinutes(
-          booking.startsAt,
-          -bufferBefore,
-        );
-        const bookingEndWithBuffer = addMinutes(booking.endsAt, bufferAfter);
+      // Build buffered bookings for conflict detection
+      const bufferedBookings: ConflictCheckBooking[] = existingBookings.map((b) => ({
+        id: (b as BookingInput & { id?: string }).id,
+        startsAt: addMinutes(b.startsAt, -bufferBefore),
+        endsAt: addMinutes(b.endsAt, bufferAfter),
+        status: b.status,
+      }));
 
-        if (
-          areIntervalsOverlapping(
-            { start: newStart, end: newEnd },
-            { start: bookingStartWithBuffer, end: bookingEndWithBuffer },
-          )
-        ) {
-          return {
-            valid: false,
-            reason: reason === "already_booked" ? "conflict" : "buffer_conflict",
-            conflictDetails: {
-              bookingId: (booking as BookingInput & { id?: string }).id ?? "unknown",
-              startsAt: booking.startsAt,
-              endsAt: booking.endsAt,
-            },
-          };
-        }
+      const conflicts = findConflicts(bufferedBookings, newStart, newEnd);
+      if (conflicts.length > 0) {
+        const first = conflicts[0];
+        // Map back to original booking times for conflictDetails
+        const originalBooking = existingBookings.find(
+          (b) => (b as BookingInput & { id?: string }).id === first.bookingId,
+        );
+        return {
+          valid: false,
+          reason: reason === "already_booked" ? "conflict" : "buffer_conflict",
+          conflictDetails: {
+            bookingId: first.bookingId,
+            startsAt: originalBooking?.startsAt ?? first.startsAt,
+            endsAt: originalBooking?.endsAt ?? first.endsAt,
+          },
+        };
       }
     }
 
+    // Map isSlotAvailable reasons to RescheduleValidation reasons
+    const mappedReason: RescheduleValidation["reason"] =
+      reason === "already_booked" ? "conflict"
+      : reason === "buffer_conflict" ? "buffer_conflict"
+      : reason === "outside_availability" ? "outside_availability"
+      : reason === "blocked_date" ? "blocked_date"
+      : "outside_availability"; // safe fallback
+
     return {
       valid: false,
-      reason: reason as RescheduleValidation["reason"],
+      reason: mappedReason,
     };
   }
 
@@ -371,23 +470,30 @@ export function validateBreakBlock(
     return { valid: false, conflictingBookings: [] };
   }
 
-  const activeBookings = existingBookings.filter(
-    (b) =>
-      b.status !== "cancelled" &&
-      b.status !== "rejected" &&
-      b.status !== "no_show",
-  );
+  // Delegate to findConflicts for consistent overlap logic
+  const conflictCheckBookings: ConflictCheckBooking[] = existingBookings.map((b) => ({
+    id: (b as BookingInput & { id?: string }).id,
+    startsAt: b.startsAt,
+    endsAt: b.endsAt,
+    status: b.status,
+  }));
 
-  const conflicts = activeBookings.filter((booking) =>
-    areIntervalsOverlapping(
-      { start: block.startTime, end: block.endTime },
-      { start: booking.startsAt, end: booking.endsAt },
-    ),
+  const detected = findConflicts(conflictCheckBookings, block.startTime, block.endTime);
+
+  // Map back to the original BookingInput objects for backward compatibility
+  const conflictingBookings = existingBookings.filter((b) =>
+    detected.some((d) => {
+      const id = (b as BookingInput & { id?: string }).id;
+      if (id && d.bookingId !== "unknown") return id === d.bookingId;
+      // Fallback: match by time
+      return b.startsAt.getTime() === d.startsAt.getTime() &&
+        b.endsAt.getTime() === d.endsAt.getTime();
+    }),
   );
 
   return {
-    valid: conflicts.length === 0,
-    conflictingBookings: conflicts,
+    valid: detected.length === 0,
+    conflictingBookings,
   };
 }
 

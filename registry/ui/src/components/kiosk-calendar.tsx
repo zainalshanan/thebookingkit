@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Calendar, dateFnsLocalizer, type View } from "react-big-calendar";
 import withDragAndDrop from "react-big-calendar/lib/addons/dragAndDrop";
 import "react-big-calendar/lib/addons/dragAndDrop/styles.css";
+import "./kiosk-calendar.css";
 import {
   format,
   parse,
@@ -11,6 +12,7 @@ import {
   addDays,
   subDays,
   startOfToday,
+  addMilliseconds,
 } from "date-fns";
 import { cn } from "../utils/cn.js";
 import { BookingStatusBadge, type BookingStatus } from "./booking-status-badge.js";
@@ -27,12 +29,17 @@ const localizer = dateFnsLocalizer({
 
 const DnDCalendar = withDragAndDrop(Calendar);
 
+/** Statuses that cannot be rescheduled or dragged */
+const NON_DRAGGABLE_STATUSES = ["completed", "cancelled", "no_show", "rejected"];
+
 /** A resource (provider/room/equipment) shown as a column in day view */
 export interface KioskResource {
   /** Unique identifier */
   id: string | number;
   /** Display label shown in the column header */
   title: string;
+  /** Whether this resource is off for the day. Grays the column header and prevents drops. */
+  isOff?: boolean;
 }
 
 /** A booking/event for the kiosk calendar */
@@ -55,6 +62,27 @@ export interface KioskEvent {
   /** Whether this is a break/block (not a booking) */
   isBlock?: boolean;
   blockType?: "break" | "personal" | "meeting" | "closed";
+}
+
+/** Minimal conflict detail for the onConflictDetected callback */
+export interface KioskConflictDetail {
+  bookingId: string;
+  startsAt: Date;
+  endsAt: Date;
+  customerName?: string;
+  type?: string;
+  /** Resource ID for multi-resource conflict filtering */
+  resourceId?: string | number;
+}
+
+/** Staged reschedule state exposed to parent via callback */
+export interface StagedReschedule {
+  eventId: string;
+  originalStart: Date;
+  originalEnd: Date;
+  newStart: Date;
+  newEnd: Date;
+  resourceId?: string | number;
 }
 
 /** Color coding mode */
@@ -116,6 +144,7 @@ export interface KioskCalendarProps {
   /**
    * Called when a booking is dragged to a new time (or a new resource column).
    * `resourceId` is the target resource when dragging between columns in day view.
+   * Only used when `rescheduleMode` is `false` (default).
    */
   onEventDrop?: (eventId: string, newStart: Date, newEnd: Date, resourceId?: string | number) => Promise<void>;
   /** Called when a booking is resized */
@@ -140,10 +169,76 @@ export interface KioskCalendarProps {
    * the parent is responsible for updating the value via this callback.
    */
   onDateChange?: (date: Date) => void;
+
+  // ── Two-Phase Reschedule (WP3) ──
+
+  /**
+   * When `true`, drag-and-drop enters a staged confirmation flow instead of
+   * calling `onEventDrop` directly. The event visually moves to the new
+   * position and a confirmation banner appears. @default false
+   */
+  rescheduleMode?: boolean;
+  /**
+   * Called when user drops an event in reschedule mode. The parent may
+   * store the staged intent but should NOT commit the change yet.
+   */
+  onRescheduleStage?: (staged: StagedReschedule) => void;
+  /**
+   * Called when user confirms the staged reschedule from the banner.
+   * Throw to trigger optimistic snap-back.
+   */
+  onRescheduleConfirm?: (staged: StagedReschedule, force?: boolean) => Promise<void>;
+  /** Called when user cancels the staged reschedule */
+  onRescheduleCancel?: () => void;
+
+  // ── Conflict Detection (WP4) ──
+
+  /**
+   * Called instead of `onRescheduleConfirm` when conflicts are detected.
+   * The parent renders a toast/dialog and calls `onForceOverride` or `onCancel`.
+   */
+  onConflictDetected?: (
+    conflicts: KioskConflictDetail[],
+    onForceOverride: () => void,
+    onCancel: () => void,
+  ) => void;
+  /**
+   * Bookings used for client-side conflict detection before confirming a
+   * reschedule. When omitted, conflict checking is skipped (server handles it).
+   */
+  existingBookings?: KioskConflictDetail[];
+
+  // ── Auto-Refresh (WP5) ──
+
+  /** Auto-refresh interval in milliseconds. 0 = disabled. @default 0 */
+  refreshInterval?: number;
+  /** Called by the auto-refresh interval. Parent fetches fresh data. */
+  onRefresh?: () => Promise<void>;
+  /** Called when the calendar's idle state changes. `true` = safe to refresh. */
+  onIdleChange?: (isIdle: boolean) => void;
+
+  // ── Mobile (WP3) ──
+
+  /**
+   * Force all time slots to be selectable (clickable) regardless of event
+   * status. Used for mobile tap-to-slot reschedule. @default false
+   */
+  forceSelectable?: boolean;
+
   /** Additional CSS class name */
   className?: string;
   /** Inline styles */
   style?: React.CSSProperties;
+}
+
+/** Internal event shape used by react-big-calendar */
+interface CalendarEvent {
+  id: string;
+  title: string;
+  start: Date;
+  end: Date;
+  resource: KioskEvent;
+  resourceId?: string | number;
 }
 
 const STATUS_COLORS: Record<BookingStatus, string> = {
@@ -188,26 +283,21 @@ const SOURCE_COLORS: Record<string, string> = {
  *
  * @example
  * ```tsx
- * // Multi-provider (salon, clinic, barbershop)
+ * // Multi-provider with two-phase reschedule
  * <KioskCalendar
  *   events={bookings}
  *   resources={[
  *     { id: "dr-1", title: "Dr. Chen" },
- *     { id: "dr-2", title: "Dr. Patel" },
+ *     { id: "dr-2", title: "Dr. Patel", isOff: true },
  *   ]}
  *   defaultView="day"
  *   colorMode="status"
- *   onEventDrop={async (id, start, end, resourceId) => {
- *     await rescheduleBooking(id, start, end, resourceId);
+ *   rescheduleMode
+ *   onRescheduleConfirm={async (staged) => {
+ *     await rescheduleBooking(staged.eventId, staged.newStart, staged.newEnd);
  *   }}
- * />
- *
- * // Solo practitioner (no resource columns)
- * <KioskCalendar
- *   events={myBookings}
- *   defaultView="week"
- *   colorMode="source"
- *   onEventClick={(e) => openDetail(e)}
+ *   refreshInterval={30000}
+ *   onRefresh={async () => { refetchBookings(); }}
  * />
  * ```
  */
@@ -230,6 +320,16 @@ export function KioskCalendar({
   scheduleMap,
   date: controlledDate,
   onDateChange,
+  rescheduleMode = false,
+  onRescheduleStage,
+  onRescheduleConfirm,
+  onRescheduleCancel,
+  onConflictDetected,
+  existingBookings,
+  refreshInterval = 0,
+  onRefresh,
+  onIdleChange,
+  forceSelectable = false,
   className,
   style,
 }: KioskCalendarProps) {
@@ -239,17 +339,52 @@ export function KioskCalendar({
   // When a controlled date is provided use it; otherwise fall back to internal state.
   const date = controlledDate ?? internalDate;
 
+  // Stable ref for onDateChange to avoid stale closures in effects.
+  const onDateChangeRef = useRef(onDateChange);
+  useEffect(() => { onDateChangeRef.current = onDateChange; }, [onDateChange]);
+
   // Helper: update date via internal state and notify parent if a callback was given.
-  const setDate = (updater: Date | ((prev: Date) => Date)) => {
-    const next = typeof updater === "function" ? updater(date) : updater;
-    if (!controlledDate) setInternalDate(next);
-    onDateChange?.(next);
-  };
+  // Uses functional setInternalDate to avoid depending on `date` (prevents stale closures).
+  const setDate = useCallback((updater: Date | ((prev: Date) => Date)) => {
+    if (controlledDate) {
+      const next = typeof updater === "function" ? updater(controlledDate) : updater;
+      onDateChangeRef.current?.(next);
+    } else {
+      setInternalDate((prev) => {
+        const next = typeof updater === "function" ? updater(prev) : updater;
+        onDateChangeRef.current?.(next);
+        return next;
+      });
+    }
+  }, [controlledDate]);
   const [selectedEvent, setSelectedEvent] = useState<KioskEvent | null>(null);
+
+  // ── Two-Phase Reschedule State (WP3) ──
+  const [stagedReschedule, setStagedReschedule] = useState<StagedReschedule | null>(null);
+  const [isConfirming, setIsConfirming] = useState(false);
+
+  // ── Stale-Response Guard (WP5) ──
+  const refreshSeqRef = useRef(0);
 
   // Whether there are multiple resources (enables column layout in day view
   // and the resource picker in week view).
   const hasMultipleResources = resources && resources.length > 1;
+
+  // Build a set of off-resource IDs for drag prevention (WP8)
+  const offResourceIds = useMemo(() => {
+    const ids = new Set<string | number>();
+    if (resources) {
+      for (const r of resources) {
+        if (r.isOff) ids.add(r.id);
+      }
+    }
+    if (scheduleMap) {
+      for (const [id, entry] of scheduleMap) {
+        if (entry.isOff) ids.add(id);
+      }
+    }
+    return ids;
+  }, [resources, scheduleMap]);
 
   // Week-view resource selection: default to first resource.
   const [selectedResourceId, setSelectedResourceId] = useState<string | number>(
@@ -272,10 +407,63 @@ export function KioskCalendar({
     scrollTarget?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, []);
 
+  // ── Idle State (WP5) ──
+  const isIdle = !selectedEvent && !stagedReschedule && !isConfirming;
+  const prevIdleRef = useRef(isIdle);
+  useEffect(() => {
+    if (prevIdleRef.current !== isIdle) {
+      prevIdleRef.current = isIdle;
+      onIdleChange?.(isIdle);
+    }
+  }, [isIdle, onIdleChange]);
+
+  // ── Auto-Refresh (WP5) ──
+  // Store onRefresh in a ref to avoid resetting the interval when
+  // the parent passes an un-memoized inline callback.
+  const onRefreshRef = useRef(onRefresh);
+  useEffect(() => { onRefreshRef.current = onRefresh; }, [onRefresh]);
+
+  useEffect(() => {
+    if (!refreshInterval || refreshInterval <= 0) return;
+
+    const id = setInterval(async () => {
+      // Skip if admin is mid-action or no handler
+      if (!prevIdleRef.current || !onRefreshRef.current) return;
+
+      const seq = ++refreshSeqRef.current;
+      try {
+        await onRefreshRef.current();
+        // Discard if a newer refresh has started
+        if (seq !== refreshSeqRef.current) return;
+      } catch {
+        // Swallow refresh errors silently
+      }
+    }, refreshInterval);
+
+    return () => clearInterval(id);
+  }, [refreshInterval]);
+
+  // ── Reschedule Cancel Handler (defined early for keyboard/event click refs) ──
+  const handleRescheduleCancel = useCallback(() => {
+    setStagedReschedule(null);
+    onRescheduleCancel?.();
+  }, [onRescheduleCancel]);
+
+  // Clear staged reschedule if the source event disappears (e.g., from auto-refresh).
+  useEffect(() => {
+    if (stagedReschedule && !events.find((e) => e.id === stagedReschedule.eventId)) {
+      setStagedReschedule(null);
+    }
+  }, [events, stagedReschedule]);
+
   // Keyboard navigation.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        if (stagedReschedule) {
+          handleRescheduleCancel();
+          return;
+        }
         setSelectedEvent(null);
         return;
       }
@@ -290,16 +478,7 @@ export function KioskCalendar({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [view]);
-
-  interface CalendarEvent {
-    id: string;
-    title: string;
-    start: Date;
-    end: Date;
-    resource: KioskEvent;
-    resourceId?: string | number;
-  }
+  }, [view, stagedReschedule, handleRescheduleCancel, setDate]);
 
   // In week view with multiple resources, filter to the selected resource.
   // In day view, show all events (resource columns handle placement).
@@ -310,15 +489,19 @@ export function KioskCalendar({
         ? events.filter((evt) => evt.resourceId === selectedResourceId)
         : events;
 
-    return sourceEvents.map((evt) => ({
-      id: evt.id,
-      title: buildTitle(evt, showFields),
-      start: evt.startsAt,
-      end: evt.endsAt,
-      resource: evt,
-      resourceId: evt.resourceId,
-    }));
-  }, [events, showFields, view, selectedResourceId, hasMultipleResources]);
+    return sourceEvents.map((evt) => {
+      // If this event has a staged reschedule, show it at the new position
+      const isStaged = stagedReschedule?.eventId === evt.id;
+      return {
+        id: evt.id,
+        title: buildTitle(evt, showFields),
+        start: isStaged ? stagedReschedule!.newStart : evt.startsAt,
+        end: isStaged ? stagedReschedule!.newEnd : evt.endsAt,
+        resource: evt,
+        resourceId: isStaged ? (stagedReschedule!.resourceId ?? evt.resourceId) : evt.resourceId,
+      };
+    });
+  }, [events, showFields, view, selectedResourceId, hasMultipleResources, stagedReschedule]);
 
   // Resources are only passed to react-big-calendar in day view when there
   // are multiple. In week view (or solo mode) we pass nothing, so RBC
@@ -328,12 +511,31 @@ export function KioskCalendar({
     [view, resources, hasMultipleResources],
   );
 
+  // ── Custom ResourceHeader (WP8) ──
+  const ResourceHeader = useCallback(
+    ({ label, resource }: { label: string; resource: KioskResource }) => {
+      const isResourceOff = resource?.isOff || offResourceIds.has(resource?.id);
+      return (
+        <span className={isResourceOff ? "tbk-resource-header-off" : undefined}>
+          {label}
+          {isResourceOff && <span className="tbk-day-off-badge">Day Off</span>}
+        </span>
+      );
+    },
+    [offResourceIds],
+  );
+
   const handleSelectEvent = useCallback(
     (event: CalendarEvent) => {
+      // Clicking an event while in reschedule mode cancels the reschedule
+      if (stagedReschedule) {
+        handleRescheduleCancel();
+        return;
+      }
       setSelectedEvent(event.resource);
       onEventClick?.(event.resource);
     },
-    [onEventClick],
+    [onEventClick, stagedReschedule, handleRescheduleCancel],
   );
 
   const handleSelectSlot = useCallback(
@@ -347,13 +549,54 @@ export function KioskCalendar({
     [onSlotDoubleClick, view, selectedResourceId],
   );
 
+  // ── Reschedule Confirm Handler (WP3 + WP4) ──
+  const handleRescheduleConfirm = useCallback(
+    async (force = false) => {
+      if (!stagedReschedule || !onRescheduleConfirm || isConfirming) return;
+
+      // WP4: Client-side conflict detection before confirming
+      if (!force && existingBookings && existingBookings.length > 0 && onConflictDetected) {
+        const ns = stagedReschedule.newStart.getTime();
+        const ne = stagedReschedule.newEnd.getTime();
+        const targetResource = stagedReschedule.resourceId;
+        const conflicts = existingBookings.filter((b) => {
+          if (b.bookingId === stagedReschedule.eventId) return false;
+          // In multi-resource mode, only check bookings on the same resource
+          if (targetResource && b.resourceId && b.resourceId !== targetResource) return false;
+          const bs = b.startsAt.getTime();
+          const be = b.endsAt.getTime();
+          return ns < be && ne > bs;
+        });
+        if (conflicts.length > 0) {
+          onConflictDetected(
+            conflicts,
+            () => handleRescheduleConfirm(true),
+            handleRescheduleCancel,
+          );
+          return;
+        }
+      }
+
+      setIsConfirming(true);
+      try {
+        await onRescheduleConfirm(stagedReschedule, force);
+        setStagedReschedule(null);
+      } catch {
+        // Optimistic snap-back: revert to original position on error
+        setStagedReschedule(null);
+      } finally {
+        setIsConfirming(false);
+      }
+    },
+    [stagedReschedule, onRescheduleConfirm, isConfirming, existingBookings, onConflictDetected, handleRescheduleCancel],
+  );
+
   const handleEventDrop = useCallback(
     async ({
       event,
       start,
       end,
       resourceId,
-      isAllDay,
     }: {
       event: any;
       start: Date | string;
@@ -361,12 +604,47 @@ export function KioskCalendar({
       resourceId?: string | number;
       isAllDay?: boolean;
     }) => {
-      if (!onEventDrop) return;
       const s = typeof start === "string" ? new Date(start) : start;
+      const originalEvent: KioskEvent = event.resource;
+
+      // WP8: Prevent drops on off-resource columns
+      if (resourceId && offResourceIds.has(resourceId)) return;
+
+      // WP3: Duration-preserving logic — preserve original booking duration
+      const originalDuration = originalEvent.endsAt.getTime() - originalEvent.startsAt.getTime();
+      const newEnd = addMilliseconds(s, originalDuration);
+
+      if (rescheduleMode) {
+        // Two-phase: stage for confirmation instead of immediate commit
+        const staged: StagedReschedule = {
+          eventId: event.id,
+          originalStart: originalEvent.startsAt,
+          originalEnd: originalEvent.endsAt,
+          newStart: s,
+          newEnd,
+          resourceId,
+        };
+
+        // No-op check: skip if same time and same resource
+        if (
+          s.getTime() === originalEvent.startsAt.getTime() &&
+          resourceId === originalEvent.resourceId
+        ) {
+          return;
+        }
+
+        setStagedReschedule(staged);
+        setSelectedEvent(null);
+        onRescheduleStage?.(staged);
+        return;
+      }
+
+      // Legacy mode: immediate commit via onEventDrop
+      if (!onEventDrop) return;
       const e = typeof end === "string" ? new Date(end) : end;
       await onEventDrop(event.id, s, e, resourceId);
     },
-    [onEventDrop],
+    [onEventDrop, rescheduleMode, onRescheduleStage, offResourceIds],
   );
 
   const handleEventResize = useCallback(
@@ -446,6 +724,8 @@ export function KioskCalendar({
             padding: "2px 6px",
             opacity: 0.85,
           },
+          className: "tbk-block-event",
+          "data-block": "true",
         };
       }
 
@@ -469,12 +749,7 @@ export function KioskCalendar({
 
       // Regular booking
       const color = getEventColor(evt, colorMode);
-      const isDraggable = ![
-        "completed",
-        "cancelled",
-        "no_show",
-        "rejected",
-      ].includes(evt.status);
+      const isDraggable = !NON_DRAGGABLE_STATUSES.includes(evt.status);
 
       return {
         style: {
@@ -485,9 +760,7 @@ export function KioskCalendar({
           fontSize: "12px",
           padding: "2px 6px",
           cursor: isDraggable ? "grab" : "default",
-          opacity: ["cancelled", "rejected", "no_show"].includes(evt.status)
-            ? 0.45
-            : 1,
+          opacity: NON_DRAGGABLE_STATUSES.includes(evt.status) ? 0.45 : 1,
         },
       };
     },
@@ -524,12 +797,50 @@ export function KioskCalendar({
         )}`
       : format(date, "EEEE, MMM d, yyyy");
 
+  // Staged reschedule banner text
+  const bannerEvent = stagedReschedule
+    ? events.find((e) => e.id === stagedReschedule.eventId)
+    : null;
+
   return (
     <div
       ref={calendarRef}
       className={cn("tbk-kiosk-calendar", `tbk-view-${view}`, className)}
       style={style}
     >
+      {/* ── Reschedule Confirmation Banner (WP3) ── */}
+      {stagedReschedule && bannerEvent && (
+        <div className="tbk-reschedule-banner" role="alert">
+          <span>
+            Move <strong>{bannerEvent.customerName}</strong> from{" "}
+            {formatTime(stagedReschedule.originalStart)} to{" "}
+            {formatTime(stagedReschedule.newStart)}
+            {stagedReschedule.resourceId &&
+              stagedReschedule.resourceId !== bannerEvent.resourceId &&
+              ` (${resources?.find((r) => r.id === stagedReschedule.resourceId)?.title ?? "new resource"})`}
+            ?
+          </span>
+          <div className="tbk-reschedule-banner-actions">
+            <button
+              type="button"
+              className="tbk-reschedule-confirm"
+              onClick={() => handleRescheduleConfirm()}
+              disabled={isConfirming}
+            >
+              {isConfirming ? "Moving..." : "Confirm"}
+            </button>
+            <button
+              type="button"
+              className="tbk-reschedule-cancel"
+              onClick={handleRescheduleCancel}
+              disabled={isConfirming}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Toolbar ── */}
       <div className="tbk-kiosk-toolbar">
         {/* Left: navigation */}
@@ -630,11 +941,14 @@ export function KioskCalendar({
         onEventDrop={handleEventDrop as any}
         onEventResize={handleEventResize as any}
         resizable={resizable}
-        draggableAccessor={(event: any) =>
-          !["completed", "cancelled", "no_show", "rejected"].includes(
-            event.resource.status,
-          )
-        }
+        draggableAccessor={(event: any) => {
+          const evt: KioskEvent = event.resource;
+          // Non-draggable statuses
+          if (NON_DRAGGABLE_STATUSES.includes(evt.status)) return false;
+          // WP8: Prevent dragging events on off-resource columns
+          if (evt.resourceId && offResourceIds.has(evt.resourceId)) return false;
+          return true;
+        }}
         // Resources are injected only in day view with multiple resources.
         // In week view this is undefined → clean 7-day grid.
         {...(activeResources
@@ -644,6 +958,11 @@ export function KioskCalendar({
               resourceTitleAccessor: "title" as any,
             }
           : {})}
+        components={{
+          ...(activeResources
+            ? { resourceHeader: ResourceHeader as any }
+            : {}),
+        }}
       />
 
       {/* ── Event Detail Popover ── */}

@@ -1,0 +1,265 @@
+/*
+ * KioskCalendar Styles
+ *
+ * CSS layer for the kiosk calendar component. Provides status colors via
+ * custom properties, current-time indicator, off-hours dimming, striped
+ * break/block patterns, smooth scrollbars, and a dark theme variant.
+ *
+ * Override any `--tbk-*` variable on .tbk-kiosk-calendar to customise.
+ */
+
+/* ---------------------------------------------------------------------------
+ * CSS Custom Properties (Light theme defaults)
+ * ----------------------------------------------------------------------- */
+
+.tbk-kiosk-calendar {
+  --tbk-confirmed: #16a34a;
+  --tbk-pending: #ca8a04;
+  --tbk-cancelled: #6b7280;
+  --tbk-no-show: #dc2626;
+  --tbk-completed: #2563eb;
+  --tbk-rejected: #9ca3af;
+  --tbk-rescheduled: #7c3aed;
+
+  --tbk-source-online: #2563eb;
+  --tbk-source-walk-in: #f59e0b;
+  --tbk-source-phone: #8b5cf6;
+  --tbk-source-admin: #64748b;
+
+  --tbk-block-bg: #f1f5f9;
+  --tbk-block-border: #94a3b8;
+  --tbk-block-text: #475569;
+
+  --tbk-slot-off-bg: rgba(0, 0, 0, 0.04);
+  --tbk-slot-off-opacity: 0.5;
+
+  --tbk-time-indicator: #dc2626;
+  --tbk-time-indicator-size: 8px;
+
+  --tbk-bg: #ffffff;
+  --tbk-border: #e5e7eb;
+  --tbk-text: #1f2937;
+  --tbk-text-muted: #6b7280;
+}
+
+/* ---------------------------------------------------------------------------
+ * Current-Time Indicator
+ * ----------------------------------------------------------------------- */
+
+.tbk-kiosk-calendar .rbc-current-time-indicator {
+  background-color: var(--tbk-time-indicator);
+  height: 2px;
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.tbk-kiosk-calendar .rbc-current-time-indicator::before {
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: var(--tbk-time-indicator-size);
+  height: var(--tbk-time-indicator-size);
+  border-radius: 50%;
+  background-color: var(--tbk-time-indicator);
+}
+
+/* ---------------------------------------------------------------------------
+ * Off-Hours Slot Dimming
+ * ----------------------------------------------------------------------- */
+
+.tbk-kiosk-calendar .tbk-slot-off {
+  background-color: var(--tbk-slot-off-bg) !important;
+  opacity: var(--tbk-slot-off-opacity);
+}
+
+/* ---------------------------------------------------------------------------
+ * Striped Break/Block Pattern
+ * ----------------------------------------------------------------------- */
+
+.tbk-kiosk-calendar .rbc-event[data-block="true"] {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--tbk-block-bg),
+    var(--tbk-block-bg) 4px,
+    transparent 4px,
+    transparent 8px
+  ) !important;
+  border: 2px dashed var(--tbk-block-border) !important;
+  color: var(--tbk-block-text) !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * Non-Reschedulable Events (terminal status)
+ * ----------------------------------------------------------------------- */
+
+.tbk-kiosk-calendar .rbc-event[data-draggable="false"] {
+  cursor: default !important;
+  opacity: 0.45;
+}
+
+/* ---------------------------------------------------------------------------
+ * Reschedule Confirmation Banner
+ * ----------------------------------------------------------------------- */
+
+.tbk-reschedule-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  background: #fefce8;
+  border: 1px solid #facc15;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #854d0e;
+  margin-bottom: 8px;
+}
+
+.tbk-reschedule-banner-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.tbk-reschedule-confirm {
+  padding: 4px 12px;
+  border-radius: 4px;
+  border: none;
+  background: var(--tbk-confirmed);
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.tbk-reschedule-confirm:hover {
+  opacity: 0.9;
+}
+
+.tbk-reschedule-cancel {
+  padding: 4px 12px;
+  border-radius: 4px;
+  border: 1px solid var(--tbk-border);
+  background: white;
+  color: var(--tbk-text);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.tbk-reschedule-cancel:hover {
+  background: #f9fafb;
+}
+
+/* ---------------------------------------------------------------------------
+ * Day-Off Resource Header
+ * ----------------------------------------------------------------------- */
+
+.tbk-resource-header-off {
+  opacity: 0.5;
+}
+
+.tbk-day-off-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  background: var(--tbk-slot-off-bg);
+  color: var(--tbk-text-muted);
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+/* ---------------------------------------------------------------------------
+ * Smooth Scrollbars
+ * ----------------------------------------------------------------------- */
+
+.tbk-kiosk-calendar .rbc-time-content {
+  scrollbar-width: thin;
+  scrollbar-color: var(--tbk-border) transparent;
+}
+
+.tbk-kiosk-calendar .rbc-time-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.tbk-kiosk-calendar .rbc-time-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tbk-kiosk-calendar .rbc-time-content::-webkit-scrollbar-thumb {
+  background-color: var(--tbk-border);
+  border-radius: 3px;
+}
+
+.tbk-kiosk-calendar .rbc-time-content::-webkit-scrollbar-thumb:hover {
+  background-color: var(--tbk-text-muted);
+}
+
+/* ---------------------------------------------------------------------------
+ * Dark Theme
+ * ----------------------------------------------------------------------- */
+
+.tbk-kiosk-calendar.tbk-dark {
+  --tbk-block-bg: #1e293b;
+  --tbk-block-border: #475569;
+  --tbk-block-text: #cbd5e1;
+
+  --tbk-slot-off-bg: rgba(255, 255, 255, 0.04);
+
+  --tbk-bg: #0f172a;
+  --tbk-border: #334155;
+  --tbk-text: #f1f5f9;
+  --tbk-text-muted: #94a3b8;
+}
+
+.tbk-kiosk-calendar.tbk-dark .rbc-time-view,
+.tbk-kiosk-calendar.tbk-dark .rbc-month-view {
+  background: var(--tbk-bg);
+  border-color: var(--tbk-border);
+  color: var(--tbk-text);
+}
+
+.tbk-kiosk-calendar.tbk-dark .rbc-header,
+.tbk-kiosk-calendar.tbk-dark .rbc-time-header-cell {
+  background: #1e293b;
+  border-color: var(--tbk-border);
+  color: var(--tbk-text);
+}
+
+.tbk-kiosk-calendar.tbk-dark .rbc-day-slot .rbc-time-slot {
+  border-color: var(--tbk-border);
+}
+
+.tbk-kiosk-calendar.tbk-dark .rbc-timeslot-group {
+  border-color: var(--tbk-border);
+}
+
+.tbk-kiosk-calendar.tbk-dark .rbc-time-gutter .rbc-label {
+  color: var(--tbk-text-muted);
+}
+
+.tbk-kiosk-calendar.tbk-dark .rbc-today {
+  background-color: rgba(59, 130, 246, 0.08);
+}
+
+.tbk-kiosk-calendar.tbk-dark .tbk-reschedule-banner {
+  background: #1e293b;
+  border-color: #854d0e;
+  color: #fde68a;
+}
+
+.tbk-kiosk-calendar.tbk-dark .tbk-reschedule-cancel {
+  background: #334155;
+  border-color: #475569;
+  color: var(--tbk-text);
+}
+
+.tbk-kiosk-calendar.tbk-dark .tbk-reschedule-cancel:hover {
+  background: #475569;
+}

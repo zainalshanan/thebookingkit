@@ -6,6 +6,9 @@ import {
   validateBreakBlock,
   breakBlockToOverride,
   resolveKioskProviders,
+  findConflicts,
+  canReschedule,
+  describeConflicts,
   DEFAULT_KIOSK_SETTINGS,
   type KioskSettings,
   type BreakBlockInput,
@@ -15,6 +18,8 @@ import type {
   BookingInput,
   AvailabilityRuleInput,
   AvailabilityOverrideInput,
+  ConflictCheckBooking,
+  ConflictDetail,
 } from "../types.js";
 
 // ---------------------------------------------------------------------------
@@ -384,5 +389,454 @@ describe("resolveKioskProviders", () => {
     expect(alice.displayName).toBe("Alice");
     expect(alice.acceptingWalkIns).toBe(true);
     expect(alice.queueCount).toBe(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// findConflicts (WP1 backport)
+// ---------------------------------------------------------------------------
+
+function makeConflictBooking(
+  startsAt: string,
+  endsAt: string,
+  status: string = "confirmed",
+  id?: string,
+  customerName?: string,
+): ConflictCheckBooking {
+  return {
+    id: id ?? `booking-${startsAt}`,
+    startsAt: new Date(startsAt),
+    endsAt: new Date(endsAt),
+    status,
+    customerName,
+  };
+}
+
+describe("findConflicts", () => {
+  it("detects direct overlap", () => {
+    const existing = [
+      makeConflictBooking("2026-03-10T10:00:00Z", "2026-03-10T11:00:00Z"),
+    ];
+    const result = findConflicts(
+      existing,
+      new Date("2026-03-10T10:30:00Z"),
+      new Date("2026-03-10T11:30:00Z"),
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0].bookingId).toBe(existing[0].id);
+  });
+
+  it("detects full containment overlap", () => {
+    const existing = [
+      makeConflictBooking("2026-03-10T10:00:00Z", "2026-03-10T12:00:00Z"),
+    ];
+    const result = findConflicts(
+      existing,
+      new Date("2026-03-10T10:30:00Z"),
+      new Date("2026-03-10T11:00:00Z"),
+    );
+    expect(result).toHaveLength(1);
+  });
+
+  it("returns empty for adjacent non-overlapping bookings", () => {
+    const existing = [
+      makeConflictBooking("2026-03-10T10:00:00Z", "2026-03-10T11:00:00Z"),
+    ];
+    // Starts exactly when existing ends — no overlap
+    const result = findConflicts(
+      existing,
+      new Date("2026-03-10T11:00:00Z"),
+      new Date("2026-03-10T12:00:00Z"),
+    );
+    expect(result).toHaveLength(0);
+  });
+
+  it("returns empty for non-overlapping bookings", () => {
+    const existing = [
+      makeConflictBooking("2026-03-10T14:00:00Z", "2026-03-10T15:00:00Z"),
+    ];
+    const result = findConflicts(
+      existing,
+      new Date("2026-03-10T10:00:00Z"),
+      new Date("2026-03-10T11:00:00Z"),
+    );
+    expect(result).toHaveLength(0);
+  });
+
+  it("excludes cancelled bookings", () => {
+    const existing = [
+      makeConflictBooking("2026-03-10T10:00:00Z", "2026-03-10T11:00:00Z", "cancelled"),
+    ];
+    const result = findConflicts(
+      existing,
+      new Date("2026-03-10T10:00:00Z"),
+      new Date("2026-03-10T11:00:00Z"),
+    );
+    expect(result).toHaveLength(0);
+  });
+
+  it("excludes no_show bookings", () => {
+    const existing = [
+      makeConflictBooking("2026-03-10T10:00:00Z", "2026-03-10T11:00:00Z", "no_show"),
+    ];
+    const result = findConflicts(
+      existing,
+      new Date("2026-03-10T10:00:00Z"),
+      new Date("2026-03-10T11:00:00Z"),
+    );
+    expect(result).toHaveLength(0);
+  });
+
+  it("excludes rejected bookings", () => {
+    const existing = [
+      makeConflictBooking("2026-03-10T10:00:00Z", "2026-03-10T11:00:00Z", "rejected"),
+    ];
+    const result = findConflicts(
+      existing,
+      new Date("2026-03-10T10:00:00Z"),
+      new Date("2026-03-10T11:00:00Z"),
+    );
+    expect(result).toHaveLength(0);
+  });
+
+  it("includes pending bookings as conflicts", () => {
+    const existing = [
+      makeConflictBooking("2026-03-10T10:00:00Z", "2026-03-10T11:00:00Z", "pending"),
+    ];
+    const result = findConflicts(
+      existing,
+      new Date("2026-03-10T10:00:00Z"),
+      new Date("2026-03-10T11:00:00Z"),
+    );
+    expect(result).toHaveLength(1);
+  });
+
+  it("excludes booking by excludeId (self-reschedule)", () => {
+    const existing = [
+      makeConflictBooking("2026-03-10T10:00:00Z", "2026-03-10T11:00:00Z", "confirmed", "self"),
+    ];
+    const result = findConflicts(
+      existing,
+      new Date("2026-03-10T10:00:00Z"),
+      new Date("2026-03-10T11:00:00Z"),
+      "self",
+    );
+    expect(result).toHaveLength(0);
+  });
+
+  it("returns multiple conflicts when several bookings overlap", () => {
+    const existing = [
+      makeConflictBooking("2026-03-10T10:00:00Z", "2026-03-10T11:00:00Z", "confirmed", "b1", "Alice"),
+      makeConflictBooking("2026-03-10T10:30:00Z", "2026-03-10T11:30:00Z", "confirmed", "b2", "Bob"),
+      makeConflictBooking("2026-03-10T14:00:00Z", "2026-03-10T15:00:00Z", "confirmed", "b3", "Carol"),
+    ];
+    const result = findConflicts(
+      existing,
+      new Date("2026-03-10T10:15:00Z"),
+      new Date("2026-03-10T11:15:00Z"),
+    );
+    expect(result).toHaveLength(2);
+    expect(result.map((c) => c.bookingId)).toEqual(["b1", "b2"]);
+  });
+
+  it("returns empty for empty existing list", () => {
+    const result = findConflicts(
+      [],
+      new Date("2026-03-10T10:00:00Z"),
+      new Date("2026-03-10T11:00:00Z"),
+    );
+    expect(result).toHaveLength(0);
+  });
+
+  it("carries customerName and type in conflict detail", () => {
+    const existing: ConflictCheckBooking[] = [{
+      id: "b1",
+      startsAt: new Date("2026-03-10T10:00:00Z"),
+      endsAt: new Date("2026-03-10T11:00:00Z"),
+      status: "confirmed",
+      customerName: "Jane Smith",
+      type: "booking",
+    }];
+    const result = findConflicts(
+      existing,
+      new Date("2026-03-10T10:30:00Z"),
+      new Date("2026-03-10T11:30:00Z"),
+    );
+    expect(result[0].customerName).toBe("Jane Smith");
+    expect(result[0].type).toBe("booking");
+  });
+
+  it("handles bookings without id (returns 'unknown')", () => {
+    const existing: ConflictCheckBooking[] = [{
+      startsAt: new Date("2026-03-10T10:00:00Z"),
+      endsAt: new Date("2026-03-10T11:00:00Z"),
+      status: "confirmed",
+    }];
+    const result = findConflicts(
+      existing,
+      new Date("2026-03-10T10:30:00Z"),
+      new Date("2026-03-10T11:30:00Z"),
+    );
+    expect(result[0].bookingId).toBe("unknown");
+  });
+
+  it("treats zero-length interval as a point — conflicts if inside existing booking", () => {
+    const existing = [
+      makeConflictBooking("2026-03-10T10:00:00Z", "2026-03-10T11:00:00Z"),
+    ];
+    // Point at 10:30 is inside [10:00, 11:00) — overlaps
+    const inside = new Date("2026-03-10T10:30:00Z");
+    expect(findConflicts(existing, inside, inside)).toHaveLength(1);
+    // Point at 11:00 is at the boundary (exclusive end) — no overlap
+    const boundary = new Date("2026-03-10T11:00:00Z");
+    expect(findConflicts(existing, boundary, boundary)).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// canReschedule (WP1 backport)
+// ---------------------------------------------------------------------------
+
+describe("canReschedule", () => {
+  it("allows confirmed bookings", () => {
+    expect(canReschedule("confirmed")).toBe(true);
+  });
+
+  it("allows pending bookings", () => {
+    expect(canReschedule("pending")).toBe(true);
+  });
+
+  it("allows rescheduled bookings", () => {
+    expect(canReschedule("rescheduled")).toBe(true);
+  });
+
+  it("rejects completed bookings", () => {
+    expect(canReschedule("completed")).toBe(false);
+  });
+
+  it("rejects cancelled bookings", () => {
+    expect(canReschedule("cancelled")).toBe(false);
+  });
+
+  it("rejects no_show bookings", () => {
+    expect(canReschedule("no_show")).toBe(false);
+  });
+
+  it("rejects rejected bookings", () => {
+    expect(canReschedule("rejected")).toBe(false);
+  });
+
+  it("allows unknown/custom statuses", () => {
+    expect(canReschedule("custom_status")).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// describeConflicts (WP1 backport)
+// ---------------------------------------------------------------------------
+
+describe("describeConflicts", () => {
+  it("returns 'No conflicts' for empty array", () => {
+    expect(describeConflicts([])).toBe("No conflicts");
+  });
+
+  it("describes a single conflict", () => {
+    const conflicts: ConflictDetail[] = [{
+      bookingId: "b1",
+      startsAt: new Date("2026-03-10T14:00:00Z"),
+      endsAt: new Date("2026-03-10T15:00:00Z"),
+      customerName: "Jane Smith",
+    }];
+    const result = describeConflicts(conflicts);
+    expect(result).toContain("1 conflict");
+    expect(result).toContain("Jane Smith");
+  });
+
+  it("describes multiple conflicts", () => {
+    const conflicts: ConflictDetail[] = [
+      {
+        bookingId: "b1",
+        startsAt: new Date("2026-03-10T14:00:00Z"),
+        endsAt: new Date("2026-03-10T15:00:00Z"),
+        customerName: "Jane",
+      },
+      {
+        bookingId: "b2",
+        startsAt: new Date("2026-03-10T15:00:00Z"),
+        endsAt: new Date("2026-03-10T16:00:00Z"),
+        customerName: "Bob",
+      },
+    ];
+    const result = describeConflicts(conflicts);
+    expect(result).toContain("2 conflicts");
+    expect(result).toContain("Jane");
+    expect(result).toContain("Bob");
+  });
+
+  it("uses type when customerName is missing", () => {
+    const conflicts: ConflictDetail[] = [{
+      bookingId: "b1",
+      startsAt: new Date("2026-03-10T14:00:00Z"),
+      endsAt: new Date("2026-03-10T15:00:00Z"),
+      type: "break",
+    }];
+    const result = describeConflicts(conflicts);
+    expect(result).toContain("break");
+  });
+
+  it("falls back to 'Booking' when no name or type", () => {
+    const conflicts: ConflictDetail[] = [{
+      bookingId: "b1",
+      startsAt: new Date("2026-03-10T14:00:00Z"),
+      endsAt: new Date("2026-03-10T15:00:00Z"),
+    }];
+    const result = describeConflicts(conflicts);
+    expect(result).toContain("Booking");
+  });
+
+  it("accepts custom formatTime function", () => {
+    const conflicts: ConflictDetail[] = [{
+      bookingId: "b1",
+      startsAt: new Date("2026-03-10T14:00:00Z"),
+      endsAt: new Date("2026-03-10T15:00:00Z"),
+      customerName: "Test",
+    }];
+    const fmt = (d: Date) => `${d.getUTCHours()}h`;
+    const result = describeConflicts(conflicts, fmt);
+    expect(result).toContain("14h");
+    expect(result).toContain("15h");
+  });
+
+  it("falls through to type when customerName is empty string", () => {
+    const conflicts: ConflictDetail[] = [{
+      bookingId: "b1",
+      startsAt: new Date("2026-03-10T14:00:00Z"),
+      endsAt: new Date("2026-03-10T15:00:00Z"),
+      customerName: "",
+      type: "break",
+    }];
+    const result = describeConflicts(conflicts);
+    expect(result).toContain("break");
+    expect(result).not.toContain("Booking");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Regression: validateReschedule after refactor to use findConflicts
+// ---------------------------------------------------------------------------
+
+describe("validateReschedule (post-refactor regression)", () => {
+  it("still detects conflict and returns correct conflictDetails", () => {
+    const bookings = [
+      makeBooking("2026-03-10T10:00:00Z", "2026-03-10T10:30:00Z", "confirmed", "x1"),
+    ];
+    const result = validateReschedule(
+      "confirmed",
+      RULES,
+      [],
+      bookings,
+      new Date("2026-03-10T10:00:00Z"),
+      new Date("2026-03-10T10:30:00Z"),
+    );
+    expect(result.valid).toBe(false);
+    expect(result.reason).toBe("conflict");
+    expect(result.conflictDetails?.bookingId).toBe("x1");
+    // Should return original booking times, not buffered
+    expect(result.conflictDetails?.startsAt).toEqual(new Date("2026-03-10T10:00:00Z"));
+    expect(result.conflictDetails?.endsAt).toEqual(new Date("2026-03-10T10:30:00Z"));
+  });
+
+  it("still allows valid reschedule after refactor", () => {
+    const result = validateReschedule(
+      "pending",
+      RULES,
+      [],
+      [],
+      new Date("2026-03-10T14:00:00Z"),
+      new Date("2026-03-10T14:30:00Z"),
+    );
+    expect(result.valid).toBe(true);
+  });
+
+  it("still rejects invalid status after refactor", () => {
+    for (const status of ["completed", "cancelled", "no_show", "rejected"]) {
+      const result = validateReschedule(
+        status,
+        RULES,
+        [],
+        [],
+        new Date("2026-03-10T10:00:00Z"),
+        new Date("2026-03-10T10:30:00Z"),
+      );
+      expect(result.valid).toBe(false);
+      expect(result.reason).toBe("invalid_status");
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Regression: validateBreakBlock after refactor to use findConflicts
+// ---------------------------------------------------------------------------
+
+describe("validateBreakBlock (post-refactor regression)", () => {
+  it("still detects overlapping confirmed booking", () => {
+    const block: BreakBlockInput = {
+      title: "Lunch",
+      startTime: new Date("2026-03-10T12:00:00Z"),
+      endTime: new Date("2026-03-10T13:00:00Z"),
+      blockType: "break",
+      recurring: false,
+    };
+    const bookings = [
+      makeBooking("2026-03-10T12:30:00Z", "2026-03-10T13:00:00Z"),
+    ];
+    const result = validateBreakBlock(block, bookings);
+    expect(result.valid).toBe(false);
+    expect(result.conflictingBookings).toHaveLength(1);
+    // Verify the original BookingInput object is returned
+    expect(result.conflictingBookings[0].startsAt).toEqual(new Date("2026-03-10T12:30:00Z"));
+  });
+
+  it("still ignores cancelled/no_show/rejected bookings", () => {
+    const block: BreakBlockInput = {
+      title: "Lunch",
+      startTime: new Date("2026-03-10T12:00:00Z"),
+      endTime: new Date("2026-03-10T13:00:00Z"),
+      blockType: "break",
+      recurring: false,
+    };
+    for (const status of ["cancelled", "no_show", "rejected"]) {
+      const bookings = [
+        makeBooking("2026-03-10T12:30:00Z", "2026-03-10T13:00:00Z", status),
+      ];
+      const result = validateBreakBlock(block, bookings);
+      expect(result.valid).toBe(true);
+    }
+  });
+
+  it("still rejects end before start", () => {
+    const block: BreakBlockInput = {
+      title: "Bad",
+      startTime: new Date("2026-03-10T13:00:00Z"),
+      endTime: new Date("2026-03-10T12:00:00Z"),
+      blockType: "break",
+      recurring: false,
+    };
+    const result = validateBreakBlock(block, []);
+    expect(result.valid).toBe(false);
+    expect(result.conflictingBookings).toHaveLength(0);
+  });
+
+  it("rejects block with equal start and end time", () => {
+    const t = new Date("2026-03-10T12:00:00Z");
+    const block: BreakBlockInput = {
+      title: "Zero",
+      startTime: t,
+      endTime: t,
+      blockType: "break",
+      recurring: false,
+    };
+    const result = validateBreakBlock(block, []);
+    expect(result.valid).toBe(false);
   });
 });
