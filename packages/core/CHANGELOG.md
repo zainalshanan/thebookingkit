@@ -2,11 +2,26 @@
 
 ## 0.2.0
 
-### Minor Changes — Resource & Capacity Booking (2026-03-17)
+### Minor Changes (2026-03-25)
 
-Adds resource-based booking to the scheduling engine, enabling restaurants, yoga studios, coworking spaces, and any venue with bookable physical units.
+Two major features plus an internal decomposition for better reusability.
 
 ### New Features
+
+#### Slot Release Strategies (`slot-release.ts`) — E-23
+
+- **`applySlotRelease()`** — Control when time slots become visible to customers. Three strategies:
+  - `fill_earlier_first`: Hide later time windows (e.g., afternoon) until earlier ones (e.g., morning) reach a fill threshold. Configurable via `windowBoundaries` (HH:mm) and `threshold` (0-100%).
+  - `rolling_window`: Only show slots within N hours or days from now. Ideal for restaurants releasing dinner slots day-of.
+  - `discount_incentive`: All slots remain visible, but harder-to-fill ones are annotated with `releaseMetadata.discountPercent` for dynamic pricing integration.
+- **`computeWindowFillRates()`** — Exported helper to compute fill rates per time window for custom strategies.
+- New types: `SlotReleaseConfig`, `FillEarlierFirstConfig`, `RollingWindowConfig`, `DiscountIncentiveConfig`, `SlotReleaseStrategy`, `SlotReleaseResult`
+- `SlotComputeOptions` extended with optional `slotRelease` field (backward-compatible)
+- `Slot` extended with optional `releaseMetadata` field (backward-compatible)
+- Integrated into both `getAvailableSlots()` and `getResourceAvailableSlots()` — opt-in via `options.slotRelease`
+- 44 new tests including 4 fast-check property-based invariants
+
+#### Resource & Capacity Booking (`resource-engine.ts`) — E-22
 
 #### Resource Engine (`resource-engine.ts`)
 
@@ -25,6 +40,14 @@ Adds resource-based booking to the scheduling engine, enabling restaurants, yoga
 - `ResourceInput`, `ResourcePoolInput`, `AvailableResource`, `ResourceSlot`, `ResourceAssignmentStrategy`, `ResourceAssignmentResult`, `ResourceSlotAvailabilityResult`, `ResourcePoolSummary`, `ResourceSlotOptions`
 - `ResourceUnavailableError` with typed reasons: `no_capacity`, `no_matching_type`, `all_booked`
 - `BookingInput` extended with optional `resourceId` and `guestCount` fields (backward-compatible)
+
+#### Conflict Detection Decomposition (`kiosk.ts`)
+
+- **`findConflicts()`** — Generic overlap detection extracted from `validateReschedule()`. Accepts any `ConflictCheckBooking[]`, checks half-open interval overlap, excludes inactive statuses (`cancelled`, `no_show`, `rejected`), supports `excludeId` for self-exclusion during rescheduling.
+- **`canReschedule()`** — Status check extracted from `validateReschedule()`. Only `confirmed` and `pending` bookings are reschedulable.
+- **`describeConflicts()`** — Human-readable conflict descriptions extracted from inline formatting. Accepts an optional `formatTime` function for custom time formatting.
+- New types: `ConflictCheckBooking`, `ConflictDetail`
+- Both `validateReschedule` and `validateBreakBlock` now delegate to `findConflicts()` internally — eliminates duplicated overlap logic.
 
 #### Performance
 

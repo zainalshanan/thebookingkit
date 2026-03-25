@@ -13,11 +13,26 @@ import { Aside } from '@astrojs/starlight/components';
 
 All notable changes to The Booking Kit will be documented in this file.
 
-## 0.2.0 (2026-03-17)
+## 0.2.0 (2026-03-25)
 
-### Resource & Capacity-Based Booking
+### Slot Release Strategies (E-23)
 
-The Booking Kit now supports **resource-based booking** — book restaurant tables, yoga mats, meeting rooms, tennis courts, coworking desks, and any physical bookable unit with capacity-aware scheduling.
+Control **when** time slots become visible to customers — fill earlier gaps first, use rolling release windows, or incentivize early bookings with discounts.
+
+#### @thebookingkit/core
+
+- **New:** `applySlotRelease()` — three slot release strategies:
+  - `fill_earlier_first`: Hide afternoon slots until morning reaches a fill threshold (barbers, salons)
+  - `rolling_window`: Only show slots within N hours/days from now (restaurants releasing dinner day-of)
+  - `discount_incentive`: Annotate harder-to-fill slots with `releaseMetadata.discountPercent` (no filtering)
+- **New:** `computeWindowFillRates()` — exported helper for custom fill rate computation
+- **Extended:** `SlotComputeOptions` with optional `slotRelease` field
+- **Extended:** `Slot` with optional `releaseMetadata` for discount annotations
+- **New:** Feature guide: [Slot Release Strategies](/features/slot-release)
+
+### Resource & Capacity-Based Booking (E-22)
+
+Book **restaurant tables, yoga mats, meeting rooms, tennis courts**, and any physical bookable unit with capacity-aware scheduling.
 
 #### @thebookingkit/core
 
@@ -30,6 +45,18 @@ The Booking Kit now supports **resource-based booking** — book restaurant tabl
 - **New:** Shared pipeline extraction (`slot-pipeline.ts`) — RRULE expansion and override masking shared between provider and resource engines
 - **Extended:** `BookingInput` with optional `resourceId` and `guestCount` (backward-compatible)
 - **Performance:** 50-resource / 30-day computation in ~45ms
+
+### Conflict Detection Decomposition
+
+Extracted reusable conflict detection primitives from the kiosk module for use across any booking flow.
+
+#### @thebookingkit/core
+
+- **New:** `findConflicts()` — generic booking overlap detection. Checks half-open intervals, excludes inactive statuses, supports self-exclusion via `excludeId`
+- **New:** `canReschedule()` — status check for reschedulable bookings (only `confirmed` and `pending`)
+- **New:** `describeConflicts()` — human-readable conflict descriptions with custom time formatter support
+- **New:** Types: `ConflictCheckBooking`, `ConflictDetail`
+- **Refactored:** `validateReschedule` and `validateBreakBlock` now delegate to `findConflicts()` — eliminates duplicated overlap logic
 
 #### @thebookingkit/db
 
@@ -48,6 +75,7 @@ The Booking Kit now supports **resource-based booking** — book restaurant tabl
 #### Documentation & Demo
 
 - **New:** Feature guide: [Resource & Capacity Booking](/features/resource-booking)
+- **New:** Feature guide: [Slot Release Strategies](/features/slot-release)
 - **New:** API reference: [Resource Engine API](/api-reference/resource-engine)
 - **New:** Interactive restaurant reservation demo (Olive & Vine Bistro) with party size selection, table assignment, and pool utilization
 
