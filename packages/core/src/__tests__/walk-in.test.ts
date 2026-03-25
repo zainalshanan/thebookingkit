@@ -46,7 +46,7 @@ function makeQueueEntry(
 function makeBooking(
   startsAt: string,
   endsAt: string,
-  status: string = "confirmed",
+  status: BookingInput["status"] = "confirmed",
 ): BookingInput {
   return {
     startsAt: new Date(startsAt),

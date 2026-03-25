@@ -21,6 +21,7 @@ import {
   getResourceAvailableSlots,
   assignResource,
   getResourcePoolSummary,
+  applySlotRelease,
   type Slot,
   type TeamSlot,
   type AvailabilityOverrideInput,
@@ -38,6 +39,7 @@ import {
   type ResourceSlot,
   type ResourceAssignmentStrategy,
   type ResourcePoolSummary,
+  type SlotReleaseConfig,
 } from "@thebookingkit/core";
 import {
   AVAILABILITY_RULES,
@@ -54,6 +56,7 @@ import {
   getResourceBookingCounts,
   RESTAURANT,
 } from "./restaurant-data";
+import { buildDayRange } from "./demo-utils";
 
 // ---------------------------------------------------------------------------
 // Customer Actions
@@ -216,10 +219,7 @@ export async function fetchSlotsComparison(
   durations: number[],
   timezone: string,
 ): Promise<{ duration: number; slots: Slot[]; count: number }[]> {
-  const dayStart = new Date(dateISO);
-  dayStart.setUTCHours(0, 0, 0, 0);
-  const dayEnd = new Date(dateISO);
-  dayEnd.setUTCHours(23, 59, 59, 999);
+  const { start: dayStart, end: dayEnd } = buildDayRange(dateISO);
 
   return durations.map((duration) => {
     const slots = getAvailableSlots(
@@ -241,10 +241,7 @@ export async function fetchBufferComparison(
   noBuffer: { slots: Slot[]; count: number };
   withBuffer: { slots: Slot[]; count: number };
 }> {
-  const dayStart = new Date(dateISO);
-  dayStart.setUTCHours(0, 0, 0, 0);
-  const dayEnd = new Date(dateISO);
-  dayEnd.setUTCHours(23, 59, 59, 999);
+  const { start: dayStart, end: dayEnd } = buildDayRange(dateISO);
 
   const noBuffer = getAvailableSlots(
     AVAILABILITY_RULES,
@@ -274,10 +271,7 @@ export async function fetchTimezoneComparison(
   dateISO: string,
   timezones: string[],
 ): Promise<{ timezone: string; slots: Slot[]; count: number }[]> {
-  const dayStart = new Date(dateISO);
-  dayStart.setUTCHours(0, 0, 0, 0);
-  const dayEnd = new Date(dateISO);
-  dayEnd.setUTCHours(23, 59, 59, 999);
+  const { start: dayStart, end: dayEnd } = buildDayRange(dateISO);
 
   return timezones.map((tz) => {
     const slots = getAvailableSlots(
@@ -300,10 +294,7 @@ export async function fetchOverrideDemo(
   blocked: { slots: Slot[]; count: number };
   custom: { slots: Slot[]; count: number };
 }> {
-  const dayStart = new Date(dateISO);
-  dayStart.setUTCHours(0, 0, 0, 0);
-  const dayEnd = new Date(dateISO);
-  dayEnd.setUTCHours(23, 59, 59, 999);
+  const { start: dayStart, end: dayEnd } = buildDayRange(dateISO);
 
   const opts = { duration: 30 as const };
 
@@ -357,11 +348,8 @@ export async function fetchBookingLimitsDemo(
   filteredCount: number;
   totalCount: number;
 }> {
+  const { start: dayStart, end: dayEnd } = buildDayRange(dateISO);
   const date = new Date(dateISO);
-  const dayStart = new Date(date);
-  dayStart.setUTCHours(0, 0, 0, 0);
-  const dayEnd = new Date(date);
-  dayEnd.setUTCHours(23, 59, 59, 999);
   const tz = BARBER_SHOP.timezone;
 
   const limits: BookingLimitsConfig = {
@@ -955,5 +943,119 @@ export async function fetchResourcePoolSummary(
       availableResources: s.availableResources,
       utilizationPercent: s.utilizationPercent,
     })),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Slot Release Action
+// ---------------------------------------------------------------------------
+
+export interface SlotReleaseDemoResult {
+  strategy: string;
+  totalSlots: number;
+  releasedSlots: number;
+  hiddenSlots: number;
+  discountedSlots: number;
+  slots: Array<{
+    startTime: string;
+    endTime: string;
+    localStart: string;
+    discountPercent?: number;
+  }>;
+}
+
+/**
+ * Demo action for the Slot Release strategies.
+ *
+ * Gets all available slots for the day using barber data, converts them to
+ * raw `{start, end}` format, applies the selected strategy, and returns a
+ * before/after comparison.
+ *
+ * @param dateISO - Date to compute slots for (YYYY-MM-DD)
+ * @param strategy - Which release strategy to apply
+ * @param config - Strategy-specific parameters
+ */
+export async function fetchSlotReleaseDemo(
+  dateISO: string,
+  strategy: "fill_earlier_first" | "rolling_window" | "discount_incentive",
+  config: {
+    threshold?: number;
+    windowBoundary?: string;
+    windowSize?: number;
+    discountPercent?: number;
+  },
+): Promise<SlotReleaseDemoResult> {
+  const { start: dayStart, end: dayEnd } = buildDayRange(dateISO);
+  const tz = BARBER_SHOP.timezone;
+  const existingBookings = getBookingsAsInput();
+
+  // Compute all available slots for the day
+  const allSlots = getAvailableSlots(
+    AVAILABILITY_RULES,
+    getOverrides(),
+    existingBookings,
+    { start: dayStart, end: dayEnd },
+    tz,
+    { duration: 30 },
+  );
+
+  // Convert Slot[] to raw { start, end }[] for applySlotRelease
+  const rawSlots = allSlots.map((s) => ({
+    start: new Date(s.startTime),
+    end: new Date(s.endTime),
+  }));
+
+  // Build the strategy config discriminated union
+  let releaseConfig: SlotReleaseConfig;
+  if (strategy === "fill_earlier_first") {
+    const boundary = config.windowBoundary ?? "12:00";
+    releaseConfig = {
+      strategy: "fill_earlier_first",
+      threshold: config.threshold ?? 50,
+      windowBoundaries: [boundary],
+    };
+  } else if (strategy === "rolling_window") {
+    releaseConfig = {
+      strategy: "rolling_window",
+      windowSize: config.windowSize ?? 24,
+      unit: "hours",
+    };
+  } else {
+    releaseConfig = {
+      strategy: "discount_incentive",
+      tiers: [
+        {
+          fillRateBelowPercent: 100,
+          discountPercent: config.discountPercent ?? 20,
+        },
+      ],
+      windowBoundaries: [],
+    };
+  }
+
+  const now = new Date();
+  const result = applySlotRelease(rawSlots, releaseConfig, existingBookings, tz, now);
+
+  // Build the output slots array with discount info if applicable
+  const outputSlots = result.slots.map((raw) => {
+    const matchingSlot = allSlots.find((s) => s.startTime === raw.start.toISOString());
+    const discountPercent = result.discountMap.get(raw.start.getTime());
+    return {
+      startTime: raw.start.toISOString(),
+      endTime: raw.end.toISOString(),
+      localStart: matchingSlot?.localStart ?? raw.start.toISOString(),
+      ...(discountPercent !== undefined ? { discountPercent } : {}),
+    };
+  });
+
+  const discountedSlots = [...result.discountMap.values()].filter((v) => v > 0).length;
+
+  return {
+    strategy,
+    totalSlots: rawSlots.length,
+    releasedSlots: result.slots.length,
+    hiddenSlots: rawSlots.length - result.slots.length,
+    discountedSlots,
+    slots: outputSlots,
   };
 }

@@ -17,6 +17,7 @@ export async function runCustomMigrations(databaseUrl: string) {
     "0002_booking_audit_trigger.sql",
     "0003_gdpr_anonymize.sql",
     "0004_create_booking_function.sql",
+    "0005_resources.sql",
   ];
 
   for (const file of migrationFiles) {
@@ -32,7 +33,8 @@ export async function runCustomMigrations(databaseUrl: string) {
 }
 
 // Run directly if executed as script
-if (process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/^.*?(?=src)/, ""))) {
+const isMainModule = process.argv[1] && new URL(import.meta.url).pathname === new URL(`file://${process.argv[1]}`).pathname;
+if (isMainModule) {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
     console.error("DATABASE_URL environment variable is required");

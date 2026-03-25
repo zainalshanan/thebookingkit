@@ -5,6 +5,10 @@
  * based on booking lifecycle events.
  */
 
+import { validateExternalUrl } from "./url-validation.js";
+import { escapeHtml } from "./email-templates.js";
+import { formatTime, formatDate } from "./date-formatters.js";
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -175,20 +179,25 @@ export const TEMPLATE_VARIABLES = [
  *
  * @param template - The template string with `{variable}` placeholders
  * @param context - The workflow context with booking/event data
+ * @param options - Optional resolution options
+ * @param options.escapeForHtml - When true, HTML-escape substituted values (use for email bodies)
  * @returns The resolved string
  */
 export function resolveTemplateVariables(
   template: string,
   context: WorkflowContext,
+  options?: { escapeForHtml?: boolean },
 ): string {
-  const tz = typeof context.timezone === "string" ? context.timezone : undefined;
-  const vars: Record<string, string> = {
+  // Pass the booking's IANA timezone through to the formatters so output is
+  // locale-correct regardless of the server's TZ environment variable.
+  const timeZone = typeof context.timezone === "string" ? context.timezone : undefined;
+  const rawVars: Record<string, string> = {
     "{booking.title}": context.eventTitle ?? "",
     "{booking.startTime}": context.startsAt
-      ? formatTime(context.startsAt, tz)
+      ? formatTime(context.startsAt, timeZone)
       : "",
-    "{booking.endTime}": context.endsAt ? formatTime(context.endsAt, tz) : "",
-    "{booking.date}": context.startsAt ? formatDate(context.startsAt, tz) : "",
+    "{booking.endTime}": context.endsAt ? formatTime(context.endsAt, timeZone) : "",
+    "{booking.date}": context.startsAt ? formatDate(context.startsAt, timeZone) : "",
     "{attendee.name}": context.customerName ?? "",
     "{attendee.email}": context.customerEmail ?? "",
     "{host.name}": context.hostName ?? "",
@@ -200,30 +209,12 @@ export function resolveTemplateVariables(
   };
 
   let result = template;
-  for (const [key, value] of Object.entries(vars)) {
-    result = result.replaceAll(key, value);
+  for (const [key, value] of Object.entries(rawVars)) {
+    const safeValue = options?.escapeForHtml ? escapeHtml(value) : value;
+    result = result.replaceAll(key, safeValue);
   }
 
   return result;
-}
-
-function formatTime(date: Date, timeZone?: string): string {
-  return date.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-    ...(timeZone ? { timeZone } : {}),
-  });
-}
-
-function formatDate(date: Date, timeZone?: string): string {
-  return date.toLocaleDateString("en-US", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    ...(timeZone ? { timeZone } : {}),
-  });
 }
 
 // ---------------------------------------------------------------------------
@@ -402,26 +393,12 @@ function validateAction(action: WorkflowAction): void {
           "Webhook action requires 'url' field",
         );
       }
-      {
-        let parsedUrl: URL;
-        try {
-          parsedUrl = new URL(action.url);
-        } catch {
-          throw new WorkflowValidationError(
-            `Webhook action has invalid URL: "${action.url}"`,
-          );
-        }
-        if (parsedUrl.protocol !== "https:") {
-          throw new WorkflowValidationError("Webhook URL must use HTTPS");
-        }
-        const hostname = parsedUrl.hostname.toLowerCase();
-        const ssrfPattern =
-          /^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|169\.254\.\d+\.\d+|\[::1\]|::1)$/;
-        if (ssrfPattern.test(hostname)) {
-          throw new WorkflowValidationError(
-            `Webhook URL hostname is not allowed: "${hostname}"`,
-          );
-        }
+      try {
+        validateExternalUrl(action.url, "Webhook URL");
+      } catch (err) {
+        throw new WorkflowValidationError(
+          err instanceof Error ? err.message : String(err),
+        );
       }
       break;
 

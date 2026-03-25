@@ -70,14 +70,38 @@ Extracted reusable conflict detection primitives from the kiosk module for use a
 
 - **New:** `d1ResourceAvailabilityRowsToInputs()` and `d1ResourceOverrideRowsToInputs()` converters
 - **New:** `D1ResourceBookingLock` for resource-scoped advisory locking
-- **New:** `RESOURCE_DDL` constant for SQLite table creation
+- **New:** 14 domain-scoped DDL constants for all core tables (`ORGANIZATIONS_DDL`, `TEAMS_DDL`, `PROVIDERS_DDL`, etc.)
+- **New:** `ALL_DDL` — convenience aggregate for initializing a complete D1 database in one call
+- **New:** `d1AvailabilityRuleRowsToInputs()` — converter for provider availability rules (was missing)
+
+#### @thebookingkit/server
+
+- **New:** 12 webhook triggers: `BOOKING_COMPLETED`, `RESOURCE_BOOKED`, `RESOURCE_RELEASED`, `WALK_IN_ADDED`, `WALK_IN_STARTED`, `WALK_IN_COMPLETED`, `WALK_IN_CANCELLED`, `SLOT_RELEASED`, `RECURRING_SERIES_CREATED`, `OCCURRENCE_CANCELLED`, `OCCURRENCE_RESCHEDULED`, `PAYMENT_REFUNDED`
+- **New:** 5 background job names for walk-in, resource, recurring, and slot release workflows
+- **Security:** Replaced manual XOR with `crypto.timingSafeEqual`, added error logging in `withAuth`, JSON/HTML escaping in templates
+- **Branding:** Webhook headers renamed from `X-SlotKit-*` to `X-BookingKit-*`
+
+#### Testing
+
+- **New:** 42 integration tests validating end-to-end booking flows across all modules (barber shop, restaurant, team scheduling, walk-in queue, cross-feature composition, seats/groups)
+- **New:** 101 D1 DDL structure tests
+- Total test count: **1,213 across the monorepo**
 
 #### Documentation & Demo
 
+- **Updated:** Introduction now explicitly mentions resource booking and all booking types (restaurants, hotels, yoga, coworking, courts)
+- **Updated:** Quick-start with correct v0.2.0 API signatures + resource booking quick start section
+- **Updated:** Examples page with 3 new resource-based use cases (restaurant, hotel, coworking)
+- **Updated:** Schema docs with resource tables in main grid
 - **New:** Feature guide: [Resource & Capacity Booking](/features/resource-booking)
 - **New:** Feature guide: [Slot Release Strategies](/features/slot-release)
 - **New:** API reference: [Resource Engine API](/api-reference/resource-engine)
-- **New:** Interactive restaurant reservation demo (Olive & Vine Bistro) with party size selection, table assignment, and pool utilization
+- **New:** Interactive restaurant reservation demo (Olive & Vine Bistro)
+
+#### Branding
+
+- All "SlotKit" references renamed to "BookingKit" / "The Booking Kit" across the monorepo
+- CLI types: `SlotKitManifest` → `BookingKitManifest`, `SlotKitConfig` → `BookingKitConfig` (deprecated aliases retained)
 
 ---
 

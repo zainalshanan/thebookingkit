@@ -102,6 +102,14 @@ export function parseRecurrence(
   }));
 }
 
+/** Format a Date to YYYY-MM-DD using UTC components (identical to formatDateOnly in slot-pipeline) */
+function formatDateStr(date: Date): string {
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(date.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 /** Parse iCalendar date format (e.g., "20260304T000000Z") to a Date */
 function parseICalDate(dateStr: string): Date {
   // Handle iCalendar basic format: YYYYMMDDTHHmmssZ
@@ -118,10 +126,3 @@ function parseICalDate(dateStr: string): Date {
   return date;
 }
 
-/** Format a Date to YYYY-MM-DD */
-function formatDateStr(date: Date): string {
-  const y = date.getUTCFullYear();
-  const m = String(date.getUTCMonth() + 1).padStart(2, "0");
-  const d = String(date.getUTCDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}

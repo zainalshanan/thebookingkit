@@ -1,5 +1,5 @@
 /**
- * Component registry for SlotKit UI components.
+ * Component registry for BookingKit UI components.
  *
  * Maps every component in registry/ui to its metadata: name, description,
  * source path, npm dependencies, and internal component dependencies.
@@ -19,7 +19,7 @@ export interface ComponentRegistryEntry {
   description: string;
   /** Source file path relative to registry/ui/src/ */
   sourcePath: string;
-  /** Other SlotKit component names this depends on */
+  /** Other BookingKit component names this depends on */
   dependencies: string[];
   /** npm packages the component requires (beyond react) */
   npmDependencies: Record<string, string>;

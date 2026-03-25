@@ -1,5 +1,5 @@
 """
-Favicon generator for The Booking Kit / SlotKit
+Favicon generator for The Booking Kit
 Design: Rounded dark square with a stylized "S" lettermark built from
         a calendar-slot metaphor — the letter S formed using three
         horizontal pill bars (representing time slots) in brand red (#e94560)

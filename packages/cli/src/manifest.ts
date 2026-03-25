@@ -25,24 +25,27 @@ export interface ManifestEntry {
 }
 
 /** The .thebookingkit-manifest.json file structure */
-export interface SlotKitManifest {
+export interface BookingKitManifest {
   version: string;
   components: Record<string, ManifestEntry>;
 }
 
+/** @deprecated Use BookingKitManifest instead */
+export type SlotKitManifest = BookingKitManifest;
+
 /** Default manifest structure — kept for reference/testing; do not mutate directly. */
-export const DEFAULT_MANIFEST: SlotKitManifest = {
+export const DEFAULT_MANIFEST: Readonly<BookingKitManifest> = Object.freeze({
   version: "1.0",
   components: {},
-};
+});
 
 /**
  * Return a fresh default manifest object each time.
  * Use this instead of `DEFAULT_MANIFEST` to avoid shared-state mutation bugs.
  *
- * @returns A new default SlotKitManifest
+ * @returns A new default BookingKitManifest
  */
-export function getDefaultManifest(): SlotKitManifest {
+export function getDefaultManifest(): BookingKitManifest {
   return { version: "1.0", components: {} };
 }
 
@@ -94,11 +97,11 @@ export function hasLocalModifications(
 
 /** Result type from `validateManifest` */
 export type ManifestValidationResult =
-  | { valid: true; manifest: SlotKitManifest }
+  | { valid: true; manifest: BookingKitManifest }
   | { valid: false; error: string };
 
 /**
- * Validate that an unknown value conforms to the `SlotKitManifest` schema.
+ * Validate that an unknown value conforms to the `BookingKitManifest` schema.
  * The manifest must have a `version` string and a `components` object.
  *
  * @param raw - The parsed JSON value from disk

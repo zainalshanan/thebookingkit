@@ -43,7 +43,7 @@ Pure TypeScript with zero framework dependencies. Contains:
 
 ### 2. Data layer (`@thebookingkit/db`)
 
-Drizzle ORM schema with 23 PostgreSQL tables:
+Drizzle ORM schema with 26 PostgreSQL tables:
 
 - Full TypeScript type inference from schema definitions
 - Custom SQL migrations for `btree_gist`, audit triggers, and GDPR anonymization
@@ -102,7 +102,7 @@ await sendConfirmationEmail(payload, myEmailAdapter);
 
 The Booking Kit prevents double-bookings at two levels:
 
-1. **Database constraint:** `EXCLUDE USING gist` with `btree_gist` extension ensures no two confirmed bookings overlap for the same provider
-2. **Application-level:** `SERIALIZABLE` transactions with `withSerializableRetry()` — catches serialization failures (SQLSTATE 40001) and retries up to 3 times with jittered exponential backoff
+1. **Database constraint:** `EXCLUDE USING gist` with `btree_gist` (a PostgreSQL extension that enables range-based exclusion constraints) ensures no two confirmed bookings overlap for the same provider
+2. **Application-level:** `SERIALIZABLE` transactions (the strictest isolation level — guarantees no concurrent booking conflicts) with `withSerializableRetry()` — catches serialization failures (SQLSTATE 40001) and retries up to 3 times with jittered exponential backoff
 
 This means double-bookings are impossible even under high concurrent load.

@@ -2,11 +2,18 @@
 
 ## 0.2.0
 
-### Minor Changes — Resource & Capacity Booking (2026-03-17)
+### Minor Changes (2026-03-25)
 
-Adds D1/SQLite adapter helpers for resource-based booking.
+Adds D1/SQLite adapter helpers, domain-scoped DDL for all tables, and resource booking support.
 
 ### New Features
+
+#### Domain-Scoped DDL Constants (E-24)
+
+- **14 domain-scoped DDL constants** for all core tables: `ORGANIZATIONS_DDL`, `TEAMS_DDL`, `PROVIDERS_DDL`, `EVENT_TYPES_DDL`, `AVAILABILITY_DDL`, `BOOKINGS_DDL`, `RECURRING_DDL`, `PAYMENTS_DDL`, `ROUTING_DDL`, `WORKFLOWS_DDL`, `WEBHOOKS_DDL`, `EMAIL_DDL`, `CUSTOMER_DDL`, `WALK_IN_DDL`
+- **`ALL_DDL`** — convenience aggregate joining all 16 constants (14 domain + `RESOURCE_DDL` + `BOOKING_LOCKS_DDL`), ordered by FK dependency
+- `RESOURCE_DDL` deprecated in favor of `ALL_DDL` (retained for backward compatibility)
+- 101 new DDL tests validating table structure, column names, FK constraints, and absence of PostgreSQL-only syntax
 
 #### Resource Helpers (`resource-helpers.ts`)
 

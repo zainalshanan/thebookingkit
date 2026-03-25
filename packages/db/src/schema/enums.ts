@@ -20,6 +20,7 @@ export const bookingEventTypeEnum = pgEnum("booking_event_type", [
   "completed",
   "no_show",
   "rejected",
+  "updated",
   "payment_received",
   "payment_failed",
 ]);

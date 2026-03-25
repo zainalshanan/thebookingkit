@@ -7,6 +7,8 @@
  */
 
 import { addWeeks, addMonths } from "date-fns";
+import { getActiveBookings } from "./slot-pipeline.js";
+import type { BookingInput } from "./types.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -135,13 +137,6 @@ function advanceDate(
 // Availability Validation
 // ---------------------------------------------------------------------------
 
-/** An existing booking for conflict checking */
-interface ExistingBooking {
-  startsAt: Date;
-  endsAt: Date;
-  status: string;
-}
-
 /**
  * Check availability for all occurrences in a recurring series.
  *
@@ -151,11 +146,9 @@ interface ExistingBooking {
  */
 export function checkRecurringAvailability(
   occurrences: RecurringOccurrence[],
-  existingBookings: ExistingBooking[],
+  existingBookings: BookingInput[],
 ): RecurringAvailabilityResult {
-  const activeBookings = existingBookings.filter(
-    (b) => b.status !== "cancelled" && b.status !== "rejected",
-  );
+  const activeBookings = getActiveBookings(existingBookings);
 
   const conflicts: number[] = [];
 

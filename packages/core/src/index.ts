@@ -16,6 +16,7 @@ export type {
   AvailabilityRuleInput,
   AvailabilityOverrideInput,
   BookingInput,
+  BookingStatus,
   SlotAvailabilityResult,
   // Conflict detection types
   ConflictCheckBooking,
@@ -53,6 +54,13 @@ export {
 // Slot Engine
 export { getAvailableSlots, isSlotAvailable } from "./slot-engine.js";
 
+// Slot Pipeline utilities (shared constants and helpers)
+export {
+  INACTIVE_STATUSES,
+  getActiveBookings,
+  resolveProviderTimezone,
+} from "./slot-pipeline.js";
+
 // Booking Limits
 export {
   computeBookingLimits,
@@ -77,7 +85,6 @@ export {
   getAutoRejectDeadline,
   isPendingBookingOverdue,
   CONFIRMATION_TIMEOUT_HOURS,
-  type BookingStatus,
   type AutoRejectPayload,
   type BookingStatusChangePayload,
 } from "./confirmation-mode.js";

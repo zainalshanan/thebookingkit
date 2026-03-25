@@ -5,7 +5,7 @@ CREATE OR REPLACE FUNCTION booking_audit_trigger_fn()
 RETURNS TRIGGER AS $$
 DECLARE
   v_event_type booking_event_type;
-  v_metadata jsonb;
+  v_metadata jsonb := jsonb_build_object();
 BEGIN
   IF TG_OP = 'INSERT' THEN
     v_event_type := 'created';

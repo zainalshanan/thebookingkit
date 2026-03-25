@@ -8,6 +8,8 @@ import {
   formatSlots,
   formatDateOnly,
   formatDateInTimezone,
+  getActiveBookings,
+  resolveProviderTimezone,
 } from "./slot-pipeline.js";
 import { applySlotRelease } from "./slot-release.js";
 import type {
@@ -58,16 +60,14 @@ export function getAvailableSlots(
 
   // --- Step 2: Mask Layer — Apply overrides ---
   // Use provider's timezone for date comparisons (overrides are local dates)
-  const providerTz = rules.length > 0 ? rules[0].timezone : "UTC";
+  const providerTz = resolveProviderTimezone(rules);
   const maskedWindows = applyOverrides(rawWindows, overrides, providerTz);
 
   // --- Generate individual slots from windows ---
   const candidateSlots = generateCandidateSlots(maskedWindows, duration, slotInterval);
 
   // --- Step 3: Filter Layer — Subtract bookings + buffer ---
-  const activeBookings = existingBookings.filter(
-    (b) => b.status !== "cancelled" && b.status !== "rejected",
-  );
+  const activeBookings = getActiveBookings(existingBookings);
 
   const availableSlots = candidateSlots.filter((slot) => {
     // Check each booking for overlap (including buffer)
@@ -150,7 +150,7 @@ export function isSlotAvailable(
 ): SlotAvailabilityResult {
   // Check overrides first (blocked dates)
   // Use provider timezone for local date comparison
-  const isSlotProviderTz = rules.length > 0 ? rules[0].timezone : "UTC";
+  const isSlotProviderTz = resolveProviderTimezone(rules);
   const slotDateStr = formatDateInTimezone(startTime, isSlotProviderTz);
   for (const override of overrides) {
     if (override.isUnavailable && formatDateOnly(override.date) === slotDateStr) {
@@ -214,9 +214,7 @@ export function isSlotAvailable(
   }
 
   // Check booking conflicts
-  const activeBookings = existingBookings.filter(
-    (b) => b.status !== "cancelled" && b.status !== "rejected",
-  );
+  const activeBookings = getActiveBookings(existingBookings);
 
   for (const booking of activeBookings) {
     const bookingStartWithBuffer = addMinutes(booking.startsAt, -bufferBefore);

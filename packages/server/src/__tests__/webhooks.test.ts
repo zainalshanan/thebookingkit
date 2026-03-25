@@ -15,6 +15,7 @@ import {
   type WebhookPayload,
   type WebhookTrigger,
 } from "../webhooks.js";
+import { JOB_NAMES } from "../adapters/job-adapter.js";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -408,5 +409,93 @@ describe("validateWebhookSubscription", () => {
         isActive: true,
       }),
     ).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// E24-S02 — WEBHOOK_TRIGGERS completeness
+// ---------------------------------------------------------------------------
+
+describe("WEBHOOK_TRIGGERS — E24-S02 new triggers", () => {
+  const newTriggers: WebhookTrigger[] = [
+    "BOOKING_COMPLETED",
+    "RESOURCE_BOOKED",
+    "RESOURCE_RELEASED",
+    "WALK_IN_ADDED",
+    "WALK_IN_STARTED",
+    "WALK_IN_COMPLETED",
+    "WALK_IN_CANCELLED",
+    "SLOT_RELEASED",
+    "RECURRING_SERIES_CREATED",
+    "OCCURRENCE_CANCELLED",
+    "OCCURRENCE_RESCHEDULED",
+    "PAYMENT_REFUNDED",
+  ];
+
+  it.each(newTriggers)("includes %s", (trigger) => {
+    expect(WEBHOOK_TRIGGERS).toContain(trigger);
+  });
+
+  it("total trigger count is 21 (9 original + 12 new)", () => {
+    expect(WEBHOOK_TRIGGERS).toHaveLength(21);
+  });
+
+  it("has no duplicate triggers", () => {
+    const unique = new Set(WEBHOOK_TRIGGERS);
+    expect(unique.size).toBe(WEBHOOK_TRIGGERS.length);
+  });
+
+  it("validateWebhookSubscription accepts each new trigger individually", () => {
+    for (const trigger of newTriggers) {
+      expect(() =>
+        validateWebhookSubscription({
+          subscriberUrl: "https://example.com/webhook",
+          triggers: [trigger],
+          isActive: true,
+        }),
+      ).not.toThrow();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// E24-S03 — JOB_NAMES completeness
+// ---------------------------------------------------------------------------
+
+describe("JOB_NAMES — E24-S03 new job names", () => {
+  it("includes SEND_WALK_IN_NOTIFICATION", () => {
+    expect(JOB_NAMES.SEND_WALK_IN_NOTIFICATION).toBe(
+      "thebookingkit/send-walk-in-notification",
+    );
+  });
+
+  it("includes SEND_RESOURCE_BOOKING_CONFIRMATION", () => {
+    expect(JOB_NAMES.SEND_RESOURCE_BOOKING_CONFIRMATION).toBe(
+      "thebookingkit/send-resource-booking-confirmation",
+    );
+  });
+
+  it("includes PROCESS_RECURRING_SERIES", () => {
+    expect(JOB_NAMES.PROCESS_RECURRING_SERIES).toBe(
+      "thebookingkit/process-recurring-series",
+    );
+  });
+
+  it("includes PROCESS_SLOT_RELEASE", () => {
+    expect(JOB_NAMES.PROCESS_SLOT_RELEASE).toBe(
+      "thebookingkit/process-slot-release",
+    );
+  });
+
+  it("includes ADVANCE_WALK_IN_QUEUE", () => {
+    expect(JOB_NAMES.ADVANCE_WALK_IN_QUEUE).toBe(
+      "thebookingkit/advance-walk-in-queue",
+    );
+  });
+
+  it("has no duplicate job name values", () => {
+    const values = Object.values(JOB_NAMES);
+    const unique = new Set(values);
+    expect(unique.size).toBe(values.length);
   });
 });

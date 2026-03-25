@@ -51,7 +51,7 @@ BEGIN
   -- 4. Anonymize routing_submissions
   UPDATE routing_submissions
   SET responses = '{"[REDACTED]": "[REDACTED]"}'::jsonb
-  WHERE responses::text LIKE '%' || p_email || '%';
+  WHERE responses::text LIKE '%' || replace(replace(p_email, '%', '\%'), '_', '\_') || '%' ESCAPE '\';
   GET DIAGNOSTICS v_count = ROW_COUNT;
   IF v_count > 0 THEN
     v_tables_affected := v_tables_affected + 1;

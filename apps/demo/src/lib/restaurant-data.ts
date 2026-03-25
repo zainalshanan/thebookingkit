@@ -7,6 +7,7 @@ import type {
   AvailabilityRuleInput,
   BookingInput,
 } from "@thebookingkit/core";
+import { getNextServiceDay, makeET } from "./demo-utils";
 
 // ---------------------------------------------------------------------------
 // Restaurant constants
@@ -43,26 +44,6 @@ const TABLE_RULES: AvailabilityRuleInput[] = [LUNCH_RULE, DINNER_RULE];
 // ---------------------------------------------------------------------------
 // Seed bookings helpers
 // ---------------------------------------------------------------------------
-
-function getNextServiceDay(offset: number): Date {
-  const d = new Date();
-  d.setDate(d.getDate() + offset);
-  // Skip Sundays (0)
-  while (d.getDay() === 0) {
-    d.setDate(d.getDate() + 1);
-  }
-  return d;
-}
-
-/**
- * Create a UTC Date for a given day at a given hour+minute in Eastern time
- * (EST = UTC-5, EDT = UTC-4; use -5 as safe approximate for seeding).
- */
-function makeET(day: Date, hour: number, minute: number): Date {
-  const d = new Date(day);
-  d.setUTCHours(hour + 5, minute, 0, 0);
-  return d;
-}
 
 const tomorrow = getNextServiceDay(1);
 const dayAfter = getNextServiceDay(2);

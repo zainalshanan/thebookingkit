@@ -1,5 +1,36 @@
 # @thebookingkit/server
 
+## 0.2.0
+
+### Minor Changes (2026-03-25)
+
+#### Webhook Triggers (E-24)
+
+- **12 new webhook triggers:** `BOOKING_COMPLETED`, `RESOURCE_BOOKED`, `RESOURCE_RELEASED`, `WALK_IN_ADDED`, `WALK_IN_STARTED`, `WALK_IN_COMPLETED`, `WALK_IN_CANCELLED`, `SLOT_RELEASED`, `RECURRING_SERIES_CREATED`, `OCCURRENCE_CANCELLED`, `OCCURRENCE_RESCHEDULED`, `PAYMENT_REFUNDED`
+- Total triggers: 21 (9 existing + 12 new)
+
+#### Job Names (E-24)
+
+- **5 new background job names:** `SEND_WALK_IN_NOTIFICATION`, `SEND_RESOURCE_BOOKING_CONFIRMATION`, `PROCESS_RECURRING_SERIES`, `PROCESS_SLOT_RELEASE`, `ADVANCE_WALK_IN_QUEUE`
+
+#### Security & Error Handling (Audit Fixes)
+
+- Replaced manual XOR timing comparison with `crypto.timingSafeEqual` in `verifyApiKey` and `verifyWebhookSignature`
+- `withAuth` now logs unhandled errors and maps `BookingConflictError` (409) and `ResourceUnavailableError` (409) to proper status codes
+- Unified role types: `AuthUser.role` and `WithAuthOptions.requiredRole` now both support `"admin" | "provider" | "member" | "customer"`
+- JSON-escaped webhook payload template values to prevent injection
+- HTML-escaped workflow template variables when destined for email
+- Extracted shared SSRF validator (`validateExternalUrl`)
+- `parseOrgBookingPath` now validates slugs against `SLUG_RE`
+
+#### Platform Integration
+
+- Re-exported `ResourceUnavailableError`, resource engine functions, and slot release functions from `@thebookingkit/core`
+
+#### Branding
+
+- Webhook headers renamed: `X-SlotKit-*` → `X-BookingKit-*`
+
 ## 0.1.5
 
 ### Minor Changes — QA Audit (2026-03-12)

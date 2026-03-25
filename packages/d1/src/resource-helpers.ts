@@ -18,6 +18,7 @@ import type { AvailabilityRuleInput, AvailabilityOverrideInput } from "@thebooki
 import { D1DateCodec } from "./codec.js";
 import { D1BookingLock } from "./lock.js";
 import type { LockDb, D1BookingLockOptions } from "./lock.js";
+import { mapOverrideRow } from "./d1-shared.js";
 
 // ---------------------------------------------------------------------------
 // Row interfaces
@@ -33,8 +34,18 @@ import type { LockDb, D1BookingLockOptions } from "./lock.js";
 export interface D1ResourceRow {
   /** UUID primary key */
   id: string;
+  /**
+   * Optional organization UUID for multi-tenancy. Null when the resource
+   * belongs to a single-tenant deployment without an organization hierarchy.
+   */
+  organizationId: string | null;
   /** Human-readable display name (e.g. "Table 5", "Yoga Mat 3") */
   name: string;
+  /**
+   * URL-safe unique slug for the resource (e.g. "table-5", "yoga-mat-3").
+   * Used for human-readable URLs and CLI references.
+   */
+  slug: string;
   /**
    * Free-form resource category (e.g. "table", "room", "court", "desk").
    * No enum — user-defined strings to allow new types without schema changes.
@@ -180,12 +191,7 @@ export function d1ResourceAvailabilityRowsToInputs(
 export function d1ResourceOverrideRowsToInputs(
   rows: D1ResourceAvailabilityOverrideRow[],
 ): AvailabilityOverrideInput[] {
-  return rows.map((row) => ({
-    date: D1DateCodec.decode(row.date),
-    startTime: row.startTime ?? null,
-    endTime: row.endTime ?? null,
-    isUnavailable: Boolean(row.isUnavailable),
-  }));
+  return rows.map(mapOverrideRow);
 }
 
 // ---------------------------------------------------------------------------

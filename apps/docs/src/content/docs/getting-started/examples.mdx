@@ -5,7 +5,7 @@ description: Real-world examples of how The Booking Kit powers different types o
 
 import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 
-The Booking Kit is a general-purpose scheduling primitive. The same core APIs power very different booking experiences depending on how you configure them. The examples below show five real use cases with the key API calls for each.
+The Booking Kit is a general-purpose scheduling primitive. The same core APIs power very different booking experiences depending on how you configure them. The examples below show eight real use cases with the key API calls for each: five provider-based (appointments with people) and three resource-based (reservations for spaces).
 
 ---
 
@@ -63,6 +63,7 @@ const entry = addWalkIn({
 });
 
 // Display estimated wait time on the public queue screen.
+// See the [Walk-In Queue](/features/walk-in) guide for details
 const { estimatedWaitMinutes } = estimateWaitTime({
   queue: currentQueue,
   position: entry.queuePosition,
@@ -228,6 +229,7 @@ import {
 } from '@thebookingkit/core';
 
 // Find the next gap in the stylist's schedule that fits a 45-minute service.
+// See the [Walk-In Queue](/features/walk-in) guide for details
 const nextGap = findNextAvailableGap({
   existingBookings: stylist.todaysBookings,
   walkinQueue: stylist.currentQueue,
@@ -254,6 +256,7 @@ const waitInfo = estimateWaitTime({
 });
 
 // Aggregate queue metrics for the salon's front desk summary.
+// See the [Walk-In Queue](/features/walk-in) guide for details
 const metrics = getQueueMetrics({
   queue: stylist.currentQueue,
   completedToday: stylist.completedWalkins,
@@ -267,8 +270,287 @@ const metrics = getQueueMetrics({
 
 ---
 
+## 6. Restaurant Reservations — Table Pool with Party Size
+
+A restaurant manages multiple dining tables with varying capacities. Customers book tables based on party size, and the system auto-assigns the best-fit table (smallest table that fits their party).
+
+```typescript
+import { getResourceAvailableSlots, assignResource } from '@thebookingkit/core';
+
+// Define the restaurant's table pool
+const tables = [
+  {
+    id: 'table-1',
+    name: 'Table 1',
+    type: 'standard',
+    capacity: 2,
+    isActive: true,
+    rules: [{
+      rrule: 'FREQ=DAILY;BYDAY=MO,TU,WE,TH,FR,SA,SU',
+      startTime: '11:00',
+      endTime: '22:00',
+      timezone: 'America/Los_Angeles',
+    }],
+    overrides: [],
+    bookings: existingReservations,
+  },
+  {
+    id: 'table-2',
+    name: 'Table 2',
+    type: 'standard',
+    capacity: 4,
+    isActive: true,
+    rules: [{
+      rrule: 'FREQ=DAILY;BYDAY=MO,TU,WE,TH,FR,SA,SU',
+      startTime: '11:00',
+      endTime: '22:00',
+      timezone: 'America/Los_Angeles',
+    }],
+    overrides: [],
+    bookings: existingReservations,
+  },
+  {
+    id: 'table-6',
+    name: 'Table 6 (Patio)',
+    type: 'patio',
+    capacity: 6,
+    isActive: true,
+    rules: [{
+      rrule: 'FREQ=DAILY;BYDAY=MO,TU,WE,TH,FR,SA,SU',
+      startTime: '11:00',
+      endTime: '22:00',
+      timezone: 'America/Los_Angeles',
+    }],
+    overrides: [],
+    bookings: existingReservations,
+  },
+];
+
+// Find all available time slots across the table pool
+const availableSlots = getResourceAvailableSlots(
+  tables,
+  {
+    start: new Date('2026-03-15'),
+    end: new Date('2026-03-16'),
+  },
+  'America/Los_Angeles',
+  {
+    duration: 90,          // 90-minute seating
+    minCapacity: 4,        // Party of 4
+    bufferAfter: 15,       // 15-min turnaround between seatings
+  }
+);
+
+// Automatically assign the best-fit table for a 4-person party
+const assignment = assignResource(
+  tables,
+  new Date('2026-03-15T18:00:00.000Z'),
+  new Date('2026-03-15T19:30:00.000Z'),
+  {
+    strategy: 'best_fit',  // Pick the smallest table that fits
+    minCapacity: 4,
+    requestedCapacity: 4,
+  }
+);
+
+console.log(`Assigned ${assignment.resourceName} (${assignment.reason})`);
+// Output: Assigned Table 2 (best_fit)
+```
+
+---
+
+## 7. Hotel Room Booking — Multi-Type Resource Pool
+
+A hotel manages multiple room types (standard, deluxe, suite) with varying capacities. A booking spans check-in to check-out, and the system ensures each room is assigned to only one guest at a time.
+
+```typescript
+import { getResourceAvailableSlots, assignResource } from '@thebookingkit/core';
+
+const hotelRooms = [
+  {
+    id: 'room-101',
+    name: 'Standard Room 101',
+    type: 'standard',
+    capacity: 2,
+    isActive: true,
+    rules: [{
+      rrule: 'FREQ=DAILY',
+      startTime: '15:00',  // 3 PM check-in
+      endTime: '11:00',    // 11 AM check-out (next day)
+      timezone: 'America/New_York',
+    }],
+    overrides: [],
+    bookings: existingCheckIns,
+  },
+  {
+    id: 'room-305',
+    name: 'Deluxe Room 305',
+    type: 'deluxe',
+    capacity: 3,
+    isActive: true,
+    rules: [{
+      rrule: 'FREQ=DAILY',
+      startTime: '15:00',
+      endTime: '11:00',
+      timezone: 'America/New_York',
+    }],
+    overrides: [],
+    bookings: existingCheckIns,
+  },
+  {
+    id: 'room-510',
+    name: 'Penthouse Suite',
+    type: 'suite',
+    capacity: 4,
+    isActive: true,
+    rules: [{
+      rrule: 'FREQ=DAILY',
+      startTime: '15:00',
+      endTime: '11:00',
+      timezone: 'America/New_York',
+    }],
+    overrides: [],
+    bookings: existingCheckIns,
+  },
+];
+
+// Guest checking in for 2 nights, requesting at least 2-bed capacity
+const availableRooms = getResourceAvailableSlots(
+  hotelRooms,
+  {
+    start: new Date('2026-04-01'),  // Check-in date
+    end: new Date('2026-04-03'),    // Check-out date
+  },
+  'America/New_York',
+  {
+    duration: 2880,        // 48 hours (2 nights)
+    minCapacity: 2,        // Party of 2
+    resourceType: 'deluxe', // Filter to deluxe rooms only
+  }
+);
+
+// Auto-assign a room for the reservation
+const roomAssignment = assignResource(
+  hotelRooms,
+  new Date('2026-04-01T15:00:00.000Z'),
+  new Date('2026-04-03T11:00:00.000Z'),
+  {
+    strategy: 'largest_first',   // Prefer larger rooms when available
+    resourceType: 'deluxe',
+    requestedCapacity: 2,
+  }
+);
+```
+
+---
+
+## 8. Coworking Space — Multi-Resource Types
+
+A coworking space manages desks, meeting rooms, and phone booths. Members book by resource type; the system handles per-resource capacity and availability.
+
+```typescript
+import { getResourceAvailableSlots, assignResource, getResourcePoolSummary } from '@thebookingkit/core';
+
+const coworkingResources = [
+  {
+    id: 'desk-1',
+    name: 'Desk 1 (Window)',
+    type: 'hot_desk',
+    capacity: 1,
+    isActive: true,
+    rules: [{
+      rrule: 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR',
+      startTime: '08:00',
+      endTime: '18:00',
+      timezone: 'Europe/London',
+    }],
+    overrides: [],
+    bookings: deskBookings,
+  },
+  {
+    id: 'desk-2',
+    name: 'Desk 2',
+    type: 'hot_desk',
+    capacity: 1,
+    isActive: true,
+    rules: [{
+      rrule: 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR',
+      startTime: '08:00',
+      endTime: '18:00',
+      timezone: 'Europe/London',
+    }],
+    overrides: [],
+    bookings: deskBookings,
+  },
+  {
+    id: 'meeting-boardroom',
+    name: 'Boardroom',
+    type: 'meeting_room',
+    capacity: 12,
+    isActive: true,
+    rules: [{
+      rrule: 'FREQ=DAILY',
+      startTime: '08:00',
+      endTime: '18:00',
+      timezone: 'Europe/London',
+    }],
+    overrides: [],
+    bookings: meetingBookings,
+  },
+  {
+    id: 'phone-booth-1',
+    name: 'Phone Booth A',
+    type: 'phone_booth',
+    capacity: 1,
+    isActive: true,
+    rules: [{
+      rrule: 'FREQ=DAILY',
+      startTime: '08:00',
+      endTime: '18:00',
+      timezone: 'Europe/London',
+    }],
+    overrides: [],
+    bookings: phoneBoothBookings,
+  },
+];
+
+// Member wants to book a meeting room for a 4-person sync
+const availableRooms = getResourceAvailableSlots(
+  coworkingResources,
+  {
+    start: new Date('2026-03-17'),
+    end: new Date('2026-03-17'),
+  },
+  'Europe/London',
+  {
+    duration: 60,
+    resourceType: 'meeting_room',
+    minCapacity: 4,
+  }
+);
+
+// Admin dashboard: show current utilization across all hot desks
+const deskUtilization = getResourcePoolSummary(
+  coworkingResources,
+  {
+    start: new Date('2026-03-17'),
+    end: new Date('2026-03-17'),
+  },
+  'Europe/London',
+  {
+    duration: 480,         // 8-hour work day
+    resourceType: 'hot_desk',
+    now: new Date(),
+  }
+);
+
+console.log(`Desks available right now: ${deskUtilization[0]?.availableResources}/${deskUtilization[0]?.totalResources}`);
+```
+
+---
+
 ## What to Build Next
 
-All five examples above use the same underlying APIs from `@thebookingkit/core`. The difference is configuration: which scheduling algorithm, what seat count, which timezone, whether confirmation is automatic or manual.
+All eight examples above use the same underlying APIs from `@thebookingkit/core`. Provider booking uses `getAvailableSlots` and `getTeamSlots`; resource booking uses `getResourceAvailableSlots`, `assignResource`, and `getResourcePoolSummary`. The difference is configuration: which scheduling algorithm, what capacity model, which timezone, whether confirmation is automatic or manual.
 
 To start integrating The Booking Kit into your own application, follow the [Quick Start](/getting-started/quick-start) guide or review the [Architecture](/getting-started/architecture) page for a full picture of how the packages fit together.

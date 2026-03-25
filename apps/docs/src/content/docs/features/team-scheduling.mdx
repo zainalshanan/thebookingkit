@@ -3,151 +3,255 @@ title: Team Scheduling
 description: Distribute bookings across team members with round-robin, collective, managed, and fixed strategies.
 ---
 
-Team scheduling enables organizations with multiple providers to manage bookings across a team.
+When your business has multiple providers — barbers, doctors, instructors, massage therapists — team scheduling distributes bookings across them automatically based on your chosen strategy. Instead of managing each provider independently, you define a team and let the system handle fair distribution.
 
-## Assignment strategies
+## When to use team scheduling
 
-### Round-robin
+Team scheduling answers these questions:
 
-Distributes bookings evenly across team members. Considers each member's existing booking count to maintain balance.
+- **Single provider, one availability window?** Use [`getAvailableSlots`](/docs/core-concepts/slot-engine) — no team needed. Team scheduling adds overhead you don't need.
+- **Multiple providers, book any available provider?** Use team scheduling with **round-robin** (the most common scenario: salon with multiple barbers, clinic with multiple doctors).
+- **All team members must be free at the same time?** Use **collective** (panel interviews, group consultations, team meetings).
+- **Organization-created template with locked fields?** Use **managed** (franchise/chain operations with consistent offerings but member-level customization).
+- **Customer wants to book a specific provider?** Use **fixed** (patient's regular doctor, client's favorite barber) — just filter to that member.
+
+## How team slots work
+
+`getTeamSlots()` computes each team member's individual availability, then merges the results based on your strategy:
+
+| Strategy | Merge Logic | Slot Shown? | Use Case |
+|----------|-----------|-----------|----------|
+| **Round-Robin** | Union | Any member free = YES | Barber salon, dental practice |
+| **Collective** | Intersection | All members free = YES | Group interview, team meeting |
+| **Managed** | Union | Any member free = YES | Franchise with templates |
+| **Fixed** | Direct | Only chosen member | Customer's regular provider |
+
+Every returned slot includes `availableMembers` — an array of user IDs available at that time. This powers assignment algorithms.
+
+### The return type: TeamSlot
 
 ```typescript
-import { assignHost } from "@thebookingkit/core";
+interface TeamSlot extends Slot {
+  // Which members are free at this time
+  availableMembers: string[];
+}
+
+// Example result:
+// {
+//   startTime: "2026-03-09T14:00:00.000Z",
+//   endTime: "2026-03-09T14:30:00.000Z",
+//   localStart: "2026-03-09T09:00:00",
+//   localEnd: "2026-03-09T09:30:00",
+//   availableMembers: ["alice", "bob"]  // Both are free
+// }
+```
+
+## Round-Robin Strategy
+
+**Most common.** Distributes bookings evenly across team members using priority and weight ratios.
+
+### How it works
+
+1. Computes each member's individual slots
+2. Returns the **union** — any time slot where at least one member is free
+3. Each slot tracks which members are available
+4. When assigning, picks the best-balanced member based on:
+   - `isFixed` flag (fixed members get priority)
+   - `priority` number (lower = higher priority)
+   - `weight` ratio (relative distribution — 100:50 = 2:1 booking ratio)
+   - Past booking count (load balancing across members)
+
+### Key fields explained
+
+```typescript
+interface TeamMemberInput {
+  userId: string;
+  role: "admin" | "member";
+
+  // Lower = checked first when multiple members are equally available
+  priority: number;              // e.g., alice=1, bob=2
+
+  // Weight ratio determines target booking distribution
+  weight: number;                // e.g., alice=100, bob=50 → 2:1 ratio
+
+  // Fixed members always get assigned if available (e.g., manager on shift)
+  isFixed?: boolean;
+
+  // Everything else: their personal availability
+  rules: AvailabilityRuleInput[];
+  overrides: AvailabilityOverrideInput[];
+  bookings: BookingInput[];
+}
+```
+
+**Weight vs Priority:** Priority is a tiebreaker when members have the same availability. Weight is the long-term target ratio. If Alice has `weight: 100` and Bob has `weight: 50`, Alice should get ~2x as many bookings as Bob over time.
+
+### Example: Multi-Barber Salon
+
+Three barbers with different schedules and load balancing:
+
+```typescript
+import { getTeamSlots, assignHost } from "@thebookingkit/core";
 import type { TeamMemberInput, MemberBookingCount } from "@thebookingkit/core";
 
-const teamMembers: TeamMemberInput[] = [
+// Barber availability and workload
+const barbers: TeamMemberInput[] = [
   {
     userId: "alice",
     role: "member",
-    priority: 1,
-    weight: 100,
-    rules: aliceRules,
-    overrides: aliceOverrides,
-    bookings: aliceBookings,
+    priority: 1,        // Alice is primary barber
+    weight: 100,        // Target 50% of bookings
+    rules: [
+      {
+        rrule: "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR,SA",
+        startTime: "09:00",
+        endTime: "18:00",
+        timezone: "America/New_York",
+      },
+    ],
+    overrides: [],
+    bookings: aliceBookings, // Load from database
   },
   {
     userId: "bob",
     role: "member",
-    priority: 2,
-    weight: 100,
-    rules: bobRules,
-    overrides: bobOverrides,
-    bookings: bobBookings,
-  },
-];
-
-// Track booking counts for load balancing
-const bookingCounts: MemberBookingCount[] = [
-  { userId: "alice", confirmedCount: 5 },
-  { userId: "bob", confirmedCount: 7 },
-];
-
-const result = assignHost(teamMembers, bookingCounts, "round_robin");
-// Returns: { hostId: "alice", reason: "alice selected via round-robin (load balanced)" }
-// Alice gets assigned because Bob has more bookings
-```
-
-### Collective
-
-All team members must be available for the slot. Used for group interviews, panel discussions, or meetings requiring all participants.
-
-```typescript
-import { getTeamSlots } from "@thebookingkit/core";
-import type { TeamMemberInput } from "@thebookingkit/core";
-
-const teamMembers: TeamMemberInput[] = [
-  {
-    userId: "alice",
-    role: "member",
-    priority: 1,
-    weight: 100,
-    rules: [mondayFriday9to5],
-    overrides: [],
-    bookings: aliceBookings,
-  },
-  {
-    userId: "bob",
-    role: "member",
-    priority: 2,
-    weight: 100,
-    rules: [mondayFriday9to5],
+    priority: 2,        // Bob is secondary
+    weight: 100,        // Target 50% of bookings
+    rules: [
+      {
+        rrule: "RRULE:FREQ=WEEKLY;BYDAY=TU,WE,TH,FR,SA,SU",
+        startTime: "11:00",
+        endTime: "20:00",
+        timezone: "America/New_York",
+      },
+    ],
     overrides: [],
     bookings: bobBookings,
   },
+  {
+    userId: "charlie",
+    role: "member",
+    priority: 3,        // Charlie is part-time
+    weight: 50,         // Target 25% of bookings (half Alice's ratio)
+    rules: [
+      {
+        rrule: "RRULE:FREQ=WEEKLY;BYDAY=SA,SU",
+        startTime: "10:00",
+        endTime: "17:00",
+        timezone: "America/New_York",
+      },
+    ],
+    overrides: [],
+    bookings: charlieBookings,
+  },
 ];
 
+// Step 1: Get team slots (union of all barber availability)
 const slots = getTeamSlots(
-  teamMembers,
+  barbers,
+  "round_robin",
   {
     start: new Date("2026-03-09T00:00:00.000Z"),
-    end: new Date("2026-03-13T23:59:59.999Z"),
+    end: new Date("2026-03-15T23:59:59.999Z"),
   },
   "America/New_York",
-  { strategy: "collective", duration: 60 }
+  { duration: 30 }  // 30-minute haircuts
 );
 
-// Returns only slots where BOTH Alice and Bob are available
-// If Alice is booked 2-3pm and Bob is booked 3-4pm,
-// those slots are excluded from the results
+console.log(slots[0]);
+// {
+//   startTime: "2026-03-09T14:00:00.000Z",
+//   endTime: "2026-03-09T14:30:00.000Z",
+//   localStart: "2026-03-09T09:00:00",
+//   localEnd: "2026-03-09T09:30:00",
+//   availableMembers: ["alice", "bob"]  // Only these barbers are free
+// }
+
+// Step 2: Customer picks a time slot
+const selectedSlot = slots[5];
+
+// Step 3: Assign the best barber for that slot
+// Track confirmed bookings per barber (from database)
+const bookingCounts: MemberBookingCount[] = [
+  { userId: "alice", confirmedCount: 24 },
+  { userId: "bob", confirmedCount: 18 },
+  { userId: "charlie", confirmedCount: 8 },
+];
+
+// assignHost picks based on:
+// - Who's available at this slot (availableMembers)
+// - Priority (if different)
+// - Weight ratio (who should get more bookings)
+// - Past booking count (load balance)
+const assignment = assignHost(
+  barbers,
+  selectedSlot.availableMembers,  // ["alice", "bob"] from the slot
+  bookingCounts
+);
+
+console.log(assignment);
+// {
+//   hostId: "bob",
+//   reason: "weight_balanced"
+// }
+// Bob gets this booking because:
+// - Both alice and bob are available
+// - Same priority tiebreaker
+// - Bob's booking count (18) is further below his target than Alice's (24)
 ```
 
-### Managed
+### The assignment algorithm
 
-Organization-level event type templates with field locking. Admins create templates; members get auto-generated event types with locked fields.
+`assignHost()` selects in this order:
 
-```typescript
-import { resolveManagedEventType, isFieldLocked, propagateTemplateChanges } from "@thebookingkit/core";
-import type { ManagedEventTypeTemplate } from "@thebookingkit/core";
+1. **Fixed members first:** If any member has `isFixed: true` and is available, they get selected. Use this for a manager who must always work.
+2. **Highest priority:** Among available members, pick those with the lowest `priority` number.
+3. **Weight-balanced:** Among same priority, pick the member whose actual booking ratio is furthest below their target weight ratio.
 
-// Admin creates a template with some fields locked
-const template: ManagedEventTypeTemplate = {
-  title: "Team Consultation",
-  durationMinutes: 30,
-  bufferBefore: 0,
-  bufferAfter: 15,
-  customQuestions: [],
-  priceCents: 5000,
-  lockedFields: [
-    { field: "title", locked: true },
-    { field: "durationMinutes", locked: true },
-    { field: "description", locked: false },  // Members can customize
-    { field: "priceCents", locked: false },   // Members can set own price
-  ],
-};
+The third step uses this formula:
 
-// Check what members can and can't modify
-isFieldLocked(template, "title");            // true
-isFieldLocked(template, "durationMinutes");  // true
-isFieldLocked(template, "description");      // false
-isFieldLocked(template, "priceCents");       // false
-
-// When admin updates the template
-const updatedTemplate: ManagedEventTypeTemplate = {
-  ...template,
-  durationMinutes: 45,  // Changed from 30 to 45 minutes
-};
-
-// Propagate changes (locked fields only)
-const updates = propagateTemplateChanges(updatedTemplate, memberEventTypes);
-// All members' duration changes to 45 minutes
-// Members' custom prices are NOT overwritten
+```
+For each member:
+  targetRatio = member.weight / (sum of all weights)
+  expectedBookings = totalBookings * targetRatio
+  deficit = expectedBookings - actualBookings
+  → Pick member with highest deficit (most "underbooked")
 ```
 
-### Fixed
+**Example:** Alice (weight 100) and Bob (weight 100) at same priority:
+- Total bookings: 42
+- Target ratio each: 50% = 21 bookings
+- Alice actual: 24 bookings → deficit = 21 - 24 = -3 (slightly overbooked)
+- Bob actual: 18 bookings → deficit = 21 - 18 = +3 (underbooked)
+- **Bob wins** because +3 > -3
 
-Direct booking with a specific team member. No automatic assignment.
+## Collective Strategy
 
-## Team slots
+**For group availability.** All team members must be free at the same time.
 
-Complete example with all team members:
+### How it works
+
+Returns only slots where **every** team member is available. Uses **intersection** logic:
+- Slot is included only if all members have no conflicts
+- If any member is booked, that slot vanishes
+- `availableMembers` always contains all members (or is empty)
+
+### Use cases
+
+- **Panel interviews:** HR, hiring manager, team lead must all interview together
+- **Group consultations:** Lead therapist + assistants all present
+- **Team meetings:** All stakeholders available
+- **Medical rounds:** Specialist + residents + nurses
+
+### Example: Panel Interview Room
 
 ```typescript
 import { getTeamSlots } from "@thebookingkit/core";
 import type { TeamMemberInput } from "@thebookingkit/core";
 
-const teamMembers: TeamMemberInput[] = [
+const interviewPanel: TeamMemberInput[] = [
   {
-    userId: "alice",
+    userId: "hr-manager",
     role: "admin",
     priority: 1,
     weight: 100,
@@ -160,6 +264,282 @@ const teamMembers: TeamMemberInput[] = [
       },
     ],
     overrides: [],
+    bookings: hrBookings,
+  },
+  {
+    userId: "hiring-manager",
+    role: "member",
+    priority: 1,
+    weight: 100,
+    rules: [
+      {
+        rrule: "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+        startTime: "09:00",
+        endTime: "17:00",
+        timezone: "America/New_York",
+      },
+    ],
+    overrides: [],
+    bookings: hmBookings,
+  },
+  {
+    userId: "team-lead",
+    role: "member",
+    priority: 1,
+    weight: 100,
+    rules: [
+      {
+        rrule: "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,FR",  // Friday off
+        startTime: "09:00",
+        endTime: "17:00",
+        timezone: "America/New_York",
+      },
+    ],
+    overrides: [],
+    bookings: tlBookings,
+  },
+];
+
+// Collective: only times when ALL three are free
+const slots = getTeamSlots(
+  interviewPanel,
+  "collective",
+  {
+    start: new Date("2026-03-09T00:00:00.000Z"),
+    end: new Date("2026-03-15T23:59:59.999Z"),
+  },
+  "America/New_York",
+  { duration: 60 }  // 1-hour interviews
+);
+
+// Result: Much fewer slots than round-robin
+// Friday slots EXCLUDED because team-lead is unavailable
+// Any time someone is booked 2-3pm → that slot is excluded entirely
+console.log(slots.length);  // Maybe 20 slots instead of 100
+```
+
+Notice: Collective produces far fewer slots because it requires perfect alignment. Use this only when everyone truly must be present.
+
+## Managed Strategy
+
+**For franchises and chains.** Organization creates a template with locked fields; members inherit and customize unlocked fields.
+
+### How it works
+
+1. Admin creates an `ManagedEventTypeTemplate` with field locks
+2. Members get auto-generated event types based on the template
+3. Locked fields can't be changed by members (title, duration, buffer)
+4. Unlocked fields are customizable (description, price, custom questions)
+5. When admin updates the template, locked fields propagate to all members automatically
+
+### The template model
+
+```typescript
+interface ManagedEventTypeTemplate {
+  title: string;
+  durationMinutes: number;
+  bufferBefore: number;
+  bufferAfter: number;
+  customQuestions: unknown[];
+  priceCents?: number;
+  lockedFields: ManagedFieldLock[];  // Define which fields are locked
+}
+
+interface ManagedFieldLock {
+  field: string;
+  locked: boolean;  // true = member can't change
+}
+```
+
+### Example: Massage Franchise
+
+Corporate defines the core "Swedish Massage" service. All locations offer the same duration, buffer, and questions. But each location can set their own price and therapist bio.
+
+```typescript
+import {
+  resolveManagedEventType,
+  isFieldLocked,
+  propagateTemplateChanges,
+} from "@thebookingkit/core";
+import type {
+  ManagedEventTypeTemplate,
+  MemberEventTypeOverride,
+} from "@thebookingkit/core";
+
+// Corporate defines the template
+const corporateTemplate: ManagedEventTypeTemplate = {
+  title: "Swedish Massage",
+  durationMinutes: 60,
+  bufferBefore: 15,    // 15 min prep
+  bufferAfter: 15,     // 15 min cleanup
+  customQuestions: [
+    {
+      id: "health",
+      text: "Any injuries or health concerns?",
+      required: true,
+    },
+  ],
+  priceCents: 9000,    // Corporate default $90
+  lockedFields: [
+    { field: "title", locked: true },                    // Can't rename service
+    { field: "durationMinutes", locked: true },          // All therapists: 60 min
+    { field: "bufferBefore", locked: true },             // Corporate standard
+    { field: "customQuestions", locked: true },          // Same questions everywhere
+    { field: "priceCents", locked: false },              // Locations set own price
+    { field: "description", locked: false },             // Therapist can describe their style
+  ],
+};
+
+// Check what therapists can customize
+isFieldLocked(corporateTemplate, "title");           // true — can't change
+isFieldLocked(corporateTemplate, "priceCents");      // false — can customize
+isFieldLocked(corporateTemplate, "description");     // false — can customize
+
+// Therapist Alice's custom overrides
+const aliceOverrides: MemberEventTypeOverride = {
+  userId: "alice",
+  overrides: {
+    priceCents: 10000,    // Alice charges $100 (more experienced)
+    description: "Therapeutic massage with deep tissue focus",
+  },
+};
+
+// Resolve Alice's event type: locked fields from template, overrides for unlocked
+const aliceEventType = resolveManagedEventType(
+  corporateTemplate,
+  aliceOverrides
+);
+
+console.log(aliceEventType);
+// {
+//   userId: "alice",
+//   config: {
+//     title: "Swedish Massage",               // From template (locked)
+//     durationMinutes: 60,                    // From template (locked)
+//     bufferBefore: 15,                       // From template (locked)
+//     customQuestions: [{ ... }],             // From template (locked)
+//     priceCents: 10000,                      // From alice's override (unlocked)
+//     description: "Therapeutic massage...",  // From alice's override (unlocked)
+//   }
+// }
+
+// --- Later: Corporate updates the template ---
+
+// New duration for all therapists (better scheduling)
+const updatedTemplate: ManagedEventTypeTemplate = {
+  ...corporateTemplate,
+  durationMinutes: 90,  // Expanded from 60 to 90 minutes
+};
+
+// Propagate locked field changes to all therapists
+const memberOverrides: MemberEventTypeOverride[] = [
+  aliceOverrides,
+  bobOverrides,
+  charlieOverrides,
+];
+
+const propagated = propagateTemplateChanges(updatedTemplate, memberOverrides);
+
+propagated.forEach((result) => {
+  console.log(`${result.userId}: duration now ${result.config.durationMinutes} min`);
+});
+// alice: duration now 90 min
+// bob: duration now 90 min
+// charlie: duration now 90 min
+// (Their custom prices unchanged)
+```
+
+### Key concepts
+
+- **Locked fields:** Enforced across entire organization. Use for service consistency.
+- **Unlocked fields:** Members customize. Use for differentiation (price, bio, questions).
+- **Propagation:** `propagateTemplateChanges()` updates all members' locked field values when the template changes. Unlocked field customizations are preserved.
+
+## Fixed Strategy
+
+**For customer preference.** Book a specific team member directly. No automatic assignment.
+
+### How it works
+
+1. `getTeamSlots` still returns union slots (any member free)
+2. `assignHost` is skipped — you manually specify `userId`
+3. Filter the team array to just one member before calling `getTeamSlots`
+
+### Example: Patient Books Their Regular Doctor
+
+```typescript
+import { getTeamSlots } from "@thebookingkit/core";
+import type { TeamMemberInput } from "@thebookingkit/core";
+
+// Patient wants Dr. Sarah (their regular doctor)
+const doctorId = "dr-sarah";
+
+// Get all doctors
+const allDoctors: TeamMemberInput[] = [/* ... */];
+
+// Filter to just Dr. Sarah
+const regularDoctor = allDoctors.filter((d) => d.userId === doctorId);
+
+// Compute her available slots
+const slots = getTeamSlots(
+  regularDoctor,
+  "fixed",  // or any strategy — doesn't matter for one member
+  {
+    start: new Date("2026-03-09T00:00:00.000Z"),
+    end: new Date("2026-03-15T23:59:59.999Z"),
+  },
+  "America/New_York",
+  { duration: 30 }
+);
+
+// Result: Only times when Dr. Sarah is free
+console.log(slots);
+// [
+//   { ..., availableMembers: ["dr-sarah"] },
+//   { ..., availableMembers: ["dr-sarah"] },
+//   // ... more slots, all with just Dr. Sarah
+// ]
+
+// Create booking with fixed provider
+const booking = await db.insert(bookings).values({
+  id: uuidv4(),
+  providerId: doctorId,  // Explicit assignment
+  customerId: patientId,
+  startsAt: slots[3].startTime,
+  endsAt: slots[3].endTime,
+  status: "confirmed",
+});
+```
+
+## Complete example: Multi-Barber Salon
+
+A realistic flow: Setup → Display slots → Customer picks time → Auto-assign barber → Book.
+
+```typescript
+import { getTeamSlots, assignHost } from "@thebookingkit/core";
+import type { TeamMemberInput, MemberBookingCount } from "@thebookingkit/core";
+
+// --- Step 1: Define team ---
+const barbers: TeamMemberInput[] = [
+  {
+    userId: "alice",
+    role: "member",
+    priority: 1,
+    weight: 100,
+    rules: [
+      {
+        rrule: "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR,SA",
+        startTime: "09:00",
+        endTime: "18:00",
+        timezone: "America/New_York",
+      },
+    ],
+    overrides: [
+      {
+        date: new Date("2026-03-17"),
+        isUnavailable: true,  // Alice on vacation
+      },
+    ],
     bookings: aliceBookings,
   },
   {
@@ -169,36 +549,219 @@ const teamMembers: TeamMemberInput[] = [
     weight: 100,
     rules: [
       {
-        rrule: "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
-        startTime: "10:00",
-        endTime: "18:00",
+        rrule: "RRULE:FREQ=WEEKLY;BYDAY=TU,WE,TH,FR,SA,SU",
+        startTime: "11:00",
+        endTime: "20:00",
         timezone: "America/New_York",
       },
     ],
     overrides: [],
     bookings: bobBookings,
   },
+  {
+    userId: "charlie",
+    role: "member",
+    priority: 3,
+    weight: 50,  // Part-time: 25% of bookings
+    rules: [
+      {
+        rrule: "RRULE:FREQ=WEEKLY;BYDAY=SA,SU",
+        startTime: "10:00",
+        endTime: "17:00",
+        timezone: "America/New_York",
+      },
+    ],
+    overrides: [],
+    bookings: charlieBookings,
+  },
 ];
 
+// --- Step 2: Load booking counts from database ---
+const bookingCounts: MemberBookingCount[] = [
+  { userId: "alice", confirmedCount: 32 },
+  { userId: "bob", confirmedCount: 28 },
+  { userId: "charlie", confirmedCount: 10 },
+];
+
+// --- Step 3: Get available slots ---
+const startDate = new Date("2026-03-09T00:00:00.000Z");
+const endDate = new Date("2026-03-15T23:59:59.999Z");
+
 const slots = getTeamSlots(
-  teamMembers,
-  {
-    start: new Date("2026-03-09T00:00:00.000Z"),
-    end: new Date("2026-03-13T23:59:59.999Z"),
-  },
+  barbers,
+  "round_robin",
+  { start: startDate, end: endDate },
   "America/New_York",
-  { strategy: "round_robin", duration: 30 }
+  {
+    duration: 30,      // 30-minute haircuts
+    slotInterval: 15,  // Show a slot every 15 minutes
+  }
 );
 
-// Example result
-console.log(slots[0]);
-// {
-//   startTime: "2026-03-09T14:00:00.000Z",
-//   endTime: "2026-03-09T14:30:00.000Z",
-//   localStart: "2026-03-09T09:00:00",
-//   localEnd: "2026-03-09T09:30:00",
-//   availableMembers: ["alice", "bob"]  // both members are free at this time
-// }
+console.log(`${slots.length} available slots this week`);
+
+// --- Step 4: Display to customer (e.g., in Next.js route) ---
+// GET /api/availability
+export async function GET(request: Request) {
+  return Response.json(slots);
+}
+
+// --- Step 5: Customer selects a time ---
+// POST /api/bookings
+export async function POST(request: Request) {
+  const { slotIndex, customerEmail } = await request.json();
+
+  const selectedSlot = slots[slotIndex];
+
+  // --- Step 6: Assign barber ---
+  const assignment = assignHost(
+    barbers,
+    selectedSlot.availableMembers,  // ["alice", "bob"] or ["bob"] etc.
+    bookingCounts
+  );
+
+  console.log(`Assigning ${assignment.hostId} (reason: ${assignment.reason})`);
+
+  // --- Step 7: Create booking ---
+  const booking = await db.insert(bookings).values({
+    id: uuidv4(),
+    organizationId: org.id,
+    providerId: assignment.hostId,       // barber assigned by system
+    customerId: currentUser.id,
+    startsAt: new Date(selectedSlot.startTime),
+    endsAt: new Date(selectedSlot.endTime),
+    status: "confirmed",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+
+  // Update confirmation email
+  await sendConfirmationEmail(customerEmail, {
+    barberName: assignment.hostId,
+    date: selectedSlot.localStart,
+    time: selectedSlot.localStart.split("T")[1],
+  });
+
+  return Response.json({ bookingId: booking.id, barber: assignment.hostId });
+}
+```
+
+## Tips and patterns
+
+### Adding a new team member
+
+Existing bookings are unaffected. The system rebalances future assignments based on the new member's weight:
+
+```typescript
+// Add Charlie to the team mid-year
+const newTeam = [
+  ...existingBarbers,
+  {
+    userId: "charlie",
+    role: "member",
+    priority: 3,
+    weight: 50,  // Start with low weight, increase over time
+    rules: charlieRules,
+    overrides: [],
+    bookings: [],  // No past bookings
+  },
+];
+
+// Refresh the assignment logic (Charlie's low weight means other barbers
+// get bookings until the load balances out)
+```
+
+### Handling time off
+
+Members going on vacation don't require adding/removing them. Just add an availability override:
+
+```typescript
+const aliceWithVacation: TeamMemberInput = {
+  ...alice,
+  overrides: [
+    ...alice.overrides,
+    {
+      date: new Date("2026-06-15"),
+      isUnavailable: true,  // Alice unavailable June 15
+    },
+    {
+      date: new Date("2026-06-16"),
+      isUnavailable: true,  // June 16
+    },
+    // ... more days
+  ],
+};
+
+// Re-run getTeamSlots with updated team
+const slots = getTeamSlots(newTeam, "round_robin", dateRange, tz, options);
+// Slots during Alice's vacation show only Bob and Charlie
+```
+
+### Preferred vs available
+
+If a customer has a preferred provider but accepts anyone:
+
+```typescript
+// Show preferred barber first, then others
+const preferredBarber = "alice";
+
+const slots = getTeamSlots(barbers, "round_robin", dateRange, tz, options);
+
+// Sort: slots with preferred barber first
+const sorted = slots.sort((a, b) => {
+  const aHasPreferred = a.availableMembers.includes(preferredBarber);
+  const bHasPreferred = b.availableMembers.includes(preferredBarber);
+  if (aHasPreferred && !bHasPreferred) return -1;
+  if (!aHasPreferred && bHasPreferred) return 1;
+  return 0;
+});
+
+// Display sorted list to customer
+```
+
+### Load balancing across different weights
+
+Example: Alice (2 chairs) vs Bob (1 chair):
+
+```typescript
+const barbers: TeamMemberInput[] = [
+  { userId: "alice", weight: 100, ... },  // 2 chairs
+  { userId: "bob", weight: 50, ... },     // 1 chair
+];
+
+// Over time, Alice gets 2x as many bookings because her weight is 2x higher.
+// The assignment algorithm keeps the ratio balanced automatically.
+```
+
+## Database integration
+
+Load team data from your database:
+
+```typescript
+// GET all team members with their availability
+const team = await db.query.users.findMany({
+  where: (user) => eq(user.organizationId, orgId),
+  with: {
+    availabilityRules: true,
+    availabilityOverrides: true,
+    bookings: true,
+  },
+});
+
+// Map to TeamMemberInput
+const teamInput: TeamMemberInput[] = team.map((member) => ({
+  userId: member.id,
+  role: member.role as "admin" | "member",
+  priority: member.priority ?? 999,
+  weight: member.weight ?? 100,
+  isFixed: member.isFixed ?? false,
+  rules: member.availabilityRules,
+  overrides: member.availabilityOverrides,
+  bookings: member.bookings,
+}));
+
+// Use in getTeamSlots
+const slots = getTeamSlots(teamInput, "round_robin", ...);
 ```
 
 ## UI component
@@ -208,10 +771,30 @@ The `<TeamAssignmentEditor />` component lets admins configure team members and 
 ```tsx
 import { TeamAssignmentEditor } from "./components/team-assignment-editor";
 
-<TeamAssignmentEditor
-  members={teamMembers}
-  strategy={currentStrategy}
-  onStrategyChange={handleStrategyChange}
-  onMembersChange={handleMembersChange}
-/>
+export function EventTypeSettings() {
+  const [members, setMembers] = useState<TeamMemberInput[]>([]);
+  const [strategy, setStrategy] = useState<AssignmentStrategy>("round_robin");
+
+  return (
+    <TeamAssignmentEditor
+      members={members}
+      strategy={strategy}
+      onStrategyChange={setStrategy}
+      onMembersChange={setMembers}
+      onPriorityChange={(userId, newPriority) => {
+        // Update database
+      }}
+      onWeightChange={(userId, newWeight) => {
+        // Update database
+      }}
+    />
+  );
+}
 ```
+
+## Related
+
+- [Slot Engine](/docs/core-concepts/slot-engine) — How individual availability is computed
+- [Availability Rules](/docs/guides/availability) — RRULE syntax and overrides
+- [Resource Booking](/docs/features/resource-booking) — Booking physical resources (tables, rooms)
+- [Fixed Bookings](/docs/features/fixed-bookings) — Book one specific provider

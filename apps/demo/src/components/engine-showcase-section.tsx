@@ -10,6 +10,8 @@ import {
   fetchEmbedSnippets,
   fetchBookingLimitsDemo,
   fetchConfirmationModeDemo,
+  fetchSlotReleaseDemo,
+  type SlotReleaseDemoResult,
 } from "@/lib/actions";
 
 function getNextWeekday(): string {
@@ -41,6 +43,7 @@ export function EngineShowcaseSection() {
     { id: "embed", label: "Embed Code" },
     { id: "limits", label: "Booking Limits" },
     { id: "confirmation", label: "Confirmation Mode" },
+    { id: "slot-release", label: "Slot Release" },
   ];
 
   return (
@@ -75,6 +78,7 @@ export function EngineShowcaseSection() {
           {activeDemo === "embed" && <EmbedDemo />}
           {activeDemo === "limits" && <BookingLimitsDemo />}
           {activeDemo === "confirmation" && <ConfirmationModeDemo />}
+          {activeDemo === "slot-release" && <SlotReleaseDemo />}
         </div>
       </div>
     </section>
@@ -566,6 +570,273 @@ function BookingLimitsDemo() {
 
               <div className={`limits-status-badge ${data.status.canBook ? "can-book" : "blocked"}`}>
                 {data.status.canBook ? "Booking allowed" : "Limit reached — no new bookings"}
+              </div>
+            </>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Slot Release Demo
+// ---------------------------------------------------------------------------
+
+type SlotReleaseStrategy = "fill_earlier_first" | "rolling_window" | "discount_incentive";
+
+function SlotReleaseDemo() {
+  const [strategy, setStrategy] = useState<SlotReleaseStrategy>("fill_earlier_first");
+  const [threshold, setThreshold] = useState(50);
+  const [windowBoundary, setWindowBoundary] = useState("12:00");
+  const [windowSize, setWindowSize] = useState(24);
+  const [discountPercent, setDiscountPercent] = useState(20);
+  const [data, setData] = useState<SlotReleaseDemoResult | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const demoDate = getNextWeekday();
+
+  useEffect(() => {
+    setLoading(true);
+    fetchSlotReleaseDemo(demoDate, strategy, {
+      threshold,
+      windowBoundary,
+      windowSize,
+      discountPercent,
+    }).then((r) => {
+      setData(r);
+      setLoading(false);
+    });
+  }, [demoDate, strategy, threshold, windowBoundary, windowSize, discountPercent]);
+
+  const releasePct = data ? Math.round((data.releasedSlots / Math.max(data.totalSlots, 1)) * 100) : 0;
+
+  const codeSnippet =
+    strategy === "fill_earlier_first"
+      ? `applySlotRelease(slots, {\n  strategy: "fill_earlier_first",\n  threshold: ${threshold},\n  windowBoundaries: ["${windowBoundary}"],\n}, bookings, tz, now)`
+      : strategy === "rolling_window"
+        ? `applySlotRelease(slots, {\n  strategy: "rolling_window",\n  windowSize: ${windowSize},\n  unit: "hours",\n}, bookings, tz, now)`
+        : `applySlotRelease(slots, {\n  strategy: "discount_incentive",\n  tiers: [{\n    fillRateBelowPercent: 100,\n    discountPercent: ${discountPercent},\n  }],\n}, bookings, tz, now)`;
+
+  return (
+    <div>
+      <div className="demo-description">
+        <h3>Slot Release Strategies</h3>
+        <p>
+          <code>applySlotRelease()</code> is Step 4B of the slot pipeline — called after
+          booking-conflict filtering. Three strategies let you control which slots are
+          visible to customers and at what price.
+        </p>
+      </div>
+
+      <div className="slot-release-layout">
+        {/* Left: strategy picker + controls */}
+        <div className="slot-release-controls">
+          <div className="slot-release-strategies">
+            {(
+              [
+                { id: "fill_earlier_first", label: "Fill Earlier First", desc: "Hide afternoon slots until morning fills up" },
+                { id: "rolling_window", label: "Rolling Window", desc: "Reveal slots within a sliding time horizon" },
+                { id: "discount_incentive", label: "Discount Incentive", desc: "Show all slots, discount the slow ones" },
+              ] as const
+            ).map((s) => (
+              <button
+                key={s.id}
+                className={`slot-release-strategy-btn ${strategy === s.id ? "active" : ""}`}
+                onClick={() => setStrategy(s.id)}
+              >
+                <span className="slot-release-strategy-label">{s.label}</span>
+                <span className="slot-release-strategy-desc">{s.desc}</span>
+              </button>
+            ))}
+          </div>
+
+          {strategy === "fill_earlier_first" && (
+            <div className="slot-release-params">
+              <div className="limits-control-item">
+                <div className="limits-control-label">
+                  Fill threshold
+                  <span className="limits-control-value">{threshold}%</span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={threshold}
+                  onChange={(e) => setThreshold(Number(e.target.value))}
+                />
+              </div>
+              <div className="limits-control-item">
+                <div className="limits-control-label">
+                  Window boundary
+                  <span className="limits-control-value">{windowBoundary}</span>
+                </div>
+                <input
+                  type="time"
+                  value={windowBoundary}
+                  onChange={(e) => setWindowBoundary(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "0.4rem 0.6rem",
+                    border: "1px solid var(--border)",
+                    borderRadius: "var(--radius-sm)",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "0.825rem",
+                    color: "var(--text)",
+                    background: "var(--surface)",
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {strategy === "rolling_window" && (
+            <div className="slot-release-params">
+              <div className="limits-control-item">
+                <div className="limits-control-label">
+                  Window size
+                  <span className="limits-control-value">{windowSize}h</span>
+                </div>
+                <input
+                  type="range"
+                  min={1}
+                  max={168}
+                  step={1}
+                  value={windowSize}
+                  onChange={(e) => setWindowSize(Number(e.target.value))}
+                />
+              </div>
+            </div>
+          )}
+
+          {strategy === "discount_incentive" && (
+            <div className="slot-release-params">
+              <div className="limits-control-item">
+                <div className="limits-control-label">
+                  Discount %
+                  <span className="limits-control-value">{discountPercent}%</span>
+                </div>
+                <input
+                  type="range"
+                  min={5}
+                  max={50}
+                  step={5}
+                  value={discountPercent}
+                  onChange={(e) => setDiscountPercent(Number(e.target.value))}
+                />
+              </div>
+            </div>
+          )}
+
+          <div
+            style={{
+              background: "var(--surface-dark)",
+              borderRadius: "var(--radius-sm)",
+              padding: "0.85rem",
+              fontFamily: "var(--font-mono)",
+              fontSize: "0.72rem",
+              lineHeight: 1.7,
+              color: "var(--text-muted)",
+              border: "1px solid var(--border)",
+              whiteSpace: "pre",
+              overflowX: "auto",
+            }}
+          >
+            {codeSnippet}
+          </div>
+        </div>
+
+        {/* Right: results */}
+        <div className="slot-release-results">
+          {loading ? (
+            <p className="loading-slots">Computing release strategy...</p>
+          ) : data ? (
+            <>
+              <div className="limits-result-card">
+                <h4>
+                  {data.releasedSlots} of {data.totalSlots} slots released
+                </h4>
+                <div className="limits-meter" style={{ marginTop: "0.5rem" }}>
+                  <div
+                    className="limits-meter-fill ok"
+                    style={{ width: `${releasePct}%` }}
+                  />
+                </div>
+                <div className="limits-meter-label" style={{ marginTop: "0.35rem" }}>
+                  {releasePct}% visible &mdash; {data.hiddenSlots} hidden
+                  {data.discountedSlots > 0 && ` · ${data.discountedSlots} discounted`}
+                </div>
+              </div>
+
+              <div className="slot-release-grid">
+                {strategy === "discount_incentive"
+                  ? data.slots.map((slot) => (
+                      <span
+                        key={slot.startTime}
+                        className={`mini-slot${slot.discountPercent ? " slot-discounted" : ""}`}
+                        title={slot.discountPercent ? `${slot.discountPercent}% off` : undefined}
+                      >
+                        {formatTime(slot.localStart)}
+                        {slot.discountPercent && (
+                          <span className="slot-discount-badge">{slot.discountPercent}%</span>
+                        )}
+                      </span>
+                    ))
+                  : (() => {
+                      const releasedSet = new Set(data.slots.map((s) => s.startTime));
+                      const allTimesFromReleased = data.slots.map((s) => ({
+                        startTime: s.startTime,
+                        localStart: s.localStart,
+                        released: true,
+                      }));
+                      // Show a representative "hidden" count placeholder
+                      return (
+                        <>
+                          {allTimesFromReleased.map((slot) => (
+                            <span key={slot.startTime} className="mini-slot slot-released">
+                              {formatTime(slot.localStart)}
+                            </span>
+                          ))}
+                          {data.hiddenSlots > 0 && (
+                            <span
+                              className="mini-slot slot-hidden"
+                              title="Hidden by release strategy"
+                            >
+                              +{data.hiddenSlots} hidden
+                            </span>
+                          )}
+                        </>
+                      );
+                    })()}
+              </div>
+
+              <div
+                className="slot-release-legend"
+              >
+                {strategy === "discount_incentive" ? (
+                  <>
+                    <span className="slot-release-legend-item">
+                      <span className="slot-release-dot released" />
+                      Regular price
+                    </span>
+                    <span className="slot-release-legend-item">
+                      <span className="slot-release-dot discounted" />
+                      Discounted
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="slot-release-legend-item">
+                      <span className="slot-release-dot released" />
+                      Visible to customers
+                    </span>
+                    <span className="slot-release-legend-item">
+                      <span className="slot-release-dot hidden" />
+                      Hidden by strategy
+                    </span>
+                  </>
+                )}
               </div>
             </>
           ) : null}

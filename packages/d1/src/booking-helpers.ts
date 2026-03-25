@@ -11,11 +11,12 @@
  * All conversions go through D1DateCodec so the format is always UTC-Z.
  */
 
-import type { BookingInput, AvailabilityOverrideInput } from "@thebookingkit/core";
+import type { BookingInput, AvailabilityOverrideInput, AvailabilityRuleInput, BookingStatus } from "@thebookingkit/core";
 import { normalizeToUTC } from "@thebookingkit/core";
 import { toZonedTime } from "date-fns-tz";
 import { format } from "date-fns";
 import { D1DateCodec } from "./codec.js";
+import { mapOverrideRow } from "./d1-shared.js";
 
 /**
  * The minimal shape of a D1 booking row needed for conflict checking.
@@ -73,7 +74,7 @@ export function d1BookingRowsToInputs(rows: D1BookingRow[]): BookingInput[] {
   return rows.map((row) => ({
     startsAt: D1DateCodec.decode(row.startsAt),
     endsAt: D1DateCodec.decode(row.endsAt),
-    status: row.status,
+    status: row.status as BookingStatus,
   }));
 }
 
@@ -87,11 +88,69 @@ export function d1BookingRowsToInputs(rows: D1BookingRow[]): BookingInput[] {
 export function d1OverrideRowsToInputs(
   rows: D1AvailabilityOverrideRow[],
 ): AvailabilityOverrideInput[] {
+  return rows.map(mapOverrideRow);
+}
+
+/**
+ * The minimal shape of a D1 availability rule row needed by the slot engine.
+ *
+ * Your Drizzle schema's inferred type will be a superset of this. Use this
+ * interface when you query `availability_rules` directly and want to pass the
+ * results to `d1AvailabilityRuleRowsToInputs`.
+ */
+export interface D1AvailabilityRuleRow {
+  /** RRULE string (e.g. "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR") */
+  rrule: string;
+  /** Wall-clock start in "HH:mm" format */
+  startTime: string;
+  /** Wall-clock end in "HH:mm" format */
+  endTime: string;
+  /** IANA timezone identifier (e.g. "America/New_York") */
+  timezone: string;
+  /**
+   * Optional: ISO date/datetime string (UTC-Z or local-ISO) after which
+   * this rule becomes active. Stored as TEXT in D1. Null when not set.
+   */
+  validFrom: string | null;
+  /**
+   * Optional: ISO date/datetime string (UTC-Z or local-ISO) after which
+   * this rule is no longer active. Stored as TEXT in D1. Null when not set.
+   */
+  validUntil: string | null;
+}
+
+/**
+ * Convert an array of raw D1 `availability_rules` rows into
+ * `AvailabilityRuleInput[]` for `getAvailableSlots()` and `isSlotAvailable()`.
+ *
+ * Date fields (`validFrom`, `validUntil`) are decoded through
+ * `D1DateCodec.decode()` which handles both canonical UTC-Z format and legacy
+ * local-ISO rows. Null values are preserved as `undefined`.
+ *
+ * @param rows - Raw rows from a D1/Drizzle query on `availability_rules`.
+ * @returns Array of AvailabilityRuleInput objects ready for the slot engine.
+ *
+ * @example
+ * ```ts
+ * const ruleRows = await db.select()
+ *   .from(availabilityRules)
+ *   .where(eq(availabilityRules.providerId, providerId))
+ *   .all();
+ *
+ * const rules = d1AvailabilityRuleRowsToInputs(ruleRows);
+ * const slots = getAvailableSlots(rules, overrides, bookings, dateRange, tz, opts);
+ * ```
+ */
+export function d1AvailabilityRuleRowsToInputs(
+  rows: D1AvailabilityRuleRow[],
+): AvailabilityRuleInput[] {
   return rows.map((row) => ({
-    date: D1DateCodec.decode(row.date),
-    startTime: row.startTime ?? null,
-    endTime: row.endTime ?? null,
-    isUnavailable: Boolean(row.isUnavailable),
+    rrule: row.rrule,
+    startTime: row.startTime,
+    endTime: row.endTime,
+    timezone: row.timezone,
+    validFrom: row.validFrom ? D1DateCodec.decode(row.validFrom) : undefined,
+    validUntil: row.validUntil ? D1DateCodec.decode(row.validUntil) : undefined,
   }));
 }
 

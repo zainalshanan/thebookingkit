@@ -18,7 +18,7 @@
  *
  * ## The Rule
  *
- * - Every date column in a D1/SQLite schema used with SlotKit MUST store
+ * - Every date column in a D1/SQLite schema used with TheBookingKit MUST store
  *   values in the form "YYYY-MM-DDTHH:mm:ss.sssZ".
  * - Query bounds passed to Drizzle (`gte`, `lte`) MUST use `D1DateCodec.encode()`.
  * - Rows retrieved from D1 MUST be parsed with `D1DateCodec.decode()` before
@@ -235,7 +235,7 @@ export const D1DateCodec = {
    * Build `gte`/`lte` bounds from a `DateRange` (two UTC Date objects) for use
    * in multi-day D1 range queries.
    *
-   * @param range - A SlotKit `DateRange` with UTC `start` and `end` Date objects.
+   * @param range - A BookingKit `DateRange` with UTC `start` and `end` Date objects.
    * @returns `{ gte: string; lte: string }` — both in UTC-Z canonical format.
    *
    * @example

@@ -1,6 +1,58 @@
 // Schema exports — all tables, enums, and inferred types
 export * from "./schema/index.js";
 
+// ---------------------------------------------------------------------------
+// Enum union types — derived from pgEnum definitions for use without Drizzle
+// ---------------------------------------------------------------------------
+import {
+  bookingStatusEnum,
+  paymentStatusEnum,
+  bookingEventTypeEnum,
+  paymentTypeEnum,
+  locationTypeEnum,
+  assignmentStrategyEnum,
+  teamMemberRoleEnum,
+  questionFieldTypeEnum,
+  recurringFrequencyEnum,
+  seatStatusEnum,
+  workflowTriggerEnum,
+  workflowActionTypeEnum,
+  emailDeliveryStatusEnum,
+  bookingSourceEnum,
+  walkInStatusEnum,
+} from "./schema/index.js";
+
+/** Union of all valid booking status values as stored in the database */
+export type BookingStatusDb = (typeof bookingStatusEnum.enumValues)[number];
+/** Union of all valid payment status values as stored in the database */
+export type PaymentStatusDb = (typeof paymentStatusEnum.enumValues)[number];
+/** Union of all valid booking event type values as stored in the database */
+export type BookingEventTypeDb = (typeof bookingEventTypeEnum.enumValues)[number];
+/** Union of all valid payment type values as stored in the database */
+export type PaymentTypeDb = (typeof paymentTypeEnum.enumValues)[number];
+/** Union of all valid location type values as stored in the database */
+export type LocationTypeDb = (typeof locationTypeEnum.enumValues)[number];
+/** Union of all valid assignment strategy values as stored in the database */
+export type AssignmentStrategyDb = (typeof assignmentStrategyEnum.enumValues)[number];
+/** Union of all valid team member role values as stored in the database */
+export type TeamMemberRoleDb = (typeof teamMemberRoleEnum.enumValues)[number];
+/** Union of all valid question field type values as stored in the database */
+export type QuestionFieldTypeDb = (typeof questionFieldTypeEnum.enumValues)[number];
+/** Union of all valid recurring frequency values as stored in the database */
+export type RecurringFrequencyDb = (typeof recurringFrequencyEnum.enumValues)[number];
+/** Union of all valid seat status values as stored in the database */
+export type SeatStatusDb = (typeof seatStatusEnum.enumValues)[number];
+/** Union of all valid workflow trigger values as stored in the database */
+export type WorkflowTriggerDb = (typeof workflowTriggerEnum.enumValues)[number];
+/** Union of all valid workflow action type values as stored in the database */
+export type WorkflowActionTypeDb = (typeof workflowActionTypeEnum.enumValues)[number];
+/** Union of all valid email delivery status values as stored in the database */
+export type EmailDeliveryStatusDb = (typeof emailDeliveryStatusEnum.enumValues)[number];
+/** Union of all valid booking source values as stored in the database */
+export type BookingSourceDb = (typeof bookingSourceEnum.enumValues)[number];
+/** Union of all valid walk-in status values as stored in the database */
+export type WalkInStatusDb = (typeof walkInStatusEnum.enumValues)[number];
+
 // Database client
 export { createDb, type Database } from "./client.js";
 

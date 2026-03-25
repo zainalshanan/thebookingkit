@@ -54,7 +54,7 @@ export interface EventTypeSettings {
   bookingLimits?: Record<string, unknown>;
 }
 
-/** Global SlotKit defaults */
+/** Global BookingKit defaults */
 export interface GlobalDefaults {
   timezone: string;
   currency: string;
@@ -305,9 +305,16 @@ export function parseOrgBookingPath(pathname: string): {
   const match = pathname.match(/^\/([^/]+)\/([^/]+)\/([^/]+)$/);
   if (!match) return null;
 
-  return {
-    orgSlug: match[1],
-    providerSlug: match[2],
-    eventTypeSlug: match[3],
-  };
+  const [, orgSlug, providerSlug, eventTypeSlug] = match;
+
+  // Reject segments that are not valid slugs (same rule as buildOrgBookingUrl)
+  if (
+    !SLUG_RE.test(orgSlug) ||
+    !SLUG_RE.test(providerSlug) ||
+    !SLUG_RE.test(eventTypeSlug)
+  ) {
+    return null;
+  }
+
+  return { orgSlug, providerSlug, eventTypeSlug };
 }

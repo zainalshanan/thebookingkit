@@ -8,6 +8,7 @@ import type {
   BookingInput,
 } from "@thebookingkit/core";
 import { BARBER_SHOP, SERVICES, type Service } from "./constants";
+import { getNextServiceDay, makeET } from "./demo-utils";
 
 // ---------------------------------------------------------------------------
 // Availability Rules — Mon-Sat, closed Sundays
@@ -46,25 +47,10 @@ export interface StoredBooking {
   createdAt: Date;
 }
 
-function getNextWeekday(offset: number): Date {
-  const d = new Date();
-  d.setDate(d.getDate() + offset);
-  while (d.getDay() === 0) {
-    d.setDate(d.getDate() + 1);
-  }
-  return d;
-}
-
-function makeET(day: Date, hour: number, minute: number): Date {
-  const d = new Date(day);
-  d.setUTCHours(hour + 5, minute, 0, 0); // EST offset (approximate)
-  return d;
-}
-
 // Seed with realistic bookings
-const tomorrow = getNextWeekday(1);
-const dayAfter = getNextWeekday(2);
-const day3 = getNextWeekday(3);
+const tomorrow = getNextServiceDay(1);
+const dayAfter = getNextServiceDay(2);
+const day3 = getNextServiceDay(3);
 
 const bookingStore: StoredBooking[] = [
   {
@@ -160,7 +146,7 @@ export function getBookingsAsInput(): BookingInput[] {
   return bookingStore.map((b) => ({
     startsAt: b.startsAt,
     endsAt: b.endsAt,
-    status: b.status,
+    status: b.status as BookingInput["status"],
   }));
 }
 

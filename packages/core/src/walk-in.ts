@@ -10,6 +10,7 @@
 
 import { addMinutes, areIntervalsOverlapping } from "date-fns";
 import { getAvailableSlots, isSlotAvailable } from "./slot-engine.js";
+import { getActiveBookings } from "./slot-pipeline.js";
 import type {
   AvailabilityRuleInput,
   AvailabilityOverrideInput,
@@ -249,14 +250,11 @@ export function estimateWaitTime(
 
   // Also check scheduled bookings that fall during the wait window
   const waitEndTime = addMinutes(now, totalWaitMinutes + serviceDuration);
-  const blockingBookings = existingBookings.filter(
-    (b) =>
-      b.status !== "cancelled" &&
-      b.status !== "rejected" &&
-      areIntervalsOverlapping(
-        { start: now, end: waitEndTime },
-        { start: b.startsAt, end: b.endsAt },
-      ),
+  const blockingBookings = getActiveBookings(existingBookings).filter((b) =>
+    areIntervalsOverlapping(
+      { start: now, end: waitEndTime },
+      { start: b.startsAt, end: b.endsAt },
+    ),
   );
 
   // Merge overlapping booking intervals before summing to avoid double-counting
@@ -312,9 +310,7 @@ export function findNextAvailableGap(
   const occupiedIntervals: Array<{ start: Date; end: Date }> = [];
 
   // Add existing bookings
-  const activeBookings = existingBookings.filter(
-    (b) => b.status !== "cancelled" && b.status !== "rejected",
-  );
+  const activeBookings = getActiveBookings(existingBookings);
   for (const booking of activeBookings) {
     occupiedIntervals.push({
       start: addMinutes(booking.startsAt, -bufferBefore),
@@ -491,9 +487,7 @@ export function recomputeWaitTimes(
     .filter((e) => e.status === "queued")
     .sort((a, b) => a.queuePosition - b.queuePosition);
 
-  const activeBookings = existingBookings.filter(
-    (b) => b.status !== "cancelled" && b.status !== "rejected",
-  );
+  const activeBookings = getActiveBookings(existingBookings);
 
   for (const entry of queued) {
     // Check if any scheduled booking falls in the way
@@ -700,9 +694,7 @@ function findCurrentBooking(
   bookings: BookingInput[],
   now: Date,
 ): BookingInput | null {
-  const active = bookings.filter(
-    (b) => b.status !== "cancelled" && b.status !== "rejected",
-  );
+  const active = getActiveBookings(bookings);
   for (const booking of active) {
     if (booking.startsAt <= now && booking.endsAt > now) {
       return booking;

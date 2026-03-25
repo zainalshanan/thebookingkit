@@ -23,7 +23,7 @@ export interface EmailTemplateVars {
  * Interpolate template variables into a template string.
  * Variables use the format `{variableName}`.
  */
-function escapeHtml(str: string): string {
+export function escapeHtml(str: string): string {
   return str
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")

@@ -100,14 +100,16 @@ describe("DB-H5: eventTypes.slug uniqueness", () => {
     expect(uniqueOnSlug).toBe(false);
   });
 
-  it("event_types_slug_idx is a plain (non-unique) index", () => {
+  it("redundant event_types_slug_idx plain index has been removed (L12 fix)", () => {
+    // After the L12 fix, the plain non-unique index on slug is removed.
+    // The .unique() column constraint already creates a unique index at the
+    // database level, making the explicit plain index redundant.
     const config = getTableConfig(eventTypes);
     const slugIdx = config.indexes.find(
       (idx) => idx.config.name === "event_types_slug_idx",
     );
 
-    expect(slugIdx).toBeDefined();
-    expect(slugIdx?.config.unique).toBe(false);
+    expect(slugIdx).toBeUndefined();
   });
 });
 

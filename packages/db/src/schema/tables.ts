@@ -18,7 +18,6 @@ import {
   locationTypeEnum,
   assignmentStrategyEnum,
   teamMemberRoleEnum,
-  questionFieldTypeEnum,
   recurringFrequencyEnum,
   seatStatusEnum,
   workflowTriggerEnum,
@@ -58,7 +57,7 @@ export const organizations = pgTable("organizations", {
 // ---------------------------------------------------------------------------
 export const teams = pgTable("teams", {
   id: idColumn(),
-  organizationId: uuid("organization_id").references(() => organizations.id),
+  organizationId: uuid("organization_id").references(() => organizations.id, { onDelete: "restrict" }),
   name: text("name").notNull(),
   slug: varchar("slug", { length: 255 }).notNull().unique(),
   assignmentStrategy: assignmentStrategyEnum("assignment_strategy")
@@ -81,7 +80,10 @@ export const teamMembers = pgTable(
     weight: integer("weight").notNull().default(100),
     ...timestamps(),
   },
-  (table) => [index("team_members_team_id_idx").on(table.teamId)],
+  (table) => [
+    index("team_members_team_id_idx").on(table.teamId),
+    index("team_members_user_id_idx").on(table.userId),
+  ],
 );
 
 // ---------------------------------------------------------------------------
@@ -91,7 +93,7 @@ export const providers = pgTable(
   "providers",
   {
     id: idColumn(),
-    organizationId: uuid("organization_id").references(() => organizations.id),
+    organizationId: uuid("organization_id").references(() => organizations.id, { onDelete: "restrict" }),
     userId: text("user_id").notNull().unique(),
     displayName: text("display_name").notNull(),
     email: text("email"),
@@ -119,7 +121,7 @@ export const eventTypes = pgTable(
     teamId: uuid("team_id").references(() => teams.id, {
       onDelete: "set null",
     }),
-    organizationId: uuid("organization_id").references(() => organizations.id),
+    organizationId: uuid("organization_id").references(() => organizations.id, { onDelete: "restrict" }),
     title: text("title").notNull(),
     slug: varchar("slug", { length: 255 }).notNull().unique(),
     description: text("description"),
@@ -151,7 +153,6 @@ export const eventTypes = pgTable(
   },
   (table) => [
     index("event_types_provider_id_idx").on(table.providerId),
-    index("event_types_slug_idx").on(table.slug),
   ],
 );
 
@@ -232,10 +233,10 @@ export const recurringBookings = pgTable("recurring_bookings", {
   id: idColumn(),
   eventTypeId: uuid("event_type_id")
     .notNull()
-    .references(() => eventTypes.id),
+    .references(() => eventTypes.id, { onDelete: "restrict" }),
   providerId: uuid("provider_id")
     .notNull()
-    .references(() => providers.id),
+    .references(() => providers.id, { onDelete: "restrict" }),
   customerEmail: text("customer_email").notNull(),
   frequency: recurringFrequencyEnum("frequency").notNull(),
   count: integer("count").notNull(),
@@ -252,10 +253,10 @@ export const bookings = pgTable(
     id: idColumn(),
     eventTypeId: uuid("event_type_id")
       .notNull()
-      .references(() => eventTypes.id),
+      .references(() => eventTypes.id, { onDelete: "restrict" }),
     providerId: uuid("provider_id")
       .notNull()
-      .references(() => providers.id),
+      .references(() => providers.id, { onDelete: "restrict" }),
     teamId: uuid("team_id").references(() => teams.id),
     customerEmail: text("customer_email").notNull(),
     customerName: text("customer_name").notNull(),
@@ -267,6 +268,7 @@ export const bookings = pgTable(
     paymentStatus: paymentStatusEnum("payment_status"),
     recurringBookingId: uuid("recurring_booking_id").references(
       () => recurringBookings.id,
+      { onDelete: "restrict" },
     ),
     resourceId: uuid("resource_id").references(() => resources.id, {
       onDelete: "set null",
@@ -281,6 +283,7 @@ export const bookings = pgTable(
     index("bookings_starts_at_idx").on(table.startsAt),
     index("bookings_status_idx").on(table.status),
     index("bookings_resource_id_idx").on(table.resourceId),
+    index("bookings_provider_starts_at_idx").on(table.providerId, table.startsAt),
   ],
 );
 
@@ -340,9 +343,7 @@ export const bookingSeats = pgTable(
     attendeeEmail: text("attendee_email").notNull(),
     attendeeName: text("attendee_name").notNull(),
     status: seatStatusEnum("status").notNull().default("confirmed"),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    ...timestamps(),
   },
   (table) => [index("booking_seats_booking_id_idx").on(table.bookingId)],
 );
@@ -356,7 +357,7 @@ export const payments = pgTable(
     id: idColumn(),
     bookingId: uuid("booking_id")
       .notNull()
-      .references(() => bookings.id),
+      .references(() => bookings.id, { onDelete: "restrict" }),
     stripePaymentIntentId: text("stripe_payment_intent_id"),
     amountCents: integer("amount_cents").notNull(),
     currency: varchar("currency", { length: 3 }).notNull().default("USD"),
@@ -374,7 +375,7 @@ export const payments = pgTable(
 // ---------------------------------------------------------------------------
 export const routingForms = pgTable("routing_forms", {
   id: idColumn(),
-  organizationId: uuid("organization_id").references(() => organizations.id),
+  organizationId: uuid("organization_id").references(() => organizations.id, { onDelete: "restrict" }),
   teamId: uuid("team_id").references(() => teams.id),
   title: text("title").notNull(),
   fields: jsonb("fields").notNull().default([]),
@@ -408,7 +409,7 @@ export const routingSubmissions = pgTable(
 // ---------------------------------------------------------------------------
 export const workflows = pgTable("workflows", {
   id: idColumn(),
-  organizationId: uuid("organization_id").references(() => organizations.id),
+  organizationId: uuid("organization_id").references(() => organizations.id, { onDelete: "restrict" }),
   name: text("name").notNull(),
   trigger: workflowTriggerEnum("trigger").notNull(),
   conditions: jsonb("conditions").default({}),
@@ -442,7 +443,7 @@ export const workflowLogs = pgTable(
 // ---------------------------------------------------------------------------
 export const webhooks = pgTable("webhooks", {
   id: idColumn(),
-  organizationId: uuid("organization_id").references(() => organizations.id),
+  organizationId: uuid("organization_id").references(() => organizations.id, { onDelete: "restrict" }),
   teamId: uuid("team_id").references(() => teams.id),
   eventTypeId: uuid("event_type_id").references(() => eventTypes.id),
   subscriberUrl: text("subscriber_url").notNull(),
@@ -501,9 +502,7 @@ export const customerPreferences = pgTable("customer_preferences", {
   emailOptOut: boolean("email_opt_out").notNull().default(false),
   bouncedAt: timestamp("bounced_at", { withTimezone: true }),
   anonymizedAt: timestamp("anonymized_at", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  ...timestamps(),
 });
 
 // ---------------------------------------------------------------------------
@@ -513,7 +512,7 @@ export const resources = pgTable(
   "resources",
   {
     id: idColumn(),
-    organizationId: uuid("organization_id").references(() => organizations.id),
+    organizationId: uuid("organization_id").references(() => organizations.id, { onDelete: "restrict" }),
     name: text("name").notNull(),
     slug: varchar("slug", { length: 255 }).notNull().unique(),
     type: varchar("type", { length: 100 }).notNull(),
@@ -526,7 +525,6 @@ export const resources = pgTable(
   (table) => [
     index("resources_organization_id_idx").on(table.organizationId),
     index("resources_type_idx").on(table.type),
-    index("resources_slug_idx").on(table.slug),
   ],
 );
 
@@ -541,9 +539,9 @@ export const resourceAvailabilityRules = pgTable(
       .notNull()
       .references(() => resources.id, { onDelete: "cascade" }),
     rrule: text("rrule").notNull(),
-    startTime: varchar("start_time", { length: 5 }), // "09:00"
-    endTime: varchar("end_time", { length: 5 }), // "17:00"
-    timezone: varchar("timezone", { length: 100 }),
+    startTime: varchar("start_time", { length: 5 }).notNull(), // "09:00"
+    endTime: varchar("end_time", { length: 5 }).notNull(), // "17:00"
+    timezone: varchar("timezone", { length: 100 }).notNull(),
     validFrom: timestamp("valid_from", { withTimezone: true }),
     validUntil: timestamp("valid_until", { withTimezone: true }),
     ...timestamps(),

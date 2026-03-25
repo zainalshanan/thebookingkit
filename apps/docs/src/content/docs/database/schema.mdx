@@ -15,9 +15,17 @@ The Booking Kit's database schema consists of 26 tables managed by Drizzle ORM w
 | `event_types` | Bookable services. Duration, price, questions, limits, confirmation mode. |
 | `availability_rules` | Recurring schedules using RRULE. Linked to providers. |
 | `availability_overrides` | Date-specific schedule modifications (block/extend hours). |
-| `bookings` | Customer appointments. `starts_at`/`ends_at` in UTC with `EXCLUDE USING gist`. |
+| `bookings` | Customer appointments. `starts_at`/`ends_at` in UTC with `EXCLUDE USING gist`. Includes optional `resource_id` FK. |
 | `booking_events` | Append-only audit trail for every booking status change. |
 | `out_of_office` | Extended unavailability periods (vacations, leave). |
+
+### Resource tables
+
+| Table | Description |
+|---|---|
+| `resources` | Bookable physical/virtual units (restaurant tables, hotel rooms, coworking desks, tennis courts). `capacity` in units, `type` for filtering. |
+| `resource_availability_rules` | Recurring schedules for resources using RRULE (mirrors `availability_rules`). |
+| `resource_availability_overrides` | Date-specific resource schedule modifications (mirrors `availability_overrides`). |
 
 ### Team tables
 
@@ -89,10 +97,10 @@ Most tables include an optional `organization_id` column for multi-tenancy scopi
 EXCLUDE USING gist (
   provider_id WITH =,
   tstzrange(starts_at, ends_at) WITH &&
-) WHERE (status NOT IN ('cancelled', 'rejected'))
+) WHERE (status NOT IN ('cancelled', 'rejected', 'rescheduled'))
 ```
 
-This constraint prevents overlapping bookings for the same provider, except for cancelled and rejected bookings. Requires the `btree_gist` extension.
+This constraint prevents overlapping bookings for the same provider, except for cancelled, rejected, and rescheduled bookings. Requires the `btree_gist` extension.
 
 ### Enums
 

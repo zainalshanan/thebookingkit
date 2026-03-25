@@ -11,8 +11,9 @@ export {
 export {
   createManifestEntry,
   hasLocalModifications,
-  DEFAULT_MANIFEST,
+  getDefaultManifest,
   type ManifestEntry,
+  type BookingKitManifest,
   type SlotKitManifest,
 } from "./manifest.js";
 
@@ -20,6 +21,7 @@ export {
 export {
   generateThebookingkitConfig,
   generateEnvTemplate,
+  type BookingKitConfig,
   type SlotKitConfig,
 } from "./config.js";
 

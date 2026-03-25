@@ -7,18 +7,13 @@
  * is automatically rejected via the AUTO_REJECT_PENDING job.
  */
 
+import type { BookingStatus } from "./types.js";
+
+// Re-export so existing imports from confirmation-mode.ts continue to work.
+export type { BookingStatus };
+
 /** Default hours before a pending booking is auto-rejected */
 export const CONFIRMATION_TIMEOUT_HOURS = 24;
-
-/** Booking status values relevant to confirmation mode */
-export type BookingStatus =
-  | "pending"
-  | "confirmed"
-  | "cancelled"
-  | "rejected"
-  | "completed"
-  | "no_show"
-  | "rescheduled";
 
 /**
  * Determine the initial status for a new booking.

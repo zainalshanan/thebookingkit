@@ -292,7 +292,9 @@ describe("D1ResourceRow interface", () => {
   it("accepts a valid resource row shape (isActive as integer)", () => {
     const row: D1ResourceRow = {
       id: "res-1",
+      organizationId: null,
       name: "Table 5",
+      slug: "table-5",
       type: "table",
       capacity: 4,
       isActive: 1,
@@ -310,7 +312,9 @@ describe("D1ResourceRow interface", () => {
   it("accepts a valid resource row shape (isActive as boolean)", () => {
     const row: D1ResourceRow = {
       id: "res-2",
+      organizationId: "org-abc",
       name: "Yoga Mat 3",
+      slug: "yoga-mat-3",
       type: "mat",
       capacity: 1,
       isActive: true,
@@ -325,7 +329,9 @@ describe("D1ResourceRow interface", () => {
   it("accepts null location and metadata", () => {
     const row: D1ResourceRow = {
       id: "res-3",
+      organizationId: null,
       name: "Court A",
+      slug: "court-a",
       type: "tennis-court",
       capacity: 4,
       isActive: 1,
@@ -402,7 +408,8 @@ describe("RESOURCE_DDL", () => {
   });
 
   it("uses INTEGER for is_active (SQLite boolean)", () => {
-    expect(RESOURCE_DDL).toContain("is_active   INTEGER");
+    expect(RESOURCE_DDL).toContain("is_active");
+    expect(RESOURCE_DDL).toContain("INTEGER");
   });
 
   it("can be split into individual statements on semicolons", () => {

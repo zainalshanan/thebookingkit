@@ -4,6 +4,22 @@ export {
   SerializationRetryExhaustedError,
   UnauthorizedError,
   ForbiddenError,
+  ResourceUnavailableError,
+} from "@thebookingkit/core";
+
+// Resource scheduling (E-22)
+export {
+  getResourceAvailableSlots,
+  assignResource,
+  isResourceSlotAvailable,
+  getResourcePoolSummary,
+} from "@thebookingkit/core";
+
+// Slot release (E-23)
+export {
+  applySlotRelease,
+  type SlotReleaseResult,
+  type SlotReleaseConfig,
 } from "@thebookingkit/core";
 
 // Serialization retry utility

@@ -20,12 +20,65 @@
 import { fromZonedTime, toZonedTime, format } from "date-fns-tz";
 import { addMinutes } from "date-fns";
 import { parseRecurrence } from "./rrule-parser.js";
+import { isValidTimezone, InvalidTimezoneError } from "./timezone.js";
 import type {
   Slot,
   DateRange,
   AvailabilityRuleInput,
   AvailabilityOverrideInput,
+  BookingInput,
 } from "./types.js";
+
+// ---------------------------------------------------------------------------
+// Active-booking helpers (C1 + H1)
+// ---------------------------------------------------------------------------
+
+/**
+ * Statuses that indicate an inactive/terminal booking.
+ *
+ * `no_show` is included because a no-show appointment did not happen, so the
+ * slot it occupied should be treated as free for scheduling purposes.
+ */
+export const INACTIVE_STATUSES = [
+  "cancelled",
+  "rejected",
+  "no_show",
+] as const;
+
+/**
+ * Filter a booking array down to only active (non-terminal) entries.
+ *
+ * A booking is considered inactive when its status is `"cancelled"`,
+ * `"rejected"`, or `"no_show"`. All other statuses (`"pending"`,
+ * `"confirmed"`, `"completed"`, `"rescheduled"`) are treated as active.
+ *
+ * @param bookings - The full list of bookings to filter
+ * @returns Only the bookings that are still active
+ */
+export function getActiveBookings(bookings: BookingInput[]): BookingInput[] {
+  return bookings.filter(
+    (b) => !INACTIVE_STATUSES.includes(b.status as (typeof INACTIVE_STATUSES)[number]),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Provider timezone resolver (L2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve the canonical provider timezone from a set of availability rules.
+ *
+ * Reads the first rule's `timezone` field, which the database schema enforces
+ * to be consistent across all rules for a given provider. Falls back to
+ * `"UTC"` when the rule set is empty (e.g. a provider with no availability
+ * configured yet).
+ *
+ * @param rules - Provider's availability rules from the database
+ * @returns IANA timezone string (never undefined)
+ */
+export function resolveProviderTimezone(rules: AvailabilityRuleInput[]): string {
+  return rules.length > 0 ? rules[0].timezone : "UTC";
+}
 
 // ---------------------------------------------------------------------------
 // Date-formatting helpers
@@ -101,6 +154,11 @@ export function expandRules(
   const rawWindows: Array<{ start: Date; end: Date }> = [];
 
   for (const rule of rules) {
+    // M3: Validate timezone before attempting any date conversion
+    if (!isValidTimezone(rule.timezone)) {
+      throw new InvalidTimezoneError(rule.timezone);
+    }
+
     // Check validity period
     if (rule.validFrom && dateRange.end < rule.validFrom) continue;
     if (rule.validUntil && dateRange.start > rule.validUntil) continue;
@@ -207,6 +265,10 @@ export function generateCandidateSlots(
   duration: number,
   slotInterval: number,
 ): Array<{ start: Date; end: Date }> {
+  // H4: Guard against infinite loop caused by non-positive step values
+  if (duration <= 0) throw new Error("duration must be positive");
+  if (slotInterval <= 0) throw new Error("slotInterval must be positive");
+
   const candidateSlots: Array<{ start: Date; end: Date }> = [];
 
   for (const window of windows) {

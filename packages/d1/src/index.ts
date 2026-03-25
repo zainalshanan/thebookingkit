@@ -1,5 +1,5 @@
 /**
- * @thebookingkit/d1 — Cloudflare D1 / SQLite adapter for SlotKit
+ * @thebookingkit/d1 — Cloudflare D1 / SQLite adapter for TheBookingKit
  *
  * This package bridges the gap between D1's text-based date storage and
  * `@thebookingkit/core`'s UTC Date object expectations.
@@ -68,6 +68,7 @@ export {
 export {
   d1BookingRowsToInputs,
   d1OverrideRowsToInputs,
+  d1AvailabilityRuleRowsToInputs,
   encodeD1Date,
   d1DayBounds,
   d1DayQuery,
@@ -75,6 +76,7 @@ export {
   localToday,
   type D1BookingRow,
   type D1AvailabilityOverrideRow,
+  type D1AvailabilityRuleRow,
 } from "./booking-helpers.js";
 
 // Schedule adapter (WeeklySchedule JSON → AvailabilityRuleInput[])
@@ -102,6 +104,21 @@ export {
   buildMigrationSql,
   BOOKING_LOCKS_DDL,
   RESOURCE_DDL,
+  ORGANIZATIONS_DDL,
+  TEAMS_DDL,
+  PROVIDERS_DDL,
+  EVENT_TYPES_DDL,
+  AVAILABILITY_DDL,
+  BOOKINGS_DDL,
+  RECURRING_DDL,
+  PAYMENTS_DDL,
+  ROUTING_DDL,
+  WORKFLOWS_DDL,
+  WEBHOOKS_DDL,
+  EMAIL_DDL,
+  CUSTOMER_DDL,
+  WALK_IN_DDL,
+  ALL_DDL,
   type MigrationColumn,
   type TableMigrationPlan,
 } from "./migration.js";

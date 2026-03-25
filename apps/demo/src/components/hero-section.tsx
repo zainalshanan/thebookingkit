@@ -24,10 +24,26 @@ export function HeroSection() {
           </h1>
 
           <p className="hero-subtitle">
-            Production-grade scheduling infrastructure for developers. Drop-in slot engine,
-            Drizzle ORM schema, and copy-paste React components. Ship a full booking system
-            in hours, not weeks.
+            Open-source scheduling toolkit for any booking use case — barber shops,
+            restaurants, hotels, yoga studios, medical clinics, coworking spaces, and more.
           </p>
+
+          <div className="hero-use-cases">
+            {[
+              "Salons",
+              "Restaurants",
+              "Hotels",
+              "Fitness",
+              "Medical",
+              "Coworking",
+              "Courts",
+              "Studios",
+            ].map((label) => (
+              <span key={label} className="hero-use-case-pill">
+                {label}
+              </span>
+            ))}
+          </div>
 
           <div className="hero-npm">
             <span className="hero-npm-label">npm</span>

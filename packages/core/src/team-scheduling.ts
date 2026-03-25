@@ -62,8 +62,8 @@ export interface MemberBookingCount {
 export interface AssignmentResult {
   /** The assigned host's userId */
   hostId: string;
-  /** Reason for selection */
-  reason: string;
+  /** The rule that selected this host */
+  reason: "fixed_host" | "highest_priority" | "weight_balanced";
 }
 
 /** Lockable field definition for managed event types */

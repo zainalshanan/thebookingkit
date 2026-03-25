@@ -1,11 +1,11 @@
-import { UnauthorizedError, ForbiddenError } from "@thebookingkit/core";
+import { UnauthorizedError, ForbiddenError, BookingConflictError, ResourceUnavailableError } from "@thebookingkit/core";
 
 /** Represents an authenticated user in the system */
 export interface AuthUser {
   id: string;
   email: string;
   name?: string;
-  role?: "admin" | "provider" | "customer";
+  role?: "admin" | "provider" | "member" | "customer";
 }
 
 /** Session returned by the auth adapter */
@@ -36,13 +36,14 @@ export interface AuthenticatedRequest extends Request {
 /** Options for the withAuth middleware */
 export interface WithAuthOptions {
   /** Require a specific role */
-  requiredRole?: "admin" | "provider" | "member";
+  requiredRole?: "admin" | "provider" | "member" | "customer";
 }
 
 const ROLE_HIERARCHY: Record<string, number> = {
   admin: 3,
   provider: 2,
   member: 1,
+  customer: 0,
 };
 
 /**
@@ -115,6 +116,19 @@ export function withAuth(
           { status: 403 },
         );
       }
+      if (error instanceof BookingConflictError) {
+        return Response.json(
+          { error: error.message, code: "BOOKING_CONFLICT" },
+          { status: 409 },
+        );
+      }
+      if (error instanceof ResourceUnavailableError) {
+        return Response.json(
+          { error: error.message, code: error.code, reason: error.reason },
+          { status: 409 },
+        );
+      }
+      console.error("[withAuth] Unhandled error:", error);
       return Response.json(
         { error: "Internal server error", code: "INTERNAL_ERROR" },
         { status: 500 },

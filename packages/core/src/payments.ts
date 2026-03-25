@@ -21,8 +21,15 @@ export interface CancellationPolicyTier {
 /** Cancellation policy for an event type */
 export type CancellationPolicy = CancellationPolicyTier[];
 
-/** Payment type discriminator */
-export type PaymentType = "prepay" | "no_show_hold" | "cancellation_fee";
+/**
+ * Payment type discriminator.
+ *
+ * Values match `PaymentRecord.paymentType` exactly.
+ * - `"prepayment"` — full or partial upfront charge at booking time.
+ * - `"no_show_hold"` — authorization hold released or captured on no-show.
+ * - `"cancellation_fee"` — fee charged on late cancellation per policy tier.
+ */
+export type PaymentType = "prepayment" | "no_show_hold" | "cancellation_fee";
 
 /** Hold status for no-show fee holds */
 export type HoldStatus = "authorized" | "captured" | "released";
@@ -35,7 +42,8 @@ export interface PaymentRecord {
   amountCents: number;
   currency: string;
   status: "pending" | "succeeded" | "failed" | "refunded" | "partially_refunded";
-  paymentType: "prepayment" | "no_show_hold" | "cancellation_fee";
+  /** Discriminates between prepayment, no-show hold, and cancellation charges */
+  paymentType: PaymentType;
   refundAmountCents: number;
   createdAt: Date;
 }

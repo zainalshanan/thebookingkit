@@ -73,7 +73,7 @@ function makeSlots(
 function booking(
   start: Date,
   end: Date,
-  status = "confirmed",
+  status: BookingInput["status"] = "confirmed",
 ): BookingInput {
   return { startsAt: start, endsAt: end, status };
 }

@@ -8,6 +8,7 @@ import {
   type RecurringSeriesInput,
   type SeriesBooking,
 } from "../recurring-bookings.js";
+import type { BookingInput } from "../types.js";
 
 // ---------------------------------------------------------------------------
 // generateOccurrences
@@ -126,7 +127,7 @@ describe("checkRecurringAvailability", () => {
   });
 
   it("detects conflict with overlapping booking", () => {
-    const existing = [
+    const existing: BookingInput[] = [
       {
         startsAt: new Date("2026-03-22T13:45:00Z"),
         endsAt: new Date("2026-03-22T14:15:00Z"),
@@ -140,7 +141,7 @@ describe("checkRecurringAvailability", () => {
   });
 
   it("ignores cancelled bookings", () => {
-    const existing = [
+    const existing: BookingInput[] = [
       {
         startsAt: new Date("2026-03-22T14:00:00Z"),
         endsAt: new Date("2026-03-22T14:30:00Z"),
@@ -153,7 +154,7 @@ describe("checkRecurringAvailability", () => {
   });
 
   it("detects multiple conflicts", () => {
-    const existing = [
+    const existing: BookingInput[] = [
       {
         startsAt: new Date("2026-03-15T14:00:00Z"),
         endsAt: new Date("2026-03-15T14:30:00Z"),

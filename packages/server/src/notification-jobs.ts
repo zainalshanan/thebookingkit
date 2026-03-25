@@ -10,6 +10,7 @@
 
 import type { EmailAdapter, CalendarAdapter, JobAdapter } from "./adapters/index.js";
 import { generateICSAttachment } from "./adapters/index.js";
+import { formatDate, formatTime } from "./date-formatters.js";
 import {
   interpolateTemplate,
   CONFIRMATION_EMAIL_HTML,
@@ -115,20 +116,10 @@ export function formatDateTimeForEmail(
   timezone: string,
 ): { date: string; time: string } {
   const dt = new Date(isoString);
-  const date = dt.toLocaleDateString("en-US", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    timeZone: timezone,
-  });
-  const time = dt.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-    timeZone: timezone,
-  });
-  return { date, time };
+  return {
+    date: formatDate(dt, timezone),
+    time: formatTime(dt, timezone),
+  };
 }
 
 /**
@@ -425,4 +416,6 @@ function generateBookingICS(
   }
 }
 
+// Re-export for direct consumers of this module (the canonical export is via index.ts adapters barrel)
 export { JOB_NAMES };
+

@@ -113,11 +113,28 @@ export interface AvailabilityOverrideInput {
   isUnavailable: boolean;
 }
 
+/**
+ * All possible booking status values.
+ *
+ * Defined here (rather than in `confirmation-mode.ts`) so that `BookingInput`
+ * and other shared types can reference it without creating circular imports.
+ */
+export type BookingStatus =
+  | "pending"
+  | "confirmed"
+  | "cancelled"
+  | "rejected"
+  | "completed"
+  | "no_show"
+  | "rescheduled";
+
 /** Existing booking for conflict checking */
 export interface BookingInput {
+  /** Optional booking ID — used to exclude a booking from its own conflict check */
+  id?: string;
   startsAt: Date;
   endsAt: Date;
-  status: string;
+  status: BookingStatus;
   /** Resource ID for resource-based bookings. Omit for provider-only mode. */
   resourceId?: string;
   /** Number of guests/seats this booking occupies. Defaults to 1. */
@@ -229,8 +246,8 @@ export interface ResourceAssignmentResult {
   resourceId: string;
   /** Display name of the assigned resource */
   resourceName: string;
-  /** Human-readable reason for the selection (e.g. "best_fit", "round_robin") */
-  reason: string;
+  /** The allocation strategy that selected this resource */
+  reason: "best_fit" | "first_available" | "round_robin" | "largest_first";
 }
 
 /**

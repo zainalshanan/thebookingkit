@@ -5,7 +5,8 @@
  * retry logic, and custom payload templates.
  */
 
-import { createHmac } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
+import { validateExternalUrl } from "./url-validation.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -13,15 +14,27 @@ import { createHmac } from "node:crypto";
 
 /** Supported webhook trigger events */
 export type WebhookTrigger =
-  | "BOOKING_CREATED"
-  | "BOOKING_CONFIRMED"
   | "BOOKING_CANCELLED"
-  | "BOOKING_RESCHEDULED"
-  | "BOOKING_REJECTED"
-  | "BOOKING_PAID"
+  | "BOOKING_COMPLETED"
+  | "BOOKING_CONFIRMED"
+  | "BOOKING_CREATED"
   | "BOOKING_NO_SHOW"
+  | "BOOKING_PAID"
+  | "BOOKING_REJECTED"
+  | "BOOKING_RESCHEDULED"
   | "FORM_SUBMITTED"
-  | "OOO_CREATED";
+  | "OCCURRENCE_CANCELLED"
+  | "OCCURRENCE_RESCHEDULED"
+  | "OOO_CREATED"
+  | "PAYMENT_REFUNDED"
+  | "RECURRING_SERIES_CREATED"
+  | "RESOURCE_BOOKED"
+  | "RESOURCE_RELEASED"
+  | "SLOT_RELEASED"
+  | "WALK_IN_ADDED"
+  | "WALK_IN_CANCELLED"
+  | "WALK_IN_COMPLETED"
+  | "WALK_IN_STARTED";
 
 /** Attendee in a webhook payload */
 export interface WebhookAttendee {
@@ -101,22 +114,34 @@ export const DEFAULT_RETRY_CONFIG: WebhookRetryConfig = {
 
 /** All valid webhook triggers */
 export const WEBHOOK_TRIGGERS: WebhookTrigger[] = [
-  "BOOKING_CREATED",
-  "BOOKING_CONFIRMED",
   "BOOKING_CANCELLED",
-  "BOOKING_RESCHEDULED",
-  "BOOKING_REJECTED",
-  "BOOKING_PAID",
+  "BOOKING_COMPLETED",
+  "BOOKING_CONFIRMED",
+  "BOOKING_CREATED",
   "BOOKING_NO_SHOW",
+  "BOOKING_PAID",
+  "BOOKING_REJECTED",
+  "BOOKING_RESCHEDULED",
   "FORM_SUBMITTED",
+  "OCCURRENCE_CANCELLED",
+  "OCCURRENCE_RESCHEDULED",
   "OOO_CREATED",
+  "PAYMENT_REFUNDED",
+  "RECURRING_SERIES_CREATED",
+  "RESOURCE_BOOKED",
+  "RESOURCE_RELEASED",
+  "SLOT_RELEASED",
+  "WALK_IN_ADDED",
+  "WALK_IN_CANCELLED",
+  "WALK_IN_COMPLETED",
+  "WALK_IN_STARTED",
 ];
 
 /** Signature header name */
-export const SIGNATURE_HEADER = "X-SlotKit-Signature";
+export const SIGNATURE_HEADER = "X-BookingKit-Signature";
 
 /** Timestamp header name */
-export const TIMESTAMP_HEADER = "X-SlotKit-Timestamp";
+export const TIMESTAMP_HEADER = "X-BookingKit-Timestamp";
 
 /** Default tolerance window in seconds (5 minutes) */
 export const DEFAULT_TOLERANCE_SECONDS = 300;
@@ -160,8 +185,8 @@ export function signWebhookPayload(
  * Verify a webhook signature with replay protection.
  *
  * @param rawBody - The raw JSON string of the received payload
- * @param signature - The value of the X-SlotKit-Signature header
- * @param timestampSeconds - The value of the X-SlotKit-Timestamp header (Unix seconds)
+ * @param signature - The value of the X-BookingKit-Signature header
+ * @param timestampSeconds - The value of the X-BookingKit-Timestamp header (Unix seconds)
  * @param secret - The webhook secret key
  * @param options - Optional configuration
  * @param options.toleranceSeconds - Maximum age of the timestamp in seconds (default: 300)
@@ -190,24 +215,11 @@ export function verifyWebhookSignature(
     timestampSeconds,
   );
 
-  // Constant-time comparison
-  if (expectedSignature.length !== signature.length) {
-    return { valid: false, reason: "signature_mismatch" };
-  }
-
+  // Constant-time comparison — both buffers must be the same length
   const a = Buffer.from(expectedSignature, "hex");
   const b = Buffer.from(signature, "hex");
 
-  if (a.length !== b.length) {
-    return { valid: false, reason: "signature_mismatch" };
-  }
-
-  let mismatch = 0;
-  for (let i = 0; i < a.length; i++) {
-    mismatch |= a[i] ^ b[i];
-  }
-
-  if (mismatch !== 0) {
+  if (a.length !== b.length || !timingSafeEqual(a, b)) {
     return { valid: false, reason: "signature_mismatch" };
   }
 
@@ -267,14 +279,22 @@ export function resolvePayloadTemplate(
     "{{organizerEmail}}": envelope.payload.organizer.email,
   };
 
-  let result = template;
-  for (const [key, value] of Object.entries(vars)) {
-    const safeValue = value.replace(/\{/g, "\x00LBRACE\x00").replace(/\}/g, "\x00RBRACE\x00");
-    result = result.replaceAll(key, safeValue);
-  }
-  result = result.replace(/\x00LBRACE\x00/g, "{").replace(/\x00RBRACE\x00/g, "}");
+  // Use a single-pass regex replacement to prevent second-pass template injection:
+  // a substituted value that itself contains "{{...}}" cannot be resolved again
+  // because we only iterate the original template positions once.
+  return template.replace(/\{\{(\w+)\}\}/g, (_match, varName) => {
+    const placeholder = `{{${varName}}}`;
+    const value = vars[placeholder];
+    if (value === undefined) return _match; // leave unknown placeholders intact
 
-  return result;
+    // JSON-escape the substituted value so it is safe inside a JSON string context
+    return value
+      .replace(/\\/g, "\\\\")
+      .replace(/"/g, '\\"')
+      .replace(/\n/g, "\\n")
+      .replace(/\r/g, "\\r")
+      .replace(/\t/g, "\\t");
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -356,27 +376,11 @@ export function validateWebhookSubscription(
     throw new WebhookValidationError("Subscriber URL is required");
   }
 
-  let parsedUrl: URL;
   try {
-    parsedUrl = new URL(subscription.subscriberUrl);
-  } catch {
+    validateExternalUrl(subscription.subscriberUrl, "subscriber URL");
+  } catch (err) {
     throw new WebhookValidationError(
-      `Invalid subscriber URL: "${subscription.subscriberUrl}"`,
-    );
-  }
-
-  if (parsedUrl.protocol !== "https:") {
-    throw new WebhookValidationError(
-      "Subscriber URL must use HTTPS",
-    );
-  }
-
-  const hostname = parsedUrl.hostname.toLowerCase();
-  const ssrfPattern =
-    /^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|169\.254\.\d+\.\d+|\[::1\]|::1)$/;
-  if (ssrfPattern.test(hostname)) {
-    throw new WebhookValidationError(
-      `Subscriber URL hostname is not allowed: "${hostname}"`,
+      err instanceof Error ? err.message : String(err),
     );
   }
 

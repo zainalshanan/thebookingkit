@@ -102,9 +102,10 @@ CREATE OR REPLACE FUNCTION create_booking(
   p_ends_at        TIMESTAMPTZ,
   p_customer_email TEXT,
   p_customer_name  TEXT,
-  p_customer_phone TEXT    DEFAULT NULL,
-  p_metadata       JSONB   DEFAULT '{}'::jsonb,
-  p_resource_id    UUID    DEFAULT NULL
+  p_customer_phone TEXT          DEFAULT NULL,
+  p_metadata       JSONB         DEFAULT '{}'::jsonb,
+  p_resource_id    UUID          DEFAULT NULL,
+  p_source         booking_source DEFAULT 'online'
 )
 RETURNS bookings
 LANGUAGE plpgsql
@@ -147,7 +148,8 @@ BEGIN
     customer_phone,
     status,
     metadata,
-    resource_id
+    resource_id,
+    source
   ) VALUES (
     p_provider_id,
     p_event_type_id,
@@ -158,7 +160,8 @@ BEGIN
     p_customer_phone,
     v_initial_status,
     p_metadata,
-    p_resource_id
+    p_resource_id,
+    p_source
   )
   RETURNING * INTO v_booking;
 

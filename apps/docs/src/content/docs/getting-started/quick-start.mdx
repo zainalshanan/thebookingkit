@@ -14,6 +14,7 @@ import type { AvailabilityRuleInput } from "@thebookingkit/core";
 
 const rules: AvailabilityRuleInput[] = [
   {
+    // "Every Mon-Fri" in iCalendar recurrence format
     rrule: "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
     startTime: "09:00",
     endTime: "17:00",
@@ -30,18 +31,18 @@ This creates a Monday-Friday, 9am-5pm schedule in Eastern time.
 import { getAvailableSlots } from "@thebookingkit/core";
 
 const slots = getAvailableSlots(
-  rules,
-  [],              // no overrides
-  [],              // no existing bookings
-  {
-    start: new Date("2026-03-09"),
-    end: new Date("2026-03-14"),
+  rules,                // availability rules
+  [],                   // no overrides
+  [],                   // no existing bookings
+  {                     // date range (UTC) — Dates must be UTC — use new Date("...Z") or Date.UTC()
+    start: new Date("2026-03-09T00:00:00Z"),
+    end: new Date("2026-03-14T23:59:59Z"),
   },
-  "America/New_York",
+  "America/New_York",   // customer's timezone for display
   {
-    duration: 30,      // 30-minute slots
+    duration: 30,       // 30-minute slots
     bufferBefore: 0,
-    bufferAfter: 15,   // 15-minute gap between appointments
+    bufferAfter: 15,    // 15-minute gap between appointments
   }
 );
 
@@ -49,8 +50,8 @@ console.log(slots[0]);
 // {
 //   startTime: "2026-03-09T14:00:00.000Z",  // UTC
 //   endTime: "2026-03-09T14:30:00.000Z",
-//   localStart: "9:00 AM",                   // Eastern
-//   localEnd: "9:30 AM",
+//   localStart: "2026-03-09T09:00:00",      // Eastern
+//   localEnd: "2026-03-09T09:30:00",
 // }
 ```
 
@@ -60,11 +61,13 @@ console.log(slots[0]);
 import { isSlotAvailable } from "@thebookingkit/core";
 
 const result = isSlotAvailable(
-  rules,
-  [],
-  existingBookings,
-  new Date("2026-03-10T15:00:00.000Z"),  // slot start (UTC)
-  new Date("2026-03-10T15:30:00.000Z"),  // slot end (UTC)
+  rules,                                    // availability rules
+  [],                                       // overrides
+  existingBookings,                         // existing bookings
+  new Date("2026-03-10T14:00:00.000Z"),    // slot start (UTC)
+  new Date("2026-03-10T14:30:00.000Z"),    // slot end (UTC)
+  0,                                        // bufferBefore (minutes)
+  15                                        // bufferAfter (minutes)
 );
 
 if (result.available) {
@@ -99,13 +102,18 @@ const overrides: AvailabilityOverrideInput[] = [
 // Existing bookings reduce available slots
 const bookings: BookingInput[] = [
   {
-    startsAt: new Date("2026-03-10T15:00:00.000Z"),
-    endsAt: new Date("2026-03-10T15:30:00.000Z"),
+    startsAt: new Date("2026-03-10T14:00:00.000Z"),
+    endsAt: new Date("2026-03-10T14:30:00.000Z"),
     status: "confirmed",
   },
 ];
 
-const slots = getAvailableSlots(rules, overrides, bookings, dateRange, timezone, options);
+const dateRange = {
+  start: new Date("2026-03-09T00:00:00Z"),
+  end: new Date("2026-03-14T23:59:59Z"),
+};
+
+const slots = getAvailableSlots(rules, overrides, bookings, dateRange, 'America/New_York', { duration: 30 });
 ```
 
 ## 5. Render the booking UI
@@ -181,12 +189,12 @@ export default function BookingPage() {
     dateEnd.setUTCHours(23, 59, 59, 999);
 
     const availableSlots = getAvailableSlots(
-      rules,
-      [],
-      existingBookings,
-      { start: dateStart, end: dateEnd },
-      'America/New_York',
-      { duration: 30, bufferAfter: 15 }
+      rules,                             // availability rules
+      [],                                // overrides
+      existingBookings,                  // existing bookings
+      { start: dateStart, end: dateEnd }, // date range (UTC)
+      'America/New_York',                // customer timezone
+      { duration: 30, bufferAfter: 15 }  // options
     );
 
     setSlots(availableSlots);
@@ -294,10 +302,91 @@ export default function BookingPage() {
 }
 ```
 
+## Resource Booking Quick Start
+
+The examples above show provider-based booking (1:1 appointments with people). The Booking Kit also supports **resource-based booking** for physical spaces: restaurant tables, hotel rooms, coworking desks, tennis courts, etc.
+
+```typescript
+import { getResourceAvailableSlots, assignResource } from '@thebookingkit/core';
+
+// Define a pool of restaurant tables
+const tables = [
+  {
+    id: 'table-1',
+    name: 'Table 1',
+    type: 'standard',
+    capacity: 2,            // seats 2 people
+    isActive: true,
+    rules: [{
+      rrule: 'FREQ=DAILY;BYDAY=MO,TU,WE,TH,FR,SA,SU',
+      startTime: '11:00',
+      endTime: '22:00',
+      timezone: 'America/Los_Angeles',
+    }],
+    overrides: [],
+    bookings: existingReservations,
+  },
+  {
+    id: 'table-4',
+    name: 'Table 4',
+    type: 'standard',
+    capacity: 4,            // seats 4 people
+    isActive: true,
+    rules: [{
+      rrule: 'FREQ=DAILY;BYDAY=MO,TU,WE,TH,FR,SA,SU',
+      startTime: '11:00',
+      endTime: '22:00',
+      timezone: 'America/Los_Angeles',
+    }],
+    overrides: [],
+    bookings: existingReservations,
+  },
+];
+
+// Find all available 90-minute seating slots for a party of 4
+const availableSlots = getResourceAvailableSlots(
+  tables,
+  {
+    start: new Date('2026-03-15T00:00:00Z'),
+    end: new Date('2026-03-16T23:59:59Z'),
+  },
+  'America/Los_Angeles',
+  {
+    duration: 90,        // 90-minute seating
+    minCapacity: 4,      // party size
+    bufferAfter: 15,     // 15-min turnover between seatings
+  }
+);
+
+console.log(`${availableSlots.length} available time slots`);
+// Each slot includes:
+// - startTime, endTime (UTC)
+// - localStart, localEnd (Pacific time for display)
+// - availableResources: [{ resourceId, resourceName, remainingCapacity }]
+
+// Auto-assign the best-fit table (smallest table that fits the party)
+const assignment = assignResource(
+  tables,
+  new Date('2026-03-15T18:00:00Z'),
+  new Date('2026-03-15T19:30:00Z'),
+  {
+    strategy: 'best_fit',  // Options: best_fit, first_available, round_robin, largest_first
+    minCapacity: 4,
+    requestedCapacity: 4,
+  }
+);
+
+console.log(`Assigned: ${assignment.resourceName} via ${assignment.reason}`);
+// Output: Assigned Table 4 via best_fit
+```
+
+Resource booking uses the same three-step availability pipeline as provider booking but operates on capacity instead of individual availability windows. Use `getResourceAvailableSlots` to show customers available times and `assignResource` to pick the best resource programmatically.
+
 ## Next steps
 
 - [Architecture](/getting-started/architecture) — Understand the three-layer model
 - [Slot Engine](/core-concepts/slot-engine) — Deep dive into slot computation
+- [Resource Engine](/core-concepts/resource-engine) — Resource pool scheduling
 - [Event Types](/features/event-types) — Configure duration, questions, and limits
 - [Team Scheduling](/features/team-scheduling) — Handle multiple providers
 - [Payments](/features/payments) — Accept payments and manage fees

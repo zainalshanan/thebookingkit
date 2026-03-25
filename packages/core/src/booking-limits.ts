@@ -2,6 +2,7 @@ import {
   addMinutes,
   addDays,
 } from "date-fns";
+import { formatDateOnly, getActiveBookings } from "./slot-pipeline.js";
 import type { BookingInput } from "./types.js";
 
 /** Booking limits configuration (stored as JSON on event_types) */
@@ -46,14 +47,12 @@ export function computeBookingLimits(
   limits: BookingLimitsConfig,
   date: Date,
 ): LimitStatus {
-  const activeBookings = existingBookings.filter(
-    (b) => b.status !== "cancelled" && b.status !== "rejected",
-  );
+  const activeBookings = getActiveBookings(existingBookings);
 
-  const dateStr = utcDateKey(date);
+  const dateStr = formatDateOnly(date);
 
   const dailyCount = activeBookings.filter(
-    (b) => utcDateKey(b.startsAt) === dateStr,
+    (b) => formatDateOnly(b.startsAt) === dateStr,
   ).length;
 
   const weekStr = utcWeekKey(date);
@@ -107,12 +106,10 @@ export function filterSlotsByLimits(
   const weeklyCounts = new Map<string, number>();
 
   // Pre-count existing bookings
-  const activeBookings = existingBookings.filter(
-    (b) => b.status !== "cancelled" && b.status !== "rejected",
-  );
+  const activeBookings = getActiveBookings(existingBookings);
 
   for (const booking of activeBookings) {
-    const dayK = utcDateKey(booking.startsAt);
+    const dayK = formatDateOnly(booking.startsAt);
     dailyCounts.set(dayK, (dailyCounts.get(dayK) ?? 0) + 1);
 
     const weekK = utcWeekKey(booking.startsAt);
@@ -128,7 +125,7 @@ export function filterSlotsByLimits(
 
     // Daily limit check
     if (limits.maxBookingsPerDay != null) {
-      const dayK = utcDateKey(slot.start);
+      const dayK = formatDateOnly(slot.start);
       const count = dailyCounts.get(dayK) ?? 0;
       if (count >= limits.maxBookingsPerDay) return false;
     }
@@ -142,7 +139,7 @@ export function filterSlotsByLimits(
 
     // After all checks pass, increment counters so subsequent slots see updated counts
     if (limits.maxBookingsPerDay != null) {
-      const dayK = utcDateKey(slot.start);
+      const dayK = formatDateOnly(slot.start);
       dailyCounts.set(dayK, (dailyCounts.get(dayK) ?? 0) + 1);
     }
     if (limits.maxBookingsPerWeek != null) {
@@ -154,17 +151,12 @@ export function filterSlotsByLimits(
   });
 }
 
-/** UTC-based date key for consistent day comparison */
-function utcDateKey(date: Date): string {
-  return `${date.getUTCFullYear()}-${date.getUTCMonth()}-${date.getUTCDate()}`;
-}
-
-/** UTC-based week key (ISO week starting Monday) */
+/** UTC-based week key (ISO week starting Monday), keyed as a YYYY-MM-DD string */
 function utcWeekKey(date: Date): string {
   // Get Monday of the week in UTC
   const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
   const day = d.getUTCDay();
   const diff = d.getUTCDate() - day + (day === 0 ? -6 : 1); // Monday
   d.setUTCDate(diff);
-  return utcDateKey(d);
+  return formatDateOnly(d);
 }

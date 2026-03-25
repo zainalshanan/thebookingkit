@@ -23,6 +23,7 @@ import {
   formatDateOnly,
   formatDateInTimezone,
   formatInTimezone,
+  getActiveBookings,
 } from "./slot-pipeline.js";
 import { applySlotRelease } from "./slot-release.js";
 import { ResourceUnavailableError } from "./errors.js";
@@ -41,18 +42,6 @@ import type {
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
-/**
- * Return active bookings — those whose status is not "cancelled" or "rejected".
- *
- * @param bookings - All bookings associated with a resource
- * @returns Bookings that are still active
- */
-function getActiveBookings(bookings: BookingInput[]): BookingInput[] {
-  return bookings.filter(
-    (b) => b.status !== "cancelled" && b.status !== "rejected",
-  );
-}
 
 /**
  * Pre-processed booking boundary used in the hot capacity-check loop.
@@ -92,7 +81,7 @@ function precomputeActiveBookings(
 ): BufferedBooking[] {
   const result: BufferedBooking[] = [];
   for (const b of bookings) {
-    if (b.status === "cancelled" || b.status === "rejected") continue;
+    if (b.status === "cancelled" || b.status === "rejected" || b.status === "no_show") continue;
     const startsAtMs = b.startsAt.getTime();
     const endsAtMs = b.endsAt.getTime();
     result.push({
@@ -516,7 +505,7 @@ export function assignResource(
 
   // --- Step 5: apply strategy ---
   let chosen: ResourceInput;
-  let reason: string;
+  let reason: ResourceAssignmentResult["reason"];
 
   switch (strategy) {
     case "first_available": {

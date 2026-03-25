@@ -13,7 +13,7 @@ beforeEach(() => {
 
 const makeBooking = (
   date: string,
-  status: string = "confirmed",
+  status: BookingInput["status"] = "confirmed",
 ): BookingInput => ({
   startsAt: new Date(`${date}T15:00:00Z`),
   endsAt: new Date(`${date}T15:30:00Z`),

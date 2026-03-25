@@ -29,7 +29,7 @@ import type {
 function makeBooking(
   startsAt: string,
   endsAt: string,
-  status: string = "confirmed",
+  status: BookingInput["status"] = "confirmed",
   id?: string,
 ): BookingInput & { id: string } {
   return {
@@ -627,7 +627,7 @@ describe("canReschedule", () => {
   });
 
   it("allows unknown/custom statuses", () => {
-    expect(canReschedule("custom_status")).toBe(true);
+    expect(canReschedule("custom_status" as BookingInput["status"])).toBe(true);
   });
 });
 
@@ -759,7 +759,7 @@ describe("validateReschedule (post-refactor regression)", () => {
   });
 
   it("still rejects invalid status after refactor", () => {
-    for (const status of ["completed", "cancelled", "no_show", "rejected"]) {
+    for (const status of ["completed", "cancelled", "no_show", "rejected"] as BookingInput["status"][]) {
       const result = validateReschedule(
         status,
         RULES,
@@ -805,7 +805,7 @@ describe("validateBreakBlock (post-refactor regression)", () => {
       blockType: "break",
       recurring: false,
     };
-    for (const status of ["cancelled", "no_show", "rejected"]) {
+    for (const status of ["cancelled", "no_show", "rejected"] as BookingInput["status"][]) {
       const bookings = [
         makeBooking("2026-03-10T12:30:00Z", "2026-03-10T13:00:00Z", status),
       ];

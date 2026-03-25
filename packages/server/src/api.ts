@@ -6,7 +6,7 @@
  * for Next.js API routes.
  */
 
-import { createHmac, randomBytes } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 // ---------------------------------------------------------------------------
 // Standard Response Types
@@ -223,19 +223,12 @@ export function hashApiKey(key: string, secret?: string): string {
  */
 export function verifyApiKey(key: string, storedHash: string): boolean {
   const hash = hashApiKey(key);
-  if (hash.length !== storedHash.length) return false;
 
-  // Constant-time comparison
+  // Constant-time comparison — both buffers must be the same length
   const a = Buffer.from(hash, "hex");
   const b = Buffer.from(storedHash, "hex");
 
-  if (a.length !== b.length) return false;
-
-  let mismatch = 0;
-  for (let i = 0; i < a.length; i++) {
-    mismatch |= a[i] ^ b[i];
-  }
-  return mismatch === 0;
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 /**

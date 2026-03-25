@@ -16,7 +16,7 @@ export interface EmbedConfiguratorProps {
   eventTypes: EmbedEventTypeOption[];
   /** Provider ID */
   providerId: string;
-  /** Base URL of the SlotKit instance */
+  /** Base URL of the The Booking Kit instance */
   baseUrl: string;
   /** Additional CSS class name */
   className?: string;

@@ -246,6 +246,24 @@ body {
   max-width: 460px;
 }
 
+.hero-use-cases {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.hero-use-case-pill {
+  display: inline-block;
+  padding: 0.25rem 0.65rem;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.55);
+  letter-spacing: 0.01em;
+}
+
 .hero-npm {
   display: inline-flex;
   align-items: center;
@@ -2077,6 +2095,160 @@ body {
 .limits-status-badge.blocked {
   background: #fef2f2;
   color: var(--danger);
+}
+
+/* ---------------------------------------------------------------------------
+   Slot Release Demo
+   --------------------------------------------------------------------------- */
+.slot-release-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 768px) {
+  .slot-release-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.slot-release-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.slot-release-strategies {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.slot-release-strategy-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  text-align: left;
+  width: 100%;
+}
+
+.slot-release-strategy-btn:hover {
+  border-color: var(--border-hover);
+  background: var(--surface-alt);
+}
+
+.slot-release-strategy-btn.active {
+  border-color: var(--accent);
+  background: rgba(233, 69, 96, 0.04);
+}
+
+.slot-release-strategy-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.slot-release-strategy-btn.active .slot-release-strategy-label {
+  color: var(--accent);
+}
+
+.slot-release-strategy-desc {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.slot-release-params {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.slot-release-results {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.slot-release-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.mini-slot.slot-released {
+  background: #ecfdf5;
+  border-color: #6ee7b7;
+  color: #065f46;
+}
+
+.mini-slot.slot-hidden {
+  background: var(--surface-dark);
+  border-color: var(--border);
+  border-style: dashed;
+  color: var(--text-muted);
+}
+
+.mini-slot.slot-discounted {
+  background: #fffbeb;
+  border-color: #fcd34d;
+  color: #92400e;
+  position: relative;
+}
+
+.slot-discount-badge {
+  display: inline-block;
+  margin-left: 0.3em;
+  padding: 0 0.3em;
+  background: var(--warning);
+  color: #fff;
+  border-radius: 4px;
+  font-size: 0.65em;
+  font-weight: 700;
+  vertical-align: middle;
+  line-height: 1.5;
+}
+
+.slot-release-legend {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.slot-release-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.slot-release-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.slot-release-dot.released {
+  background: var(--success);
+}
+
+.slot-release-dot.hidden {
+  background: var(--border-hover);
+}
+
+.slot-release-dot.discounted {
+  background: var(--warning);
 }
 
 /* ---------------------------------------------------------------------------

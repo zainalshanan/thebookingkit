@@ -7,7 +7,7 @@
 // ---------------------------------------------------------------------------
 
 /** The Booking Kit project configuration */
-export interface SlotKitConfig {
+export interface BookingKitConfig {
   /** Postgres connection string (from env) */
   databaseUrl: string;
   /** Path to copy UI components */
@@ -26,21 +26,24 @@ export interface SlotKitConfig {
 // Generators
 // ---------------------------------------------------------------------------
 
-const VALID_AUTH_ADAPTERS: ReadonlyArray<SlotKitConfig["authAdapter"]> = [
+/** @deprecated Use BookingKitConfig instead */
+export type SlotKitConfig = BookingKitConfig;
+
+const VALID_AUTH_ADAPTERS: ReadonlyArray<BookingKitConfig["authAdapter"]> = [
   "nextauth",
   "supabase",
   "clerk",
   "lucia",
 ];
 
-const VALID_JOB_ADAPTERS: ReadonlyArray<SlotKitConfig["jobAdapter"]> = [
+const VALID_JOB_ADAPTERS: ReadonlyArray<BookingKitConfig["jobAdapter"]> = [
   "inngest",
   "trigger",
   "bullmq",
   "none",
 ];
 
-const VALID_EMAIL_ADAPTERS: ReadonlyArray<SlotKitConfig["emailAdapter"]> = [
+const VALID_EMAIL_ADAPTERS: ReadonlyArray<BookingKitConfig["emailAdapter"]> = [
   "resend",
   "sendgrid",
   "ses",
@@ -58,7 +61,7 @@ function sanitizePath(value: string, fieldName: string): string {
 }
 
 /** Generate the content of thebookingkit.config.ts */
-export function generateThebookingkitConfig(config: Partial<SlotKitConfig>): string {
+export function generateThebookingkitConfig(config: Partial<BookingKitConfig>): string {
   const {
     componentsDir: rawComponentsDir = "src/components/thebookingkit",
     typesOutput: rawTypesOutput = "src/types/thebookingkit.ts",
@@ -88,10 +91,10 @@ export function generateThebookingkitConfig(config: Partial<SlotKitConfig>): str
   const componentsDir = sanitizePath(rawComponentsDir, "componentsDir");
   const typesOutput = sanitizePath(rawTypesOutput, "typesOutput");
 
-  // Generated config uses the flat SlotKitConfig interface shape.
-  return `import type { SlotKitConfig } from "@thebookingkit/cli";
+  // Generated config uses the flat BookingKitConfig interface shape.
+  return `import type { BookingKitConfig } from "@thebookingkit/cli";
 
-const config: SlotKitConfig = {
+const config: BookingKitConfig = {
   databaseUrl: process.env.DATABASE_URL!,
   componentsDir: "${componentsDir}",
   typesOutput: "${typesOutput}",

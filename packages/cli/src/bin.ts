@@ -29,7 +29,7 @@ import {
   hasLocalModifications,
   getDefaultManifest,
   validateManifest,
-  type SlotKitManifest,
+  type BookingKitManifest,
 } from "./manifest.js";
 import { generateThebookingkitConfig, generateEnvTemplate } from "./config.js";
 
@@ -115,9 +115,9 @@ function installCommand(pm: "pnpm" | "yarn" | "bun" | "npm"): string {
  * has an invalid schema.
  *
  * @param manifestPath - Absolute path to the manifest file
- * @returns A valid SlotKitManifest
+ * @returns A valid BookingKitManifest
  */
-function readManifest(manifestPath: string): SlotKitManifest {
+function readManifest(manifestPath: string): BookingKitManifest {
   if (!existsSync(manifestPath)) {
     return getDefaultManifest();
   }
@@ -148,7 +148,7 @@ function readManifest(manifestPath: string): SlotKitManifest {
  * @param manifestPath - Absolute path to the manifest file
  * @param manifest - Manifest object to serialize
  */
-function writeManifest(manifestPath: string, manifest: SlotKitManifest): void {
+function writeManifest(manifestPath: string, manifest: BookingKitManifest): void {
   try {
     writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
   } catch (err) {
@@ -357,7 +357,7 @@ program
 
     // Load manifest
     const manifestPath = resolve(MANIFEST_FILE);
-    const manifest: SlotKitManifest = readManifest(manifestPath);
+    const manifest: BookingKitManifest = readManifest(manifestPath);
 
     const componentsDir = resolve(options.dir as string);
     const cwd = resolve(".");

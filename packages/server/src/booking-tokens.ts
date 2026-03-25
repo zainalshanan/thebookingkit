@@ -35,6 +35,11 @@ export function verifyBookingToken(
 ): { bookingId: string; expiresAt: Date } | null {
   try {
     const decoded = Buffer.from(token, "base64url").toString("utf-8");
+
+    // Canonical re-encode check: reject tokens whose base64url representation
+    // differs from the canonical encoding (e.g. padding-bit tampering).
+    if (Buffer.from(decoded).toString("base64url") !== token) return null;
+
     const parts = decoded.split(":");
     if (parts.length !== 3) return null;
 
@@ -44,7 +49,7 @@ export function verifyBookingToken(
     // Check expiry
     if (expiresAt < new Date()) return null;
 
-    // Verify signature
+    // Verify signature using constant-time comparison
     const payload = `${bookingId}:${expiresAtStr}`;
     const expectedSig = createHmac("sha256", secret)
       .update(payload)

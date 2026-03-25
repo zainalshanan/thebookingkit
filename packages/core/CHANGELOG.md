@@ -4,7 +4,7 @@
 
 ### Minor Changes (2026-03-25)
 
-Two major features plus an internal decomposition for better reusability.
+Two major features, platform integration, an integration test suite, and internal decomposition for better reusability.
 
 ### New Features
 
@@ -55,11 +55,23 @@ Two major features plus an internal decomposition for better reusability.
 - 30-day / 50-resource computation: ~45ms (budget: 200ms)
 - Single slot check / 50 resources: ~5ms (budget: 50ms)
 
+#### Integration Test Suite (`integration.test.ts`)
+
+- **42 end-to-end flow tests** validating multi-module composition:
+  - Flow 1: Barber shop (slots → book → limits → release → kiosk reschedule)
+  - Flow 2: Restaurant resource (assign → capacity → pool summary → rolling window → discounts)
+  - Flow 3: Team scheduling + recurring series (round-robin → occurrences → cancellation)
+  - Flow 4: Walk-in queue + kiosk (queue → wait times → break blocks → settings)
+  - Flow 5: Cross-feature edge cases (release + limits + buffer, DST, midnight-crossing, empty state)
+  - Flow 6: Seats/group booking + resource capacity
+
 #### Tests
 
-- 68+ unit tests covering all four functions, edge cases, and boundary conditions
+- 68+ unit tests covering all four resource engine functions
+- 44 slot release unit tests
 - 5 property-based invariants × 500 random cases via fast-check
 - Performance budget assertions
+- 42 integration tests (above)
 
 ## 0.1.5
 

@@ -20,7 +20,7 @@
 
 import { addHours, addDays, areIntervalsOverlapping } from "date-fns";
 import { toZonedTime, format } from "date-fns-tz";
-import { formatDateInTimezone } from "./slot-pipeline.js";
+import { formatDateInTimezone, getActiveBookings } from "./slot-pipeline.js";
 import type {
   SlotReleaseConfig,
   FillEarlierFirstConfig,
@@ -295,9 +295,7 @@ export function computeWindowFillRates(
   windowBoundaries: string[],
   providerTimezone: string,
 ): Map<string, number> {
-  const activeBookings = existingBookings.filter(
-    (b) => b.status !== "cancelled" && b.status !== "rejected",
-  );
+  const activeBookings = getActiveBookings(existingBookings);
 
   // Group slots by day × window
   // counts[key] = { total, booked }

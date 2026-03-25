@@ -9,11 +9,14 @@
  */
 
 import { addMinutes } from "date-fns";
+import { toZonedTime, format } from "date-fns-tz";
 import { isSlotAvailable } from "./slot-engine.js";
+import { INACTIVE_STATUSES } from "./slot-pipeline.js";
 import type {
   AvailabilityRuleInput,
   AvailabilityOverrideInput,
   BookingInput,
+  BookingStatus,
   ConflictCheckBooking,
   ConflictDetail,
 } from "./types.js";
@@ -226,9 +229,6 @@ export function resolveKioskSettings(
 // Conflict Detection Primitives (backported from forza-barber-v2)
 // ---------------------------------------------------------------------------
 
-/** Statuses excluded from overlap checks — these bookings are "inactive" */
-const INACTIVE_STATUSES = ["cancelled", "no_show", "rejected"] as const;
-
 /** Booking status values that cannot be rescheduled */
 const NON_RESCHEDULABLE_STATUSES = [
   "completed",
@@ -288,7 +288,7 @@ export function findConflicts(
  * @param status - Current booking status
  * @returns `true` if the booking can be rescheduled
  */
-export function canReschedule(status: string): boolean {
+export function canReschedule(status: BookingStatus): boolean {
   return !NON_RESCHEDULABLE_STATUSES.includes(
     status as (typeof NON_RESCHEDULABLE_STATUSES)[number],
   );
@@ -356,10 +356,10 @@ export interface RescheduleValidation {
  * @returns Validation result
  */
 export function validateReschedule(
-  bookingStatus: string,
+  bookingStatus: BookingStatus,
   rules: AvailabilityRuleInput[],
   overrides: AvailabilityOverrideInput[],
-  existingBookings: Array<BookingInput & { id?: string }>,
+  existingBookings: BookingInput[],
   newStart: Date,
   newEnd: Date,
   bufferBefore: number = 0,
@@ -392,7 +392,7 @@ export function validateReschedule(
     if (reason === "already_booked" || reason === "buffer_conflict") {
       // Build buffered bookings for conflict detection
       const bufferedBookings: ConflictCheckBooking[] = existingBookings.map((b) => ({
-        id: (b as BookingInput & { id?: string }).id,
+        id: b.id,
         startsAt: addMinutes(b.startsAt, -bufferBefore),
         endsAt: addMinutes(b.endsAt, bufferAfter),
         status: b.status,
@@ -403,7 +403,7 @@ export function validateReschedule(
         const first = conflicts[0];
         // Map back to original booking times for conflictDetails
         const originalBooking = existingBookings.find(
-          (b) => (b as BookingInput & { id?: string }).id === first.bookingId,
+          (b) => b.id === first.bookingId,
         );
         return {
           valid: false,
@@ -472,7 +472,7 @@ export function validateBreakBlock(
 
   // Delegate to findConflicts for consistent overlap logic
   const conflictCheckBookings: ConflictCheckBooking[] = existingBookings.map((b) => ({
-    id: (b as BookingInput & { id?: string }).id,
+    id: b.id,
     startsAt: b.startsAt,
     endsAt: b.endsAt,
     status: b.status,
@@ -501,18 +501,28 @@ export function validateBreakBlock(
  * Convert a break/block to an availability override for storage.
  *
  * @param block - The break/block to convert
- * @param providerTimezone - Provider's timezone for date extraction
+ * @param providerTimezone - Provider's IANA timezone for correct local-time
+ *   extraction. Defaults to `"UTC"` for backward compatibility, but callers
+ *   **should always pass the provider's actual timezone** to avoid producing
+ *   wrong HH:mm values on servers whose local time differs from UTC.
  * @returns An AvailabilityOverrideInput for the DB
  */
 export function breakBlockToOverride(
   block: BreakBlockInput,
+  providerTimezone: string = "UTC",
 ): AvailabilityOverrideInput {
-  const pad = (n: number) => String(n).padStart(2, "0");
+  // H5: Use toZonedTime + format to extract local-time components correctly,
+  // instead of Date#getHours/getMinutes which read the server's local clock.
+  const zonedStart = toZonedTime(block.startTime, providerTimezone);
+  const startTimeStr = format(zonedStart, "HH:mm", { timeZone: providerTimezone });
+  const zonedEnd = toZonedTime(block.endTime, providerTimezone);
+  const endTimeStr = format(zonedEnd, "HH:mm", { timeZone: providerTimezone });
+
   return {
     date: block.startTime,
     isUnavailable: true,
-    startTime: `${pad(block.startTime.getHours())}:${pad(block.startTime.getMinutes())}`,
-    endTime: `${pad(block.endTime.getHours())}:${pad(block.endTime.getMinutes())}`,
+    startTime: startTimeStr,
+    endTime: endTimeStr,
   };
 }
 
