@@ -142,6 +142,7 @@ export function AdminDashboard() {
       ) : filtered.length === 0 ? (
         <p className="no-slots">No bookings found</p>
       ) : (
+        <>
         <div className="bookings-table-wrap">
           <table className="bookings-table">
             <thead>
@@ -221,6 +222,73 @@ export function AdminDashboard() {
             </tbody>
           </table>
         </div>
+
+        <div className="bookings-cards-mobile">
+          {filtered.map((booking) => {
+            const dateStr = new Date(booking.startsAt).toLocaleDateString("en-US", {
+              weekday: "short",
+              month: "short",
+              day: "numeric",
+            });
+            const timeStr = new Date(booking.startsAt).toLocaleTimeString("en-US", {
+              hour: "numeric",
+              minute: "2-digit",
+            });
+            const actions = validActions[booking.status] ?? [];
+            const isLoading = actionLoading === booking.id;
+
+            return (
+              <div key={booking.id} className="booking-card-mobile">
+                <div className="card-row">
+                  <div>
+                    <div className="card-customer-name">{booking.customerName}</div>
+                    <div className="card-customer-email">{booking.customerEmail}</div>
+                  </div>
+                  <span
+                    className="status-badge"
+                    style={{
+                      color: STATUS_COLORS[booking.status] ?? "#666",
+                      background: STATUS_BG[booking.status] ?? "#f3f4f6",
+                    }}
+                  >
+                    {booking.status}
+                  </span>
+                </div>
+
+                <div className="card-row">
+                  <span className="card-label">Service</span>
+                  <span className="card-value">
+                    {booking.serviceTitle} &bull; {booking.duration} min
+                  </span>
+                </div>
+
+                <div className="card-row">
+                  <span className="card-label">Date & Time</span>
+                  <span className="card-value">
+                    {dateStr} at {timeStr}
+                  </span>
+                </div>
+
+                <div className="card-actions">
+                  {actions.map((action) => (
+                    <button
+                      key={action.status}
+                      className={`action-btn action-${action.variant}`}
+                      onClick={() => handleStatusChange(booking.id, action.status)}
+                      disabled={isLoading}
+                    >
+                      {isLoading ? "..." : action.label}
+                    </button>
+                  ))}
+                  {actions.length === 0 && (
+                    <span className="no-actions">No actions</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        </>
       )}
 
       {/* Booking Details (expandable) */}

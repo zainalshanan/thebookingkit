@@ -2,7 +2,7 @@ export function PackageEcosystemSection() {
   const packages = [
     {
       name: "@thebookingkit/core",
-      version: "0.1.1",
+      version: "0.2.0",
       env: "universal",
       envLabel: "Browser / Edge / Node",
       description:
@@ -30,7 +30,7 @@ const slots = getAvailableSlots(
     },
     {
       name: "@thebookingkit/server",
-      version: "0.1.1",
+      version: "0.2.0",
       env: "node",
       envLabel: "Node / Edge",
       description:
@@ -54,7 +54,7 @@ const booking = await withSerializableRetry(
     },
     {
       name: "@thebookingkit/db",
-      version: "0.1.1",
+      version: "0.2.0",
       env: "node",
       envLabel: "Node (Postgres)",
       description:
@@ -79,7 +79,7 @@ const upcoming = await db
     },
     {
       name: "@thebookingkit/d1",
-      version: "0.1.1",
+      version: "0.2.0",
       env: "edge",
       envLabel: "Cloudflare D1 / Edge",
       description:
@@ -100,7 +100,7 @@ await lock.withLock(slotKey, createBooking);`,
     },
     {
       name: "@thebookingkit/cli",
-      version: "0.1.1",
+      version: "0.2.0",
       env: "cli",
       envLabel: "CLI Tool",
       description:

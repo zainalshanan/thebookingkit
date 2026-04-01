@@ -15,7 +15,7 @@ export function HeroSection() {
     <section className="hero-section" id="hero">
       <div className="hero-inner">
         <div className="hero-left">
-          <span className="hero-eyebrow">Open Source &bull; MIT License &bull; v0.1.1</span>
+          <span className="hero-eyebrow">Open Source &bull; MIT License &bull; v0.2.0</span>
 
           <h1 className="hero-title">
             The Headless{" "}
