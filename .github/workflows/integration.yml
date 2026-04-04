@@ -15,24 +15,27 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
-    services:
-      postgres:
-        image: postgres:15-alpine
-        env:
-          POSTGRES_DB: thebookingkit
-          POSTGRES_USER: thebookingkit
-          POSTGRES_PASSWORD: thebookingkit
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U thebookingkit"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Start PostgreSQL container
+        run: |
+          docker run -d \
+            --name thebookingkit-test-db \
+            -e POSTGRES_DB=thebookingkit \
+            -e POSTGRES_USER=thebookingkit \
+            -e POSTGRES_PASSWORD=thebookingkit \
+            -p 5432:5432 \
+            postgres:15-alpine
+
+          # Wait until Postgres is ready (up to 30s)
+          for i in $(seq 1 30); do
+            docker exec thebookingkit-test-db pg_isready -U thebookingkit -q && break
+            echo "Waiting for Postgres... ($i/30)"
+            sleep 1
+          done
+          docker exec thebookingkit-test-db pg_isready -U thebookingkit
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -50,9 +53,10 @@ jobs:
         working-directory: packages/db
         run: |
           # drizzle-kit push requires interactive confirmation — pipe yes to auto-accept
-          echo "yes" | npx drizzle-kit push
+          echo "yes" | npx drizzle-kit push --verbose
 
       - name: Verify tables were created
+        working-directory: packages/db
         run: |
           node -e "
             const postgres = require('postgres');
@@ -61,10 +65,13 @@ jobs:
               .then(rows => {
                 console.log('Tables created:', rows.length);
                 rows.forEach(r => console.log('  -', r.tablename));
-                if (rows.length === 0) { console.error('ERROR: No tables created!'); process.exit(1); }
+                if (rows.length === 0) {
+                  console.error('ERROR: No tables were created by drizzle-kit push!');
+                  process.exit(1);
+                }
                 return sql.end();
               })
-              .catch(err => { console.error('Verification failed:', err); process.exit(1); });
+              .catch(err => { console.error('Table verification failed:', err.message); process.exit(1); });
           "
 
       - name: Run custom SQL migrations
@@ -74,3 +81,9 @@ jobs:
       - name: Run DB integration tests
         working-directory: packages/db
         run: npx vitest run src/__tests__/integration.test.ts
+
+      - name: Remove PostgreSQL container and volume
+        if: always()
+        run: |
+          docker stop thebookingkit-test-db || true
+          docker rm -v thebookingkit-test-db || true

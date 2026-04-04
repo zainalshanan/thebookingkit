@@ -1,6 +1,6 @@
 {
   "name": "@thebookingkit/db",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Drizzle ORM schema, migrations, and TypeScript types for The Booking Kit's 25 Postgres tables",
   "license": "MIT",
   "repository": {
@@ -45,6 +45,7 @@
     "build": "tsc",
     "test": "vitest run",
     "test:integration": "DATABASE_URL=postgresql://thebookingkit:thebookingkit@localhost:5432/thebookingkit vitest run src/__tests__/integration.test.ts",
+    "test:integration:fresh": "bash scripts/test-integration.sh",
     "prepublishOnly": "npm run build",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",

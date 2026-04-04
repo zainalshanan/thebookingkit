@@ -118,12 +118,13 @@ This release includes a comprehensive QA audit across all packages, fixing 49 bu
 - **Medium**: Multi-select validation rejects invalid options; break-to-override returns specific time window; HTML escaping in embed snippets
 - **Low**: Slug generation handles special characters; cancellation fee validation throws on invalid timing; queue reordering preserves unmentioned entries; auto-reject deadlines clamped to minimum 1 hour
 
-#### @thebookingkit/db (9 fixes)
+#### @thebookingkit/db (10 fixes)
 
 - **Critical**: EXCLUDE constraint now excludes `rescheduled` status; audit trigger uses `updated` fallback; metadata initialization fixed
 - **High**: `teams.slug` and `eventTypes.slug` now have unique constraints
-- **Medium**: `bookingEvents.bookingId` changed to `onDelete: restrict` to protect audit trail; `WalkInQueue` type exports added; pgcrypto extension added to setup migration
-- **Low**: Added vitest test script
+- **High**: Audit trigger status→enum cast replaced with explicit `CASE` expression to prevent silent cast failures on future enum additions; `bookingEvents.bookingId` uses `onDelete: restrict` to protect audit integrity
+- **Medium**: `WalkInQueue` type exports added; pgcrypto extension added to setup migration; integration test `ANY(array)` queries fixed to use `inArray()` and `sql.join`
+- **Low**: Added vitest test script; `drizzle.config.ts` schema path corrected to compiled output
 
 #### @thebookingkit/d1 (13 fixes)
 

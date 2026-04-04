@@ -231,6 +231,7 @@ export function UILibrarySection() {
                   border: "1px solid var(--border)",
                   borderRadius: "var(--radius)",
                   overflow: "hidden",
+                  minWidth: 0,
                 }}
               >
                 <div
@@ -247,8 +248,8 @@ export function UILibrarySection() {
                       {preview.category}
                     </span>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", background: "var(--surface-dark, rgba(0,0,0,0.2))", borderRadius: 6, padding: "0.3rem 0.55rem" }}>
-                    <code style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--text-muted)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", background: "var(--surface-dark, rgba(0,0,0,0.2))", borderRadius: 6, padding: "0.3rem 0.55rem", minWidth: 0 }}>
+                    <code style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--text-muted)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       npx thebookingkit add {preview.name}
                     </code>
                     <CopyBtn name={preview.name} />

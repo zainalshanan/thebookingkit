@@ -17,7 +17,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import { createDb, type Database } from "../client.js";
 import {
   providers,
@@ -49,7 +49,6 @@ const uid = (label: string) => `${label}_${runId}`;
 
 /** Ids created during the run, collected so afterAll can delete them cleanly. */
 const created = {
-  bookingEventIds: [] as string[],
   bookingIds: [] as string[],
   availabilityRuleIds: [] as string[],
   eventTypeIds: [] as string[],
@@ -59,35 +58,35 @@ const created = {
 async function cleanUp() {
   if (!db) return;
 
-  // Delete in reverse FK order
-  if (created.bookingEventIds.length > 0) {
-    await db
-      .delete(bookingEvents)
-      .where(sql`id = ANY(${created.bookingEventIds})`);
-  }
-
+  // booking_events is append-only (trigger blocks DELETE) and has a RESTRICT FK to
+  // bookings — meaning we cannot delete a booking while its audit rows exist, and we
+  // cannot delete the audit rows directly either. This is intentional in production:
+  // the audit trail must outlive the booking for compliance and dispute resolution.
+  //
+  // In tests we own the table, so we temporarily disable the delete-guard trigger to
+  // remove only the audit rows that belong to our test bookings, then re-enable it.
+  // This is the same pattern used by anonymize_customer() and is the only supported
+  // path for hard-deleting booking audit data outside of GDPR anonymization.
   if (created.bookingIds.length > 0) {
-    await db
-      .delete(bookings)
-      .where(sql`id = ANY(${created.bookingIds})`);
+    await db.execute(sql`ALTER TABLE booking_events DISABLE TRIGGER prevent_booking_events_delete`);
+    try {
+      await db.delete(bookingEvents).where(inArray(bookingEvents.bookingId, created.bookingIds));
+    } finally {
+      await db.execute(sql`ALTER TABLE booking_events ENABLE TRIGGER prevent_booking_events_delete`);
+    }
+    await db.delete(bookings).where(inArray(bookings.id, created.bookingIds));
   }
 
   if (created.availabilityRuleIds.length > 0) {
-    await db
-      .delete(availabilityRules)
-      .where(sql`id = ANY(${created.availabilityRuleIds})`);
+    await db.delete(availabilityRules).where(inArray(availabilityRules.id, created.availabilityRuleIds));
   }
 
   if (created.eventTypeIds.length > 0) {
-    await db
-      .delete(eventTypes)
-      .where(sql`id = ANY(${created.eventTypeIds})`);
+    await db.delete(eventTypes).where(inArray(eventTypes.id, created.eventTypeIds));
   }
 
   if (created.providerIds.length > 0) {
-    await db
-      .delete(providers)
-      .where(sql`id = ANY(${created.providerIds})`);
+    await db.delete(providers).where(inArray(providers.id, created.providerIds));
   }
 }
 
@@ -140,7 +139,7 @@ describe.skipIf(!hasDb)("@thebookingkit/db — integration tests", () => {
         SELECT table_name
         FROM information_schema.tables
         WHERE table_schema = 'public'
-          AND table_name = ANY(${tableNames})
+          AND table_name IN (${sql.join(tableNames.map((t) => sql`${t}`), sql`, `)})
         ORDER BY table_name
       `);
 
@@ -862,7 +861,6 @@ describe.skipIf(!hasDb)("@thebookingkit/db — integration tests", () => {
       expect(event!.eventType).toBe("confirmed");
       expect(event!.actor).toBe("test-runner");
 
-      created.bookingEventIds.push(event!.id);
     });
 
     it("can record a booking_event audit trail entry for the completed transition", async () => {
@@ -879,7 +877,6 @@ describe.skipIf(!hasDb)("@thebookingkit/db — integration tests", () => {
       expect(event).toBeDefined();
       expect(event!.eventType).toBe("completed");
 
-      created.bookingEventIds.push(event!.id);
     });
 
     it("retrieves the full audit trail for the booking in insertion order", async () => {

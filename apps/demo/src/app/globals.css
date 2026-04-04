@@ -2807,6 +2807,8 @@ body {
   border-radius: var(--radius-sm);
   padding: 0.85rem 1rem;
   transition: border-color 0.15s;
+  overflow: hidden;
+  min-width: 0;
 }
 
 .component-item:hover {
@@ -2834,6 +2836,8 @@ body {
   border-radius: 6px;
   padding: 0.3rem 0.55rem;
   margin-top: 0.1rem;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .component-install code {
@@ -2841,6 +2845,7 @@ body {
   font-size: 0.7rem;
   color: var(--text-muted);
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

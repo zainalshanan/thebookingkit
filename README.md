@@ -283,20 +283,72 @@ git clone https://github.com/zainalshanan/thebookingkit.git
 cd thebookingkit
 npm install
 
-# Run all tests (434 tests across 21 files)
-turbo test
-
 # Build all packages
 turbo build
 
 # Type check
 turbo typecheck
 
+# Run all unit tests (core logic, adapters)
+turbo test
+
 # Database
 npm run db:push       # Push schema to Postgres
 npm run db:migrate    # Run migration files
 npm run db:seed       # Seed sample data
 ```
+
+### Integration Tests
+
+The `@thebookingkit/db` package includes integration tests that run against a real PostgreSQL 15 database. There are two ways to run them.
+
+#### Against your dev database (quick)
+
+Requires the dev database to already be running (`docker compose up -d`). Runs directly against port 5432 with no lifecycle management.
+
+```bash
+# Start dev database (first time only, or after restart)
+docker compose up -d
+
+# Run integration tests against dev DB
+cd packages/db
+npm run test:integration
+```
+
+#### Fresh isolated container (recommended)
+
+Spins up a dedicated PostgreSQL 15 container on port **5433** (separate from your dev DB on 5432), runs the full schema push + custom migrations + test suite, then removes **both the container and its volume** — whether tests pass or fail.
+
+```bash
+cd packages/db
+npm run test:integration:fresh
+```
+
+What happens under the hood (`scripts/test-integration.sh`):
+
+1. `docker run` — starts `postgres:15-alpine` on port 5433 with a known container name
+2. Waits up to 30 s for `pg_isready`
+3. `drizzle-kit push` — applies the Drizzle ORM schema
+4. Custom SQL migrations — `btree_gist`, audit triggers, GDPR functions, resource tables
+5. `vitest run` — executes all 28 integration tests
+6. `docker stop && docker rm -v` — always runs via `trap`, removing the container **and its anonymous volume**
+
+Your dev database on port 5432 is never touched.
+
+#### CI (GitHub Actions)
+
+The `integration` workflow (`.github/workflows/integration.yml`) runs on every push and pull request to `main`. It uses the same explicit Docker lifecycle approach as the local fresh script:
+
+1. **`docker run`** — starts a named `postgres:15-alpine` container
+2. Waits for `pg_isready` (up to 30 s)
+3. **Build** — `turbo build` compiles all packages
+4. **Schema push** — `echo "yes" | npx drizzle-kit push`
+5. **Custom migrations** — `node --import tsx/esm src/migrate.ts`
+6. **Verify** — queries `pg_tables` to confirm tables were created
+7. **Tests** — `vitest run src/__tests__/integration.test.ts`
+8. **`docker stop && docker rm -v`** — teardown step with `if: always()`, runs even on failure, removing both the container and its volume
+
+> The workflow uses `docker run` rather than the GitHub Actions `services:` block so that container and volume teardown is fully explicit and controlled.
 
 ### Project Structure
 

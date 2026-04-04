@@ -18,7 +18,15 @@ BEGIN
   ELSIF TG_OP = 'UPDATE' THEN
     -- Determine event type from status change
     IF NEW.status != OLD.status THEN
-      v_event_type := NEW.status::booking_event_type;
+      v_event_type := CASE NEW.status::text
+        WHEN 'confirmed' THEN 'confirmed'
+        WHEN 'cancelled' THEN 'cancelled'
+        WHEN 'rescheduled' THEN 'rescheduled'
+        WHEN 'completed' THEN 'completed'
+        WHEN 'no_show' THEN 'no_show'
+        WHEN 'rejected' THEN 'rejected'
+        ELSE 'updated'
+      END::booking_event_type;
     ELSE
       -- Non-status change (e.g. metadata update)
       v_event_type := 'updated'; -- fallback; neutral event type for non-status updates
@@ -52,7 +60,13 @@ CREATE TRIGGER booking_audit_trigger
   FOR EACH ROW
   EXECUTE FUNCTION booking_audit_trigger_fn();
 
--- Prevent UPDATE and DELETE on booking_events (append-only)
+-- Prevent UPDATE and DELETE on booking_events (append-only).
+-- booking_events is a permanent audit trail — rows are never modified or removed
+-- by the application. The only legitimate removal of PII is via anonymize_customer(),
+-- which temporarily disables prevent_booking_events_update to overwrite fields in place.
+-- Hard-deleting a booking that has audit events is intentionally blocked by the
+-- RESTRICT FK; use soft-delete (status = 'cancelled') for normal cancellations,
+-- and anonymize_customer() for GDPR erasure.
 CREATE OR REPLACE FUNCTION prevent_booking_events_modification()
 RETURNS TRIGGER AS $$
 BEGIN

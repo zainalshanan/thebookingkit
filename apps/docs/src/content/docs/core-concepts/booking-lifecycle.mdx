@@ -77,7 +77,7 @@ Every status change is recorded in the `booking_events` table:
 | `metadata` | JSONB with additional context |
 | `created_at` | When the change occurred |
 
-The `booking_events` table is append-only — rows are never updated or deleted. This provides a complete history of every booking for auditing, dispute resolution, and analytics.
+The `booking_events` table is append-only — rows can never be directly updated or deleted, and a `RESTRICT` foreign key prevents deleting a booking while its audit rows exist. For GDPR erasure, use `anonymize_customer()` which anonymizes PII in place rather than deleting records. This provides a complete, tamper-proof history of every booking for auditing, dispute resolution, and analytics.
 
 A database trigger automatically creates audit entries on booking status changes.
 
