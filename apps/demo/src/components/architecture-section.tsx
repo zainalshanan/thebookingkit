@@ -50,6 +50,24 @@ export function ArchitectureSection() {
           </p>
         </div>
 
+        <div
+          style={{
+            background: "linear-gradient(135deg, rgba(233, 69, 96, 0.08), rgba(233, 69, 96, 0.02))",
+            border: "1px solid rgba(233, 69, 96, 0.2)",
+            borderRadius: "var(--radius)",
+            padding: "1.25rem 1.5rem",
+            marginBottom: "2rem",
+            fontSize: "0.88rem",
+            lineHeight: 1.6,
+            color: "var(--text)",
+          }}
+        >
+          <strong style={{ color: "var(--accent)" }}>The NextAuth Pattern:</strong>{" "}
+          NextAuth gives you <code style={{ fontFamily: "var(--font-mono)", fontSize: "0.85em" }}>getServerSession()</code>.
+          thebookingkit gives you <code style={{ fontFamily: "var(--font-mono)", fontSize: "0.85em" }}>getAvailableSlots()</code>.
+          Same idea &mdash; a composable primitive you drop into your app. You already solved auth; now solve bookings the same way.
+        </div>
+
         <div className="arch-diagram">
           <div className="arch-layer arch-layer-core">
             <div className="arch-layer-label">Layer 1</div>

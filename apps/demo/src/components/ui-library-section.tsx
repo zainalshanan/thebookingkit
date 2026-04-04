@@ -1,6 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { BookingCalendarPreview } from "./registry-previews/booking-calendar-preview";
+import { TimeSlotPreview } from "./registry-previews/time-slot-preview";
+import { StatusBadgePreview } from "./registry-previews/status-badge-preview";
+import { SeatsPickerPreview } from "./registry-previews/seats-picker-preview";
+import { QueueDisplayPreview } from "./registry-previews/queue-display-preview";
+import { AvailabilityEditorPreview } from "./registry-previews/availability-editor-preview";
 
 interface ComponentEntry {
   name: string;
@@ -67,6 +73,51 @@ const CATEGORIES: Category[] = [
   },
 ];
 
+const LIVE_PREVIEWS = [
+  {
+    name: "booking-calendar",
+    label: "BookingCalendar",
+    category: "Booking Flow",
+    description: "Date picker with availability indicators and timezone display",
+    component: BookingCalendarPreview,
+  },
+  {
+    name: "time-slot-picker",
+    label: "TimeSlotPicker",
+    category: "Booking Flow",
+    description: "Selectable time slots grouped by Morning, Afternoon, Evening",
+    component: TimeSlotPreview,
+  },
+  {
+    name: "booking-status-badge",
+    label: "BookingStatusBadge",
+    category: "Utilities",
+    description: "All 7 booking states rendered as color-coded badges",
+    component: StatusBadgePreview,
+  },
+  {
+    name: "seats-picker",
+    label: "SeatsPicker",
+    category: "Events",
+    description: "Seat capacity visualization with reservation button",
+    component: SeatsPickerPreview,
+  },
+  {
+    name: "queue-display",
+    label: "QueueDisplay",
+    category: "Queue & Walk-In",
+    description: "Public-facing auto-refreshing queue with wait estimates",
+    component: QueueDisplayPreview,
+  },
+  {
+    name: "availability-editor",
+    label: "AvailabilityEditor",
+    category: "Admin",
+    description: "Weekly schedule editor with day toggles and time ranges",
+    component: AvailabilityEditorPreview,
+  },
+];
+
 function ComponentCopyBtn({ name }: { name: string }) {
   const [copied, setCopied] = useState(false);
   const command = `npx thebookingkit add ${name}`;
@@ -93,7 +144,7 @@ export function UILibrarySection() {
       <div className="section-inner">
         <div className="section-header">
           <span className="section-eyebrow">UI Component Library</span>
-          <h2 className="section-title-lg">21+ Copy-Paste Components</h2>
+          <h2 className="section-title-lg">31 Copy-Paste Components</h2>
           <p className="section-desc">
             React components built on shadcn/ui conventions. Add them to your project with the CLI.
             You own the source — customize freely.
@@ -127,6 +178,72 @@ export function UILibrarySection() {
           </div>
         </div>
 
+        {/* Live Component Previews */}
+        <div style={{ marginBottom: "2.5rem" }}>
+          <h3 style={{ fontSize: "1rem", fontWeight: 700, color: "var(--text)", marginBottom: "1rem" }}>
+            Live Previews
+          </h3>
+          <div
+            className="live-preview"
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))",
+              gap: "1.25rem",
+            }}
+          >
+            {LIVE_PREVIEWS.map((preview) => (
+              <div
+                key={preview.name}
+                className="component-preview"
+                data-testid="component-preview"
+                style={{
+                  background: "var(--surface)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "var(--radius)",
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    padding: "0.75rem 1rem",
+                    borderBottom: "1px solid var(--border)",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <div>
+                    <div style={{ fontFamily: "var(--font-mono)", fontSize: "0.82rem", fontWeight: 600, color: "var(--accent)" }}>
+                      {preview.label}
+                    </div>
+                    <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: "0.15rem" }}>
+                      {preview.category}
+                    </div>
+                  </div>
+                  <ComponentCopyBtn name={preview.name} />
+                </div>
+                <div style={{ padding: "1rem", minHeight: 120 }}>
+                  <preview.component />
+                </div>
+                <div
+                  style={{
+                    padding: "0.5rem 1rem",
+                    borderTop: "1px solid var(--border)",
+                    fontSize: "0.75rem",
+                    color: "var(--text-muted)",
+                  }}
+                >
+                  {preview.description}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Full Component Catalog */}
+        <h3 style={{ fontSize: "1rem", fontWeight: 700, color: "var(--text)", marginBottom: "1rem" }}>
+          Full Component Catalog
+        </h3>
         <div className="components-grid">
           {CATEGORIES.map((cat) => (
             <div key={cat.label} className="component-category">

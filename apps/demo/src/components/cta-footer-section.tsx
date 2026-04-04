@@ -27,18 +27,18 @@ export function CTAFooterSection() {
     <footer className="cta-footer" id="install">
       <div className="cta-footer-inner">
         <h2 className="cta-title">
-          Ready to build your{" "}
-          <span className="accent">booking system</span>?
+          Ready to add{" "}
+          <span className="accent">bookings</span> to your app?
         </h2>
         <p className="cta-subtitle">
           Open source, MIT licensed. Works with any Postgres 15+ database.
-          No vendor lock-in, no monthly fees.
+          No vendor lock-in, no monthly fees. E2E tested with Docker.
         </p>
 
         <div className="cta-commands">
-          <CopyCommand command="npm install @thebookingkit/core" label="Core Engine" />
-          <CopyCommand command="npm install @thebookingkit/server" label="Backend" />
-          <CopyCommand command="npx thebookingkit init" label="CLI Init" />
+          <CopyCommand command="npx thebookingkit init" label="Quick Start" />
+          <CopyCommand command="npm install @thebookingkit/core" label="Core Only" />
+          <CopyCommand command="npm install @thebookingkit/core @thebookingkit/server @thebookingkit/db" label="Full Stack" />
         </div>
 
         <div className="cta-links">
@@ -74,7 +74,7 @@ export function CTAFooterSection() {
               The<span>Booking</span>Kit
             </div>
             <div className="cta-footer-note">
-              The Headless Booking Primitive &mdash; MIT License
+              The NextAuth of Scheduling &mdash; MIT License
             </div>
           </div>
           <div className="cta-footer-links">

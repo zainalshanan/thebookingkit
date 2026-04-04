@@ -3,12 +3,19 @@
 import { useState } from "react";
 
 export function HeroSection() {
-  const [copied, setCopied] = useState(false);
+  const [copiedInit, setCopiedInit] = useState(false);
+  const [copiedCore, setCopiedCore] = useState(false);
 
-  const handleCopy = () => {
+  const handleCopyInit = () => {
+    navigator.clipboard.writeText("npx thebookingkit init").catch(() => {});
+    setCopiedInit(true);
+    setTimeout(() => setCopiedInit(false), 2000);
+  };
+
+  const handleCopyCore = () => {
     navigator.clipboard.writeText("npm install @thebookingkit/core").catch(() => {});
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setCopiedCore(true);
+    setTimeout(() => setCopiedCore(false), 2000);
   };
 
   return (
@@ -18,38 +25,43 @@ export function HeroSection() {
           <span className="hero-eyebrow">Open Source &bull; MIT License &bull; v0.2.0</span>
 
           <h1 className="hero-title">
-            The Headless{" "}
-            <span className="accent">Booking</span>{" "}
-            Primitive
+            Ship <span className="accent">Bookings</span>,{" "}
+            Not Booking Systems
           </h1>
 
-          <p className="hero-subtitle">
-            Open-source scheduling toolkit for any booking use case — barber shops,
-            restaurants, hotels, yoga studios, medical clinics, coworking spaces, and more.
+          <p className="hero-subtitle" style={{ marginBottom: "0.5rem" }}>
+            The <strong>NextAuth of Scheduling</strong> — one import gives you
+            slot computation, team scheduling, and resource assignment.
+            Pure TypeScript. Timezone-safe. Zero vendor lock-in.
           </p>
 
           <div className="hero-use-cases">
             {[
-              "Salons",
-              "Restaurants",
-              "Hotels",
-              "Fitness",
-              "Medical",
-              "Coworking",
-              "Courts",
-              "Studios",
+              "getAvailableSlots()",
+              "getTeamSlots()",
+              "assignResource()",
+              "RRULE",
+              "Timezone-Safe",
+              "SERIALIZABLE",
             ].map((label) => (
-              <span key={label} className="hero-use-case-pill">
+              <span key={label} className="hero-use-case-pill" style={{ fontFamily: "var(--font-mono)", fontSize: "0.78rem" }}>
                 {label}
               </span>
             ))}
           </div>
 
           <div className="hero-npm">
-            <span className="hero-npm-label">npm</span>
+            <span className="hero-npm-label">Quick Start</span>
+            <code>npx thebookingkit init</code>
+            <button className="hero-npm-copy" onClick={handleCopyInit} aria-label="Copy init command">
+              {copiedInit ? "Copied" : "Copy"}
+            </button>
+          </div>
+          <div className="hero-npm" style={{ marginTop: "0.5rem", opacity: 0.8 }}>
+            <span className="hero-npm-label">Core Only</span>
             <code>npm install @thebookingkit/core</code>
-            <button className="hero-npm-copy" onClick={handleCopy} aria-label="Copy install command">
-              {copied ? "Copied" : "Copy"}
+            <button className="hero-npm-copy" onClick={handleCopyCore} aria-label="Copy install command">
+              {copiedCore ? "Copied" : "Copy"}
             </button>
           </div>
 
@@ -101,7 +113,7 @@ export function HeroSection() {
               <span className="code-dot code-dot-red" />
               <span className="code-dot code-dot-yellow" />
               <span className="code-dot code-dot-green" />
-              <span className="code-window-filename">route.ts</span>
+              <span className="code-window-filename">app/api/bookings/route.ts</span>
             </div>
             <div className="code-window-body">
               <pre>
@@ -165,16 +177,16 @@ export function HeroSection() {
 
           <div className="hero-stats">
             <div className="hero-stat">
-              <div className="hero-stat-value">623</div>
-              <div className="hero-stat-label">Unit Tests</div>
+              <div className="hero-stat-value" style={{ fontSize: "1.1rem" }}>E2E Verified</div>
+              <div className="hero-stat-label">Docker + Postgres</div>
             </div>
             <div className="hero-stat">
               <div className="hero-stat-value">5</div>
               <div className="hero-stat-label">Packages</div>
             </div>
             <div className="hero-stat">
-              <div className="hero-stat-value">21+</div>
-              <div className="hero-stat-label">UI Components</div>
+              <div className="hero-stat-value">31</div>
+              <div className="hero-stat-label">Registry Components</div>
             </div>
           </div>
         </div>

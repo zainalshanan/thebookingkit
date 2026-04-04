@@ -7,7 +7,7 @@
 
 /** Pattern that matches private/loopback hostnames blocked for SSRF prevention */
 const SSRF_PATTERN =
-  /^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|169\.254\.\d+\.\d+|\[::1\]|::1)$/;
+  /^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|169\.254\.\d+\.\d+|\[::1\]|::1|\[::ffff:127\.\d+\.\d+\.\d+\]|\[::ffff:10\.\d+\.\d+\.\d+\]|\[::ffff:192\.168\.\d+\.\d+\]|\[fc[0-9a-f]{2}:.*\]|\[fd[0-9a-f]{2}:.*\])$/i;
 
 /**
  * Validate that an external URL is safe to contact.

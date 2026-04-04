@@ -346,7 +346,12 @@ export function decodeCursor(
 ): Record<string, unknown> | null {
   try {
     const json = Buffer.from(cursor, "base64url").toString("utf-8");
-    return JSON.parse(json);
+    const data = JSON.parse(json);
+    // Validate decoded data is a plain object (not array, null, or primitive)
+    if (typeof data !== "object" || data === null || Array.isArray(data)) {
+      return null;
+    }
+    return data as Record<string, unknown>;
   } catch {
     return null;
   }

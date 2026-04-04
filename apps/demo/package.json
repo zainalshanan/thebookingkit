@@ -6,10 +6,14 @@
   "scripts": {
     "dev": "next dev --port 3333",
     "build": "next build",
-    "start": "next start --port 3333"
+    "start": "next start --port 3333",
+    "e2e": "playwright test --config e2e/playwright.config.ts",
+    "e2e:ui": "playwright test --config e2e/playwright.config.ts --ui",
+    "e2e:db": "E2E_WITH_DB=1 playwright test --config e2e/playwright.config.ts"
   },
   "dependencies": {
     "@thebookingkit/core": "*",
+    "@thebookingkit/db": "*",
     "date-fns": "^3.6.0",
     "date-fns-tz": "^3.2.0",
     "next": "^15.3.0",
@@ -17,6 +21,7 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.50.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

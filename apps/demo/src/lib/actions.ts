@@ -43,13 +43,18 @@ import {
 } from "@thebookingkit/core";
 import {
   AVAILABILITY_RULES,
+  getBookingsAsInput as getMockBookingsAsInput,
+  getOverrides as getMockOverrides,
+  type StoredBooking,
+} from "./barber-data";
+import {
   addBooking,
   getAllBookings,
   updateBookingStatus,
   getBookingsAsInput,
   getOverrides,
-  type StoredBooking,
-} from "./barber-data";
+  getAvailabilityRules,
+} from "./data-access";
 import { SERVICES, BARBER_SHOP } from "./constants";
 import {
   getResourcePool,
@@ -57,6 +62,23 @@ import {
   RESTAURANT,
 } from "./restaurant-data";
 import { buildDayRange } from "./demo-utils";
+
+// ---------------------------------------------------------------------------
+// Input Validation Helpers
+// ---------------------------------------------------------------------------
+
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
+
+function validateISO(value: string): Date | null {
+  if (!ISO_DATE_RE.test(value)) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function clampInt(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return min;
+  return Math.max(min, Math.min(max, Math.round(value)));
+}
 
 // ---------------------------------------------------------------------------
 // Customer Actions
@@ -70,11 +92,18 @@ export async function fetchSlots(
 ): Promise<Slot[]> {
   const service = SERVICES.find((s) => s.slug === serviceSlug);
   if (!service) return [];
+  if (!validateISO(startISO) || !validateISO(endISO)) return [];
 
-  return getAvailableSlots(
-    AVAILABILITY_RULES,
+  const [rules, overrides, bookings] = await Promise.all([
+    getAvailabilityRules(),
     getOverrides(),
     getBookingsAsInput(),
+  ]);
+
+  return getAvailableSlots(
+    rules,
+    overrides,
+    bookings,
     { start: new Date(startISO), end: new Date(endISO) },
     customerTimezone,
     {
@@ -104,13 +133,25 @@ export async function createBooking(
   const service = SERVICES.find((s) => s.slug === serviceSlug);
   if (!service) return { success: false, error: "Service not found" };
 
-  const startTime = new Date(startISO);
-  const endTime = new Date(endISO);
+  const startTime = validateISO(startISO);
+  const endTime = validateISO(endISO);
+  if (!startTime || !endTime) return { success: false, error: "Invalid date format" };
 
-  const availability = isSlotAvailable(
-    AVAILABILITY_RULES,
+  const trimmedName = customerName?.trim();
+  const trimmedEmail = customerEmail?.trim();
+  if (!trimmedName || trimmedName.length < 1) return { success: false, error: "Name is required" };
+  if (!trimmedEmail || !trimmedEmail.includes("@")) return { success: false, error: "Valid email is required" };
+
+  const [rules, overrides, existingBookings] = await Promise.all([
+    getAvailabilityRules(),
     getOverrides(),
     getBookingsAsInput(),
+  ]);
+
+  const availability = isSlotAvailable(
+    rules,
+    overrides,
+    existingBookings,
     startTime,
     endTime,
     5,
@@ -127,13 +168,13 @@ export async function createBooking(
     return { success: false, error: reasons[availability.reason ?? ""] ?? "Slot not available" };
   }
 
-  const booking = addBooking({
+  const booking = await addBooking({
     service,
     startsAt: startTime,
     endsAt: endTime,
     status: "confirmed",
-    customerName,
-    customerEmail,
+    customerName: trimmedName,
+    customerEmail: trimmedEmail,
     customerPhone,
     notes,
     responses,
@@ -181,7 +222,8 @@ function serializeBooking(b: StoredBooking): SerializedBooking {
 }
 
 export async function fetchBookings(): Promise<SerializedBooking[]> {
-  return getAllBookings().map(serializeBooking);
+  const bookings = await getAllBookings();
+  return bookings.map(serializeBooking);
 }
 
 export async function changeBookingStatus(
@@ -197,8 +239,8 @@ export async function changeBookingStatus(
     no_show: [],
   };
 
-  const bookings = getAllBookings();
-  const booking = bookings.find((b) => b.id === id);
+  const allBookings = await getAllBookings();
+  const booking = allBookings.find((b) => b.id === id);
   if (!booking) return { success: false, error: "Booking not found" };
 
   const allowed = validTransitions[booking.status] ?? [];
@@ -206,7 +248,7 @@ export async function changeBookingStatus(
     return { success: false, error: `Cannot transition from "${booking.status}" to "${status}"` };
   }
 
-  updateBookingStatus(id, status);
+  await updateBookingStatus(id, status);
   return { success: true };
 }
 
@@ -224,8 +266,8 @@ export async function fetchSlotsComparison(
   return durations.map((duration) => {
     const slots = getAvailableSlots(
       AVAILABILITY_RULES,
-      getOverrides(),
-      getBookingsAsInput(),
+      getMockOverrides(),
+      getMockBookingsAsInput(),
       { start: dayStart, end: dayEnd },
       timezone,
       { duration, bufferBefore: 0, bufferAfter: 0 },
@@ -245,8 +287,8 @@ export async function fetchBufferComparison(
 
   const noBuffer = getAvailableSlots(
     AVAILABILITY_RULES,
-    getOverrides(),
-    getBookingsAsInput(),
+    getMockOverrides(),
+    getMockBookingsAsInput(),
     { start: dayStart, end: dayEnd },
     timezone,
     { duration: 30, bufferBefore: 0, bufferAfter: 0 },
@@ -254,8 +296,8 @@ export async function fetchBufferComparison(
 
   const withBuffer = getAvailableSlots(
     AVAILABILITY_RULES,
-    getOverrides(),
-    getBookingsAsInput(),
+    getMockOverrides(),
+    getMockBookingsAsInput(),
     { start: dayStart, end: dayEnd },
     timezone,
     { duration: 30, bufferBefore: 15, bufferAfter: 15 },
@@ -276,7 +318,7 @@ export async function fetchTimezoneComparison(
   return timezones.map((tz) => {
     const slots = getAvailableSlots(
       AVAILABILITY_RULES,
-      getOverrides(),
+      getMockOverrides(),
       [],
       { start: dayStart, end: dayEnd },
       tz,
@@ -358,12 +400,12 @@ export async function fetchBookingLimitsDemo(
     minNoticeMinutes: minNoticeMinutes > 0 ? minNoticeMinutes : null,
   };
 
-  const existingBookings = getBookingsAsInput();
+  const existingBookings = getMockBookingsAsInput();
   const status = computeBookingLimits(existingBookings, limits, date);
 
   const allSlots = getAvailableSlots(
     AVAILABILITY_RULES,
-    getOverrides(),
+    getMockOverrides(),
     existingBookings,
     { start: dayStart, end: dayEnd },
     tz,
@@ -987,12 +1029,12 @@ export async function fetchSlotReleaseDemo(
 ): Promise<SlotReleaseDemoResult> {
   const { start: dayStart, end: dayEnd } = buildDayRange(dateISO);
   const tz = BARBER_SHOP.timezone;
-  const existingBookings = getBookingsAsInput();
+  const existingBookings = getMockBookingsAsInput();
 
   // Compute all available slots for the day
   const allSlots = getAvailableSlots(
     AVAILABILITY_RULES,
-    getOverrides(),
+    getMockOverrides(),
     existingBookings,
     { start: dayStart, end: dayEnd },
     tz,

@@ -32,6 +32,11 @@ export function parseRecurrence(
   startTime: string,
   endTime: string,
 ): DateOccurrence[] {
+  // Guard against excessively long RRULE strings (DoS prevention)
+  if (rruleString.length > 10_000) {
+    throw new InvalidRRuleError(rruleString.slice(0, 100) + "...");
+  }
+
   let ruleSet: RRuleSet;
 
   try {
