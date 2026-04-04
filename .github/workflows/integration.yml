@@ -30,12 +30,19 @@ jobs:
             postgres:15-alpine
 
           # Wait until Postgres is ready (up to 30s)
+          ready=0
           for i in $(seq 1 30); do
-            docker exec thebookingkit-test-db pg_isready -U thebookingkit -q && break
+            if docker exec thebookingkit-test-db pg_isready -U thebookingkit -q 2>/dev/null; then
+              ready=1
+              break
+            fi
             echo "Waiting for Postgres... ($i/30)"
             sleep 1
           done
-          docker exec thebookingkit-test-db pg_isready -U thebookingkit
+          if [ "$ready" -eq 0 ]; then
+            echo "Postgres did not become ready within 30s"
+            exit 1
+          fi
 
       - name: Set up Node.js
         uses: actions/setup-node@v4

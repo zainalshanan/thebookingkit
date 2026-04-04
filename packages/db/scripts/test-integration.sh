@@ -41,12 +41,20 @@ docker run -d \
   postgres:15-alpine
 
 echo "→ Waiting for Postgres to be ready..."
+ready=0
 for i in $(seq 1 30); do
-  docker exec "${CONTAINER}" pg_isready -U thebookingkit -q && break
+  if docker exec "${CONTAINER}" pg_isready -U thebookingkit -q 2>/dev/null; then
+    ready=1
+    break
+  fi
   echo "   ($i/30) not ready yet..."
   sleep 1
 done
-docker exec "${CONTAINER}" pg_isready -U thebookingkit
+if [ "${ready}" -eq 0 ]; then
+  echo "✗ Postgres did not become ready within 30s"
+  exit 1
+fi
+echo "✓ Postgres is ready"
 
 echo "→ Pushing Drizzle schema..."
 (cd "${PKG_DIR}" && export DATABASE_URL="${DB_URL}" && echo "yes" | npx drizzle-kit push)
