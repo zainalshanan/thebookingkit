@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx vitest:*)",
+      "Bash(npx playwright:*)",
+      "Bash(npm view:*)",
+      "Bash(grep -r \"init\\\\|CLI\\\\|command\" /c/Users/realz/OneDrive/Desktop/Projects/thebookingkit/apps/docs/src/content/docs/*.mdx)",
+      "Bash(xargs grep:*)",
+      "Read(//tmp/**)",
+      "Bash(npx turbo:*)"
+    ]
+  }
+}

@@ -150,8 +150,10 @@ function BookingPage() {
 
 ## Complete example: Build a booking page
 
+The example below uses React with `useState`/`useEffect`. The `'use client'` directive is required for **Next.js App Router** only — remove it if you're using Remix, Vite, Astro, or any other framework.
+
 ```typescript
-'use client';
+'use client'; // Next.js App Router only — remove for Remix, Vite, Astro, etc.
 
 import { useState, useEffect } from 'react';
 import { getAvailableSlots, isSlotAvailable } from '@thebookingkit/core';

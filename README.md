@@ -18,7 +18,7 @@
 
 ## What is The Booking Kit?
 
-The Booking Kit gives you the database schema, scheduling math, and UI components to build a booking system — without locking you into a SaaS platform. It's designed for developers building with Next.js and Postgres who want full control over their booking flow.
+The Booking Kit gives you the database schema, scheduling math, and UI components to build a booking system — without locking you into a SaaS platform. It's designed for TypeScript developers building with Postgres who want full control over their booking flow. `@thebookingkit/core` and `@thebookingkit/db` are framework-agnostic; the React components work with Next.js, Remix, Vite, Astro, or any React setup.
 
 **Philosophy: "Hide the Math, Expose the UI."** The hard parts (timezone-aware slot computation, RRULE expansion, double-booking prevention, team scheduling algorithms) are encapsulated in `@thebookingkit/core`. The UI components are copy-paste source code you own entirely, following the [shadcn/ui](https://ui.shadcn.com/) convention.
 
@@ -181,7 +181,7 @@ function BookingPage() {
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                   Your Next.js App                   │
+│                    Your Application                   │
 ├──────────┬──────────────────┬────────────────────────┤
 │  @thebookingkit/ui               │     API Routes          │
 │  21 React components       │     (your code)         │
@@ -414,7 +414,7 @@ npx tsx packages/db/src/migrate.ts
 
 ### Application
 
-Deploy your Next.js app to Vercel, Railway, or any Node.js host. Set environment variables:
+Deploy your application to Vercel, Railway, Fly.io, Render, or any Node.js host. Set environment variables:
 
 ```
 DATABASE_URL=          # Postgres connection string
@@ -440,7 +440,7 @@ The Booking Kit uses a `JobAdapter` interface. With Inngest (recommended):
 | Category | Technology |
 |---|---|
 | Language | TypeScript 5.x (strict mode) |
-| Framework | Next.js 14+ (App Router) |
+| Framework | Any (Next.js, Remix, Vite, Astro) — Next.js used in demo |
 | Database | PostgreSQL 15+ via Drizzle ORM |
 | Auth | NextAuth.js 5.x (pluggable) |
 | Jobs | Inngest 3.x (pluggable) |
