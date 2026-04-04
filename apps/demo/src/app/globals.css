@@ -3331,6 +3331,44 @@ body {
   .hero-inner {
     padding: 2rem 0.75rem;
   }
+
+  /* Demo tabs: scrollable row instead of wrap on very small screens */
+  .demo-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .demo-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .demo-tab {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.72rem;
+  }
+
+  .demo-panel {
+    padding: 0.75rem;
+  }
+
+  .comparison-card {
+    padding: 0.75rem;
+  }
+
+  .comparison-duration {
+    font-size: 1.1rem;
+  }
+
+  .buffer-card {
+    padding: 0.75rem;
+  }
+
+  .embed-tab {
+    padding: 0.35rem 0.6rem;
+    font-size: 0.75rem;
+  }
 }
 
 /* Mobile: Admin booking cards */
@@ -3432,5 +3470,98 @@ body {
   .filter-tab {
     min-height: 40px;
     padding: 0.5rem 0.85rem;
+  }
+
+  /* Adapter table: stack into cards on mobile */
+  .adapter-table thead {
+    display: none;
+  }
+
+  .adapter-table,
+  .adapter-table tbody,
+  .adapter-table tr,
+  .adapter-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .adapter-table tr {
+    padding: 0.75rem 0.85rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .adapter-table tr:last-child {
+    border-bottom: none;
+  }
+
+  .adapter-table td {
+    padding: 0.15rem 0;
+    border-bottom: none;
+  }
+
+  .adapter-table td:first-child {
+    margin-bottom: 0.15rem;
+  }
+
+  .adapter-table td:nth-child(2) {
+    margin-bottom: 0.35rem;
+  }
+
+  .adapter-table td:nth-child(3) {
+    margin-bottom: 0.35rem;
+  }
+
+  .adapter-table td:nth-child(3)::before {
+    content: "Default: ";
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    font-weight: 600;
+    font-family: inherit;
+  }
+
+  .adapter-table td:nth-child(4)::before {
+    content: "Alternatives: ";
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    font-weight: 600;
+    display: block;
+    margin-bottom: 0.2rem;
+  }
+
+  /* Demo tabs: smaller on mobile */
+  .demo-tab {
+    padding: 0.45rem 0.7rem;
+    font-size: 0.78rem;
+  }
+
+  .demo-panel {
+    padding: 1rem;
+  }
+
+  /* Comparison code: allow wrapping on mobile */
+  .comparison-code code {
+    white-space: normal;
+    word-break: break-all;
+    font-size: 0.65rem;
+  }
+
+  /* Embed tabs: allow scrolling */
+  .embed-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .embed-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Timezone grid: single column on mobile */
+  .tz-grid {
+    grid-template-columns: 1fr;
   }
 }
