@@ -3,9 +3,14 @@
 **The Headless Booking Primitive** — an open-source TypeScript toolkit for building production-grade booking and scheduling systems.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
-[![Tests](https://img.shields.io/badge/Tests-434%20passing-brightgreen)]()
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15%2B-336791)](https://www.postgresql.org/)
+[![Integration Tests](https://github.com/zainalshanan/thebookingkit/actions/workflows/integration.yml/badge.svg)](https://github.com/zainalshanan/thebookingkit/actions/workflows/integration.yml)
+[![E2E Tests](https://github.com/zainalshanan/thebookingkit/actions/workflows/e2e.yml/badge.svg)](https://github.com/zainalshanan/thebookingkit/actions/workflows/e2e.yml)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/zainalshanan/thebookingkit/pulls)
+[![npm](https://img.shields.io/npm/v/@thebookingkit/core?label=%40thebookingkit%2Fcore)](https://www.npmjs.com/package/@thebookingkit/core)
+[![npm](https://img.shields.io/npm/v/@thebookingkit/cli?label=%40thebookingkit%2Fcli)](https://www.npmjs.com/package/@thebookingkit/cli)
+[![npm](https://img.shields.io/npm/v/@thebookingkit/server?label=%40thebookingkit%2Fserver)](https://www.npmjs.com/package/@thebookingkit/server)
+[![npm](https://img.shields.io/npm/v/@thebookingkit/d1?label=%40thebookingkit%2Fd1)](https://www.npmjs.com/package/@thebookingkit/d1)
+[![npm](https://img.shields.io/npm/v/@thebookingkit/db?label=%40thebookingkit%2Fdb)](https://www.npmjs.com/package/@thebookingkit/db)
 
 **[Documentation](https://docs.thebookingkit.dev)** | **[Live Demo](https://thebookingkit.dev)** | **[GitHub](https://github.com/zainalshanan/thebookingkit)**
 
