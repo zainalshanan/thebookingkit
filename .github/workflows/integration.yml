@@ -48,21 +48,29 @@ jobs:
 
       - name: Push Drizzle schema to database
         working-directory: packages/db
-        run: npx drizzle-kit push --force
-        env:
-          DATABASE_URL: ${{ env.DATABASE_URL }}
+        run: |
+          # drizzle-kit push requires interactive confirmation — pipe yes to auto-accept
+          echo "yes" | npx drizzle-kit push
+
+      - name: Verify tables were created
+        run: |
+          node -e "
+            const postgres = require('postgres');
+            const sql = postgres(process.env.DATABASE_URL);
+            sql\`SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename\`
+              .then(rows => {
+                console.log('Tables created:', rows.length);
+                rows.forEach(r => console.log('  -', r.tablename));
+                if (rows.length === 0) { console.error('ERROR: No tables created!'); process.exit(1); }
+                return sql.end();
+              })
+              .catch(err => { console.error('Verification failed:', err); process.exit(1); });
+          "
 
       - name: Run custom SQL migrations
-        # Applies 0001_setup_extensions.sql (btree_gist + pgcrypto + EXCLUDE
-        # constraint), the audit trigger, GDPR anonymize function, and the
-        # resources schema extension. These are not covered by drizzle-kit push.
         working-directory: packages/db
         run: node --import tsx/esm src/migrate.ts
-        env:
-          DATABASE_URL: ${{ env.DATABASE_URL }}
 
       - name: Run DB integration tests
         working-directory: packages/db
         run: npx vitest run src/__tests__/integration.test.ts
-        env:
-          DATABASE_URL: ${{ env.DATABASE_URL }}
