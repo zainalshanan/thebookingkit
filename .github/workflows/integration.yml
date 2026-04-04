@@ -1,0 +1,68 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  DATABASE_URL: postgresql://thebookingkit:thebookingkit@localhost:5432/thebookingkit
+
+jobs:
+  integration:
+    name: DB Integration Tests (Postgres 15)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: thebookingkit
+          POSTGRES_USER: thebookingkit
+          POSTGRES_PASSWORD: thebookingkit
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U thebookingkit"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build packages
+        run: npx turbo build
+
+      - name: Push Drizzle schema to database
+        working-directory: packages/db
+        run: npx drizzle-kit push --force
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+
+      - name: Run custom SQL migrations
+        # Applies 0001_setup_extensions.sql (btree_gist + pgcrypto + EXCLUDE
+        # constraint), the audit trigger, GDPR anonymize function, and the
+        # resources schema extension. These are not covered by drizzle-kit push.
+        working-directory: packages/db
+        run: node --import tsx/esm src/migrate.ts
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+
+      - name: Run DB integration tests
+        working-directory: packages/db
+        run: npx vitest run src/__tests__/integration.test.ts
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}

@@ -109,7 +109,7 @@ export async function getAllBookings(): Promise<StoredBooking[]> {
       customerName: r.customerName ?? "Unknown",
       customerEmail: r.customerEmail ?? "",
       customerPhone: r.customerPhone ?? undefined,
-      notes: r.notes ?? undefined,
+      notes: (r.metadata as Record<string, unknown>)?.notes as string | undefined,
       createdAt: r.createdAt,
     });
   }
@@ -133,18 +133,20 @@ export async function addBooking(
     .where(eq(schema.eventTypes.slug, booking.service.slug))
     .limit(1);
 
+  if (!et) return addMockBooking(booking); // No matching event type in DB — fall back to mock
+
   const [row] = await db
     .insert(schema.bookings)
     .values({
-      eventTypeId: et?.id,
-      providerId: et?.providerId ?? undefined,
+      eventTypeId: et.id,
+      providerId: et.providerId!,
       startsAt: booking.startsAt,
       endsAt: booking.endsAt,
       status: booking.status as "pending" | "confirmed",
       customerName: booking.customerName,
       customerEmail: booking.customerEmail,
-      customerPhone: booking.customerPhone,
-      notes: booking.notes,
+      customerPhone: booking.customerPhone ?? null,
+      metadata: booking.notes ? { notes: booking.notes } : {},
     })
     .returning();
 
@@ -157,7 +159,7 @@ export async function addBooking(
     customerName: row.customerName ?? booking.customerName,
     customerEmail: row.customerEmail ?? booking.customerEmail,
     customerPhone: row.customerPhone ?? undefined,
-    notes: row.notes ?? undefined,
+    notes: (row.metadata as Record<string, unknown>)?.notes as string | undefined,
     createdAt: row.createdAt,
   };
 }
@@ -175,7 +177,7 @@ export async function updateBookingStatus(
 
   const [updated] = await db
     .update(schema.bookings)
-    .set({ status: status as "confirmed" | "cancelled" | "completed" })
+    .set({ status: status as "pending" | "confirmed" | "cancelled" | "rescheduled" | "completed" | "no_show" | "rejected" })
     .where(eq(schema.bookings.id, id))
     .returning();
 
