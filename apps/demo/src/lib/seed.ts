@@ -51,7 +51,7 @@ async function seed() {
         slug: svc.slug,
         durationMinutes: svc.duration,
         description: svc.description,
-        priceInCents: Math.round(svc.price * 100),
+        priceCents: Math.round(svc.price * 100),
         isActive: true,
       })
       .returning();

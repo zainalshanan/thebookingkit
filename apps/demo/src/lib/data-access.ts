@@ -93,7 +93,7 @@ export async function getAllBookings(): Promise<StoredBooking[]> {
           title: et.title,
           duration: et.durationMinutes,
           description: et.description ?? "",
-          price: (et.priceInCents ?? 0) / 100,
+          price: (et.priceCents ?? 0) / 100,
           icon: "scissors",
           questions: [],
         };
