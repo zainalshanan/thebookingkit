@@ -57,6 +57,9 @@ export function HeroSection() {
               {copiedInit ? "Copied" : "Copy"}
             </button>
           </div>
+          <p style={{ fontSize: "0.72rem", color: "var(--text-muted)", margin: "0.3rem 0 0.5rem" }}>
+            Scaffolds config, env template, and component directory. Interactive adapter selection.
+          </p>
           <div className="hero-npm" style={{ marginTop: "0.5rem", opacity: 0.8 }}>
             <span className="hero-npm-label">Core Only</span>
             <code>npm install @thebookingkit/core</code>

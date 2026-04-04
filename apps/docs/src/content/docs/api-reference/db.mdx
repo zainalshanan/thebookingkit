@@ -1,0 +1,372 @@
+---
+title: "Database Reference (@thebookingkit/db)"
+description: "Complete API reference for @thebookingkit/db — Drizzle ORM schema, database client, TypeScript types, and migration utilities for Postgres 15+."
+---
+
+`@thebookingkit/db` provides the Drizzle ORM schema, a typed database client factory, inferred TypeScript types for all tables, and a migration runner for custom SQL that Drizzle's kit does not handle.
+
+```bash
+npm install @thebookingkit/db drizzle-orm postgres
+```
+
+---
+
+## Database Client
+
+### `createDb()`
+
+Creates a Drizzle database client connected to a Postgres instance. Uses `postgres.js` as the driver.
+
+```typescript
+import { createDb } from "@thebookingkit/db";
+
+const db = createDb(process.env.DATABASE_URL!, {
+  max: 10,   // connection pool size
+});
+```
+
+**Parameters**
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `databaseUrl` | `string` | Yes | Postgres connection string |
+| `options.max` | `number` | No | Maximum pool connections. Default: `10` |
+| `options.ssl` | `boolean \| object` | No | SSL config. Defaults to `false` for `localhost`, `"require"` otherwise |
+
+**Returns** `Database` — a Drizzle ORM instance with the full BookingKit schema loaded.
+
+### `Database`
+
+The type of the client returned by `createDb`. Use this to type function parameters that accept a database connection.
+
+```typescript
+import type { Database } from "@thebookingkit/db";
+
+async function getBooking(db: Database, id: string) {
+  return db.query.bookings.findFirst({
+    where: (b, { eq }) => eq(b.id, id),
+  });
+}
+```
+
+---
+
+## Schema Tables
+
+All tables are exported from `@thebookingkit/db` and can be used with Drizzle's query builder or SQL template tags.
+
+```typescript
+import {
+  bookings,
+  providers,
+  eventTypes,
+  availabilityRules,
+  availabilityOverrides,
+  outOfOffice,
+  organizations,
+  teams,
+  teamMembers,
+  bookingEvents,
+  bookingQuestionsResponses,
+  bookingSeats,
+  recurringBookings,
+  payments,
+  routingForms,
+  routingSubmissions,
+  workflows,
+  workflowLogs,
+  webhooks,
+  webhookDeliveries,
+  emailDeliveryLog,
+  customerPreferences,
+  walkInQueue,
+  resources,
+  resourceAvailabilityRules,
+  resourceAvailabilityOverrides,
+} from "@thebookingkit/db";
+```
+
+**Core tables**
+
+| Table export | DB table name | Description |
+|---|---|---|
+| `bookings` | `bookings` | All booking records with status, times, and customer info |
+| `bookingEvents` | `booking_events` | Append-only audit trail of every booking state change |
+| `bookingSeats` | `booking_seats` | Individual seat reservations for group events |
+| `bookingQuestionsResponses` | `booking_questions_responses` | Customer answers to event type intake questions |
+| `recurringBookings` | `recurring_bookings` | Recurring series parent records |
+
+**Provider and scheduling tables**
+
+| Table export | DB table name | Description |
+|---|---|---|
+| `providers` | `providers` | Service providers (staff members, contractors) |
+| `eventTypes` | `event_types` | Bookable service definitions with duration, price, and settings |
+| `availabilityRules` | `availability_rules` | RRULE-based recurring availability windows |
+| `availabilityOverrides` | `availability_overrides` | One-off date overrides (extra availability or blocks) |
+| `outOfOffice` | `out_of_office` | Multi-day out-of-office periods |
+
+**Organization and team tables**
+
+| Table export | DB table name | Description |
+|---|---|---|
+| `organizations` | `organizations` | Multi-tenant organization records |
+| `teams` | `teams` | Provider groups with shared scheduling |
+| `teamMembers` | `team_members` | Provider-to-team membership with roles |
+
+**Payment and commerce tables**
+
+| Table export | DB table name | Description |
+|---|---|---|
+| `payments` | `payments` | Payment intent and capture records |
+
+**Automation tables**
+
+| Table export | DB table name | Description |
+|---|---|---|
+| `workflows` | `workflows` | Trigger-based automation definitions |
+| `workflowLogs` | `workflow_logs` | Execution history for workflow runs |
+| `webhooks` | `webhooks` | Webhook subscription registrations |
+| `webhookDeliveries` | `webhook_deliveries` | Delivery attempt log with response codes |
+| `emailDeliveryLog` | `email_delivery_log` | Transactional email send history |
+| `routingForms` | `routing_forms` | Conditional routing form definitions |
+| `routingSubmissions` | `routing_submissions` | Customer responses to routing forms |
+| `customerPreferences` | `customer_preferences` | Per-customer notification and timezone preferences |
+
+**Queue and resource tables**
+
+| Table export | DB table name | Description |
+|---|---|---|
+| `walkInQueue` | `walk_in_queue` | Walk-in waitlist entries |
+| `resources` | `resources` | Bookable resources (rooms, equipment, vehicles) |
+| `resourceAvailabilityRules` | `resource_availability_rules` | RRULE-based resource availability |
+| `resourceAvailabilityOverrides` | `resource_availability_overrides` | One-off resource availability overrides |
+
+All tables include `id` (UUID), `created_at`, and `updated_at` columns. Most tables include an optional `organization_id` column for multi-tenancy.
+
+---
+
+## Enum Union Types
+
+Enum types derived from the Drizzle `pgEnum` definitions. Use these for type-safe status comparisons without importing Drizzle internals.
+
+```typescript
+import type {
+  BookingStatusDb,
+  PaymentStatusDb,
+  BookingEventTypeDb,
+  PaymentTypeDb,
+  LocationTypeDb,
+  AssignmentStrategyDb,
+  TeamMemberRoleDb,
+  QuestionFieldTypeDb,
+  RecurringFrequencyDb,
+  SeatStatusDb,
+  WorkflowTriggerDb,
+  WorkflowActionTypeDb,
+  EmailDeliveryStatusDb,
+  BookingSourceDb,
+  WalkInStatusDb,
+} from "@thebookingkit/db";
+```
+
+| Type | Values |
+|---|---|
+| `BookingStatusDb` | `"pending"`, `"confirmed"`, `"completed"`, `"cancelled"`, `"rejected"`, `"rescheduled"`, `"no_show"` |
+| `PaymentStatusDb` | `"unpaid"`, `"paid"`, `"partially_refunded"`, `"refunded"`, `"failed"` |
+| `BookingEventTypeDb` | `"created"`, `"confirmed"`, `"cancelled"`, `"rescheduled"`, `"completed"`, `"no_show"`, `"payment_received"`, `"refunded"`, `"rejected"` |
+| `PaymentTypeDb` | `"full"`, `"deposit"`, `"free"` |
+| `LocationTypeDb` | `"in_person"`, `"video"`, `"phone"`, `"custom"` |
+| `AssignmentStrategyDb` | `"round_robin"`, `"least_busy"`, `"fixed"`, `"customer_choice"` |
+| `TeamMemberRoleDb` | `"owner"`, `"admin"`, `"member"` |
+| `QuestionFieldTypeDb` | `"text"`, `"textarea"`, `"select"`, `"checkbox"`, `"phone"`, `"email"`, `"number"`, `"date"` |
+| `RecurringFrequencyDb` | `"daily"`, `"weekly"`, `"biweekly"`, `"monthly"` |
+| `SeatStatusDb` | `"reserved"`, `"confirmed"`, `"cancelled"` |
+| `WorkflowTriggerDb` | `"booking_created"`, `"booking_confirmed"`, `"booking_cancelled"`, `"booking_rescheduled"`, `"before_event"`, `"after_event"` |
+| `WorkflowActionTypeDb` | `"send_email"`, `"send_sms"`, `"webhook"`, `"update_status"`, `"add_to_calendar"` |
+| `EmailDeliveryStatusDb` | `"queued"`, `"sent"`, `"delivered"`, `"failed"`, `"bounced"` |
+| `BookingSourceDb` | `"web"`, `"api"`, `"embed"`, `"walk_in"`, `"manual"` |
+| `WalkInStatusDb` | `"waiting"`, `"called"`, `"in_progress"`, `"completed"`, `"cancelled"`, `"no_show"` |
+
+---
+
+## Select Types
+
+TypeScript types inferred from Drizzle's `InferSelectModel`. These represent rows as they come back from database queries.
+
+```typescript
+import type {
+  Booking,
+  Provider,
+  EventType,
+  AvailabilityRule,
+  AvailabilityOverride,
+  OutOfOffice,
+  Organization,
+  Team,
+  TeamMember,
+  BookingEvent,
+  BookingQuestionResponse,
+  BookingSeat,
+  RecurringBooking,
+  Payment,
+  RoutingForm,
+  RoutingSubmission,
+  Workflow,
+  WorkflowLog,
+  Webhook,
+  WebhookDelivery,
+  EmailDeliveryLogEntry,
+  CustomerPreference,
+  WalkInQueue,
+  Resource,
+  ResourceAvailabilityRule,
+  ResourceAvailabilityOverride,
+} from "@thebookingkit/db";
+```
+
+---
+
+## Insert Types
+
+TypeScript types inferred from Drizzle's `InferInsertModel`. These represent the data required to insert a new row. Fields with database defaults (`id`, `created_at`, `updated_at`) are optional.
+
+```typescript
+import type {
+  NewBooking,
+  NewProvider,
+  NewEventType,
+  NewAvailabilityRule,
+  NewAvailabilityOverride,
+  NewOutOfOffice,
+  NewOrganization,
+  NewTeam,
+  NewTeamMember,
+  NewBookingEvent,
+  NewBookingQuestionResponse,
+  NewBookingSeat,
+  NewRecurringBooking,
+  NewPayment,
+  NewRoutingForm,
+  NewRoutingSubmission,
+  NewWorkflow,
+  NewWorkflowLog,
+  NewWebhook,
+  NewWebhookDelivery,
+  NewEmailDeliveryLogEntry,
+  NewCustomerPreference,
+  NewWalkInQueue,
+  NewResource,
+  NewResourceAvailabilityRule,
+  NewResourceAvailabilityOverride,
+} from "@thebookingkit/db";
+```
+
+---
+
+## Migration Utilities
+
+### `runCustomMigrations()`
+
+Runs the custom SQL migration files that Drizzle Kit does not manage — extensions, exclusion constraints, audit triggers, stored functions, and resource tables.
+
+```typescript
+import { runCustomMigrations } from "@thebookingkit/db";
+
+await runCustomMigrations(process.env.DATABASE_URL!);
+```
+
+**Parameters**
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `databaseUrl` | `string` | Yes | Postgres connection string |
+
+**Migration files applied (in order)**
+
+| File | Purpose |
+|---|---|
+| `0001_setup_extensions.sql` | Enable `btree_gist`, `uuid-ossp`, and other required extensions |
+| `0002_booking_audit_trigger.sql` | Install the trigger that writes to `booking_events` on every status change |
+| `0003_gdpr_anonymize.sql` | Install the `anonymize_customer` stored function |
+| `0004_create_booking_function.sql` | Install the atomic `create_booking` function with exclusion constraint enforcement |
+| `0005_resources.sql` | Set up the `EXCLUDE USING gist` constraint on the `resources` table |
+
+Run this once after your initial schema push and after any upgrade that adds new migration files.
+
+---
+
+## Examples
+
+### Querying bookings with Drizzle
+
+```typescript
+import { createDb, bookings, providers } from "@thebookingkit/db";
+import { eq, and, gte, lte } from "drizzle-orm";
+
+const db = createDb(process.env.DATABASE_URL!);
+
+// Find upcoming confirmed bookings for a provider
+const upcoming = await db
+  .select()
+  .from(bookings)
+  .where(
+    and(
+      eq(bookings.providerId, providerId),
+      eq(bookings.status, "confirmed"),
+      gte(bookings.startsAt, new Date()),
+    )
+  )
+  .orderBy(bookings.startsAt);
+```
+
+### Inserting a booking with type safety
+
+```typescript
+import { createDb, bookings, type NewBooking } from "@thebookingkit/db";
+
+const db = createDb(process.env.DATABASE_URL!);
+
+const newBooking: NewBooking = {
+  providerId: "uuid-here",
+  eventTypeId: "uuid-here",
+  customerEmail: "alice@example.com",
+  customerName: "Alice",
+  startsAt: new Date("2026-04-15T10:00:00.000Z"),
+  endsAt: new Date("2026-04-15T10:30:00.000Z"),
+  status: "pending",
+  timezone: "America/New_York",
+};
+
+const [inserted] = await db.insert(bookings).values(newBooking).returning();
+```
+
+### Using select types in API responses
+
+```typescript
+import type { Booking, BookingStatusDb } from "@thebookingkit/db";
+
+function isConfirmed(booking: Booking): boolean {
+  return booking.status === "confirmed" satisfies BookingStatusDb;
+}
+```
+
+### Full project setup
+
+```typescript
+// lib/db.ts — singleton database client
+import { createDb, type Database } from "@thebookingkit/db";
+import { runCustomMigrations } from "@thebookingkit/db";
+
+let _db: Database | null = null;
+
+export function getDb(): Database {
+  if (!_db) {
+    _db = createDb(process.env.DATABASE_URL!, { max: 5 });
+  }
+  return _db;
+}
+
+// In your migration script / startup:
+// await runCustomMigrations(process.env.DATABASE_URL!);
+```

@@ -263,3 +263,279 @@ import { BookingConflictError, SerializationRetryExhaustedError, UnauthorizedErr
 import type { AuthAdapter, EmailAdapter, CalendarAdapter, JobAdapter, PaymentAdapter, StorageAdapter, SmsAdapter } from "@thebookingkit/server";
 import { generateICSAttachment, JOB_NAMES } from "@thebookingkit/server";
 ```
+
+## Walk-In Queue
+
+Imported from `@thebookingkit/core`. Enables providers to accept walk-in customers
+alongside scheduled appointments. Walk-ins are placed in gaps between existing
+bookings, with automatic wait-time estimation and a lifecycle state machine.
+
+### Types
+
+| Type | Description |
+|---|---|
+| `BookingSource` | `"online" \| "walk_in" \| "phone" \| "admin"` — how a booking was created |
+| `WalkInStatus` | `"queued" \| "in_service" \| "completed" \| "no_show" \| "cancelled"` |
+| `WalkInQueueEntry` | Full walk-in record: `id`, `bookingId`, `providerId`, `queuePosition`, `estimatedWaitMinutes`, `checkedInAt`, `serviceStartedAt`, `completedAt`, `status`, `customerName`, `durationMinutes`, and optional contact fields |
+| `AddWalkInInput` | Input shape for adding a walk-in: `providerId`, `eventTypeId`, `durationMinutes`, `customerName`, optional contact, optional buffers |
+| `AddWalkInResult` | Result of adding a walk-in: `queueEntry`, `estimatedStartTime`, `estimatedWaitMinutes`, `queuePosition` |
+| `WaitTimeEstimate` | `estimatedMinutes`, `queueLength`, `nextAvailableAt` |
+| `ProviderWalkInState` | `acceptingWalkIns: boolean`, `withinWorkingHours: boolean` |
+| `WalkInAnalytics` | Aggregated analytics — see `computeWalkInAnalytics` |
+
+### Functions
+
+```typescript
+import {
+  estimateWaitTime,
+  findNextAvailableGap,
+  isValidQueueTransition,
+  validateQueueTransition,
+  recomputeQueuePositions,
+  reorderQueue,
+  recomputeWaitTimes,
+  isAcceptingWalkIns,
+  computeWalkInAnalytics,
+} from "@thebookingkit/core";
+
+// Estimate how long a new walk-in will wait
+const estimate = estimateWaitTime(queue, existingBookings, 30);
+// => { estimatedMinutes: 45, queueLength: 2, nextAvailableAt: Date }
+
+// Find the earliest start time for a new walk-in
+const startTime = findNextAvailableGap(queue, existingBookings, 30, 5, 5);
+
+// State machine guard
+const ok = isValidQueueTransition("queued", "in_service"); // true
+const bad = isValidQueueTransition("completed", "queued");  // false
+
+// Throws InvalidQueueTransitionError if invalid
+validateQueueTransition("queued", "in_service");
+
+// Normalise positions after a removal
+const updated = recomputeQueuePositions(activeEntries);
+
+// Drag-and-drop reorder
+const reordered = reorderQueue(entries, ["id-3", "id-1", "id-2"]);
+
+// Refresh all estimated wait times after a change
+const refreshed = recomputeWaitTimes(queue, existingBookings);
+
+// Check provider walk-in status right now
+const state = isAcceptingWalkIns(true, rules, overrides);
+// => { acceptingWalkIns: true, withinWorkingHours: true }
+
+// Aggregate analytics for a reporting period
+const analytics = computeWalkInAnalytics(entriesInRange, totalBookings);
+```
+
+| Function | Signature | Description |
+|---|---|---|
+| `estimateWaitTime` | `(queue, existingBookings, serviceDuration, now?)` | Estimate wait minutes for a new walk-in based on active queue and any in-progress appointment |
+| `findNextAvailableGap` | `(queue, existingBookings, durationMinutes, bufferBefore?, bufferAfter?, now?)` | Find the earliest moment the provider can begin serving a new walk-in |
+| `isValidQueueTransition` | `(from, to)` | Return `true` if the `WalkInStatus` transition is permitted by the state machine |
+| `validateQueueTransition` | `(current, target)` | Assert the transition is valid; throws `InvalidQueueTransitionError` otherwise |
+| `recomputeQueuePositions` | `(entries)` | Renumber `queuePosition` fields starting from 1, preserving input order |
+| `reorderQueue` | `(entries, orderedIds)` | Apply a new position order by entry ID; keeps the in-service entry at position 1 |
+| `recomputeWaitTimes` | `(queue, existingBookings, now?)` | Refresh `estimatedWaitMinutes` on every queued entry after any queue change |
+| `isAcceptingWalkIns` | `(acceptingWalkIns, rules, overrides, now?)` | Check the provider's toggle and current availability window |
+| `computeWalkInAnalytics` | `(entries, totalBookings)` | Return aggregated `WalkInAnalytics` including no-show rate, hourly/daily distributions, and walk-in ratio |
+
+### State Machine
+
+Valid transitions for `WalkInStatus`:
+
+| From | Allowed targets |
+|---|---|
+| `queued` | `in_service`, `no_show`, `cancelled` |
+| `in_service` | `completed`, `no_show` |
+| `completed` | — (terminal) |
+| `no_show` | — (terminal) |
+| `cancelled` | — (terminal) |
+
+### Error Classes
+
+| Class | `code` | Thrown when |
+|---|---|---|
+| `WalkInsDisabledError` | `WALK_INS_DISABLED` | Provider's `acceptingWalkIns` flag is `false` |
+| `QueueEntryNotFoundError` | `QUEUE_ENTRY_NOT_FOUND` | Referenced queue entry ID does not exist |
+| `InvalidQueueTransitionError` | `INVALID_QUEUE_TRANSITION` | `validateQueueTransition` is called with a disallowed `from → to` pair |
+
+---
+
+## Kiosk Mode
+
+Imported from `@thebookingkit/core`. Configuration, validation, and utilities for
+the interactive kiosk calendar view (E-20). Handles display settings, reschedule
+validation, break/block management, conflict detection, and multi-provider resource
+views.
+
+### Types
+
+| Type | Description |
+|---|---|
+| `BlockDensityMode` | `"compact" \| "standard" \| "detailed"` — calendar block density |
+| `ColorCodingMode` | `"status" \| "event_type" \| "source"` — block color scheme |
+| `KioskViewType` | `"day" \| "3day" \| "week"` — default calendar view |
+| `KioskFieldVisibility` | Object controlling which fields appear on compact blocks and detail popovers |
+| `KioskSettings` | Full kiosk configuration: view, density, color coding, field visibility, auto-lock, PIN, walk-in sidebar, slot height, day start/end hours |
+| `RescheduleValidation` | `{ valid, reason?, conflictDetails? }` — result of `validateReschedule` |
+| `BlockType` | `"break" \| "personal" \| "meeting" \| "closed"` |
+| `BreakBlockInput` | `{ title, startTime, endTime, blockType, recurring }` |
+| `KioskProvider` | `{ id, displayName, acceptingWalkIns, queueCount, visible }` |
+
+### Constants
+
+```typescript
+import { DEFAULT_KIOSK_SETTINGS } from "@thebookingkit/core";
+
+// Full default KioskSettings object:
+// {
+//   defaultView: "day",
+//   blockDensity: "standard",
+//   colorCoding: "status",
+//   autoLockMinutes: 5,
+//   pinHash: "",
+//   showWalkInSidebar: true,
+//   slotHeightPx: 48,
+//   dayStartHour: 6,
+//   dayEndHour: 22,
+//   compactFields: { customerName: true, serviceName: true, ... },
+//   detailFields: { customerName: true, customerEmail: true, ... },
+// }
+```
+
+### Functions
+
+```typescript
+import {
+  validateKioskSettings,
+  resolveKioskSettings,
+  findConflicts,
+  canReschedule,
+  describeConflicts,
+  validateReschedule,
+  validateBreakBlock,
+  breakBlockToOverride,
+  resolveKioskProviders,
+} from "@thebookingkit/core";
+
+// Validate a partial settings object before saving
+const { valid, errors } = validateKioskSettings({ slotHeightPx: 10 });
+// => { valid: false, errors: ["slotHeightPx must be between 20 and 200."] }
+
+// Merge provider settings over org defaults
+const settings = resolveKioskSettings(providerSettings, orgDefaults);
+
+// Find overlapping bookings for a proposed time range
+const conflicts = findConflicts(existingBookings, newStart, newEnd, excludeBookingId);
+
+// Check whether a booking status allows rescheduling
+const reschedulable = canReschedule("confirmed"); // true
+const notReschedulable = canReschedule("completed"); // false
+
+// Human-readable conflict summary
+const message = describeConflicts(conflicts);
+// => "2 conflicts: Jane Smith (2:00 PM – 3:00 PM), Walk-in (3:15 PM – 3:45 PM)"
+
+// Full reschedule validation
+const result = validateReschedule(
+  "confirmed",
+  rules,
+  overrides,
+  existingBookings,
+  newStart,
+  newEnd,
+  bufferBefore,
+  bufferAfter,
+);
+// => { valid: false, reason: "conflict", conflictDetails: { bookingId, startsAt, endsAt } }
+
+// Validate a break block before creating it
+const check = validateBreakBlock(
+  { title: "Lunch", startTime, endTime, blockType: "break", recurring: false },
+  existingBookings,
+);
+// => { valid: true, conflictingBookings: [] }
+
+// Convert a break block to an availability override for DB storage
+const override = breakBlockToOverride(block, "America/New_York");
+// => { date, isUnavailable: true, startTime: "12:00", endTime: "13:00" }
+
+// Filter and annotate providers for the resource view
+const providers = resolveKioskProviders(allProviders, ["prov-1", "prov-2"]);
+// => providers with visible: true/false based on visibleIds
+```
+
+| Function | Signature | Description |
+|---|---|---|
+| `validateKioskSettings` | `(settings)` | Validate a partial `KioskSettings` object; returns `{ valid, errors[] }` |
+| `resolveKioskSettings` | `(providerSettings?, orgDefaults?)` | Deep-merge provider and org settings over `DEFAULT_KIOSK_SETTINGS`; provider values win |
+| `findConflicts` | `(existing, newStart, newEnd, excludeId?)` | Detect bookings that overlap `[newStart, newEnd)` using half-open interval math; inactive statuses are excluded automatically |
+| `canReschedule` | `(status)` | Return `true` if status is `"confirmed"` or `"pending"` |
+| `describeConflicts` | `(conflicts, formatTime?)` | Produce a human-readable conflict summary string; optionally supply a custom time formatter |
+| `validateReschedule` | `(bookingStatus, rules, overrides, existingBookings, newStart, newEnd, bufferBefore?, bufferAfter?)` | Full reschedule pre-flight: checks status, availability, and buffer conflicts; returns `RescheduleValidation` |
+| `validateBreakBlock` | `(block, existingBookings)` | Check a break/block against active bookings; returns `{ valid, conflictingBookings }` |
+| `breakBlockToOverride` | `(block, providerTimezone?)` | Convert a `BreakBlockInput` to an `AvailabilityOverrideInput` ready for DB storage; defaults timezone to `"UTC"` — always pass the provider's actual timezone |
+| `resolveKioskProviders` | `(providers, visibleIds?)` | Annotate each provider with `visible: true/false`; if `visibleIds` is omitted, all providers are visible |
+
+### `RescheduleValidation` reasons
+
+| `reason` | Meaning |
+|---|---|
+| `"conflict"` | Proposed slot overlaps an existing booking |
+| `"buffer_conflict"` | Proposed slot falls inside another booking's buffer window |
+| `"outside_availability"` | Proposed slot is not within the provider's availability rules |
+| `"blocked_date"` | An override marks the date as unavailable |
+| `"invalid_status"` | The booking's current status does not permit rescheduling |
+
+---
+
+## Error Classes
+
+All error classes carry a `code` string property that can be used for programmatic
+error handling without string-matching the message.
+
+```typescript
+import {
+  // Core booking errors
+  BookingConflictError,
+  ResourceUnavailableError,
+  SerializationRetryExhaustedError,
+  UnauthorizedError,
+  ForbiddenError,
+  // Parsing & validation
+  InvalidRRuleError,
+  InvalidTimezoneError,
+  EventTypeValidationError,
+  PaymentValidationError,
+  EmbedConfigError,
+  RoutingFormValidationError,
+  // Seats & recurring
+  SeatError,
+  RecurringBookingError,
+  // Walk-in queue
+  WalkInsDisabledError,
+  QueueEntryNotFoundError,
+  InvalidQueueTransitionError,
+} from "@thebookingkit/core";
+```
+
+| Class | `code` | Additional properties | Thrown when |
+|---|---|---|---|
+| `BookingConflictError` | `BOOKING_CONFLICT` | — | DB `EXCLUDE` constraint fires; slot was taken by a concurrent booking |
+| `ResourceUnavailableError` | `RESOURCE_UNAVAILABLE` | `reason: "no_capacity" \| "no_matching_type" \| "all_booked"` | No resource can be assigned to the booking |
+| `SerializationRetryExhaustedError` | `SERIALIZATION_RETRY_EXHAUSTED` | — | All serializable-transaction retries failed (SQLSTATE 40001 × 3) |
+| `UnauthorizedError` | `UNAUTHORIZED` | `statusCode: 401` | Request carries no valid session or token |
+| `ForbiddenError` | `FORBIDDEN` | `statusCode: 403` | Session exists but user lacks permission for the resource |
+| `InvalidRRuleError` | `INVALID_RRULE` | — | `parseRecurrence` receives a malformed or unsupported RRULE string |
+| `InvalidTimezoneError` | `INVALID_TIMEZONE` | — | An unrecognised IANA timezone identifier is passed to a timezone utility |
+| `EventTypeValidationError` | `EVENT_TYPE_VALIDATION` | — | `validateEventType` finds invalid or conflicting event type configuration |
+| `PaymentValidationError` | `PAYMENT_VALIDATION` | — | Cancellation policy or payment config fails validation |
+| `EmbedConfigError` | `EMBED_CONFIG` | — | `validateEmbedConfig` rejects invalid embed configuration |
+| `RoutingFormValidationError` | `ROUTING_FORM_VALIDATION` | — | `validateRoutingForm` or `validateRoutingResponses` fails |
+| `SeatError` | `SEAT_ERROR` | — | Seat reservation violates capacity constraints |
+| `RecurringBookingError` | `RECURRING_BOOKING` | — | Recurring series configuration or occurrence generation fails |
+| `WalkInsDisabledError` | `WALK_INS_DISABLED` | — | Walk-in is attempted while provider's `acceptingWalkIns` flag is `false` |
+| `QueueEntryNotFoundError` | `QUEUE_ENTRY_NOT_FOUND` | — | Referenced walk-in queue entry ID does not exist |
+| `InvalidQueueTransitionError` | `INVALID_QUEUE_TRANSITION` | — | `validateQueueTransition` called with a disallowed `from → to` pair |

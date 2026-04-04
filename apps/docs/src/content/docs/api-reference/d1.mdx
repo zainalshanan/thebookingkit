@@ -1,0 +1,633 @@
+---
+title: "D1 Reference (@thebookingkit/d1)"
+description: "Complete API reference for @thebookingkit/d1 — Cloudflare D1 / SQLite adapter providing date encoding, advisory locks, schedule helpers, query utilities, and migration tools."
+---
+
+`@thebookingkit/d1` bridges Cloudflare D1's text-based date storage with `@thebookingkit/core`'s UTC `Date` object expectations. It also provides the advisory lock pattern required for double-booking prevention in SQLite, which lacks Postgres's `EXCLUDE USING gist` constraint.
+
+```bash
+npm install @thebookingkit/d1
+```
+
+---
+
+## The Core Problem
+
+SQLite stores dates as `TEXT`. String-range queries (`>=`, `<=`) only produce correct results when every stored value uses the same lexicographic format. `@thebookingkit/d1` enforces a single canonical format — **UTC-Z** (`"YYYY-MM-DDTHH:mm:ss.sssZ"`) — for all date columns.
+
+---
+
+## D1DateCodec
+
+The canonical date codec. All methods are pure functions with no side effects. Use `D1DateCodec` on every date value that crosses the D1 boundary.
+
+```typescript
+import { D1DateCodec } from "@thebookingkit/d1";
+```
+
+### `D1DateCodec.encode()`
+
+Converts a date value to the canonical UTC-Z string for storage or query bounds.
+
+```typescript
+// From a Date object (most common — slot returned by getAvailableSlots)
+const stored = D1DateCodec.encode(slot.startTime);
+// => "2026-03-09T14:00:00.000Z"
+
+// From a UTC-Z string (pass-through, normalized)
+D1DateCodec.encode("2026-03-09T14:00:00Z");
+// => "2026-03-09T14:00:00.000Z"
+
+// From a local ISO string — requires timezone
+D1DateCodec.encode("2026-03-10T09:00:00", { timezone: "Australia/Sydney" });
+// => "2026-03-09T22:00:00.000Z"
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `value` | `Date \| string` | Date object, UTC-Z string, or local ISO string |
+| `options.timezone` | `string` | IANA timezone required when `value` is a local ISO string without a `Z` suffix |
+
+**Returns** `string` — canonical UTC-Z ISO string.
+
+**Throws**
+- `D1DateEncodeError` — local ISO string passed without `options.timezone`.
+- `RangeError` — unrecognized format or invalid timezone.
+
+### `D1DateCodec.decode()`
+
+Decodes a D1 text column value into a UTC `Date` object for use with `@thebookingkit/core`.
+
+```typescript
+const date = D1DateCodec.decode(row.startsAt);
+// date is a valid UTC Date object
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `raw` | `string` | Raw string value from a D1 text column |
+
+**Returns** `Date` — a valid UTC `Date` object.
+
+**Throws** `D1DateDecodeError` when the string cannot be parsed. Date-only strings (`"2026-03-10"`) are explicitly rejected as ambiguous.
+
+Legacy local-ISO rows written before this codec was adopted are handled transparently: they are parsed as UTC (appending `"Z"`) and tagged with a `_d1LegacyFormat` property so you can detect and migrate them.
+
+### `D1DateCodec.dayBounds()`
+
+Builds `gte`/`lte` string bounds for a single-day range query.
+
+```typescript
+const { gte, lte } = D1DateCodec.dayBounds("2026-03-09");
+// gte => "2026-03-09T00:00:00.000Z"
+// lte => "2026-03-09T23:59:59.999Z"
+
+const rows = await db.select().from(bookings)
+  .where(and(
+    eq(bookings.barberId, barberId),
+    gte(bookings.startsAt, bounds.gte),
+    lte(bookings.startsAt, bounds.lte),
+  )).all();
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `dateStr` | `string` | Date in `"YYYY-MM-DD"` format |
+
+### `D1DateCodec.rangeBounds()`
+
+Builds `gte`/`lte` bounds from a `DateRange` object for multi-day queries.
+
+```typescript
+const { gte, lte } = D1DateCodec.rangeBounds({
+  start: new Date("2026-03-09T00:00:00.000Z"),
+  end: new Date("2026-03-15T23:59:59.999Z"),
+});
+```
+
+### `D1DateCodec.toDateRange()`
+
+Builds a `{ start: Date; end: Date }` range from a date string for passing to `getAvailableSlots()`.
+
+```typescript
+const range = D1DateCodec.toDateRange("2026-03-09");
+getAvailableSlots(rules, overrides, bookings, range, timezone, opts);
+```
+
+### `D1DateCodec.isLegacyFormat()`
+
+Returns `true` if the string is in legacy local-ISO format (no Z suffix). Use during migration to identify rows that need updating.
+
+```typescript
+D1DateCodec.isLegacyFormat("2026-03-09T14:00:00");   // true
+D1DateCodec.isLegacyFormat("2026-03-09T14:00:00.000Z"); // false
+```
+
+---
+
+## Codec Errors
+
+```typescript
+import { D1DateDecodeError, D1DateEncodeError } from "@thebookingkit/d1";
+```
+
+| Error class | Code | When thrown |
+|---|---|---|
+| `D1DateDecodeError` | `D1_DATE_DECODE_ERROR` | Raw string cannot be parsed to a valid UTC Date |
+| `D1DateEncodeError` | `D1_DATE_ENCODE_ERROR` | Local ISO string passed to `encode()` without a timezone |
+
+Both expose a `raw` property with the original string and a descriptive message explaining the required format.
+
+---
+
+## Booking Helpers
+
+Functions that bridge raw D1 row data to the types expected by `@thebookingkit/core`.
+
+```typescript
+import {
+  d1BookingRowsToInputs,
+  d1OverrideRowsToInputs,
+  d1AvailabilityRuleRowsToInputs,
+  encodeD1Date,
+  d1DayBounds,
+  d1DayQuery,
+  d1LocalDayQuery,
+  localToday,
+} from "@thebookingkit/d1";
+```
+
+### `d1BookingRowsToInputs()`
+
+Converts raw D1 booking rows into `BookingInput[]` for `getAvailableSlots()` and `isSlotAvailable()`. Decodes all date strings through `D1DateCodec.decode()`.
+
+```typescript
+const rows = await db.select().from(bookings)
+  .where(and(
+    eq(bookings.barberId, barberId),
+    gte(bookings.startsAt, bounds.gte),
+    lte(bookings.startsAt, bounds.lte),
+  )).all();
+
+const inputs = d1BookingRowsToInputs(rows);
+const slots = getAvailableSlots(rules, [], inputs, dateRange, timezone, opts);
+```
+
+**Minimum row shape (`D1BookingRow`)**
+
+| Field | Type | Description |
+|---|---|---|
+| `startsAt` | `string` | UTC-Z string (from `D1DateCodec.encode()`) |
+| `endsAt` | `string` | UTC-Z string |
+| `status` | `string` | Booking status |
+
+Your Drizzle schema's inferred type is a superset of this.
+
+### `d1OverrideRowsToInputs()`
+
+Converts raw D1 availability override rows into `AvailabilityOverrideInput[]`.
+
+```typescript
+const overrideInputs = d1OverrideRowsToInputs(overrideRows);
+```
+
+**Minimum row shape (`D1AvailabilityOverrideRow`)**
+
+| Field | Type | Description |
+|---|---|---|
+| `date` | `string` | Date as UTC-Z string |
+| `startTime` | `string \| null` | Wall-clock time in `"HH:mm"` format, or `null` |
+| `endTime` | `string \| null` | Wall-clock time in `"HH:mm"` format, or `null` |
+| `isUnavailable` | `number \| boolean` | Whether the provider is blocked for this date |
+
+### `d1AvailabilityRuleRowsToInputs()`
+
+Converts raw D1 `availability_rules` rows into `AvailabilityRuleInput[]`. Handles `validFrom`/`validUntil` date decoding.
+
+```typescript
+const ruleRows = await db.select()
+  .from(availabilityRules)
+  .where(eq(availabilityRules.providerId, providerId))
+  .all();
+
+const rules = d1AvailabilityRuleRowsToInputs(ruleRows);
+```
+
+**Minimum row shape (`D1AvailabilityRuleRow`)**
+
+| Field | Type | Description |
+|---|---|---|
+| `rrule` | `string` | RRULE string e.g. `"RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR"` |
+| `startTime` | `string` | Wall-clock start in `"HH:mm"` format |
+| `endTime` | `string` | Wall-clock end in `"HH:mm"` format |
+| `timezone` | `string` | IANA timezone identifier |
+| `validFrom` | `string \| null` | ISO date string or `null` |
+| `validUntil` | `string \| null` | ISO date string or `null` |
+
+### `encodeD1Date()`
+
+Convenience wrapper around `D1DateCodec.encode()` for use at INSERT/UPDATE time.
+
+```typescript
+await db.insert(bookings).values({
+  startsAt: encodeD1Date(slot.startTime),
+  endsAt:   encodeD1Date(slot.endTime),
+  // ...
+});
+
+// With local ISO string and explicit timezone:
+encodeD1Date("2026-03-10T09:00:00", "Australia/Sydney");
+```
+
+### `d1DayBounds()`
+
+Returns `{ gte, lte }` strings for a single-day query.
+
+```typescript
+const bounds = d1DayBounds("2026-03-09");
+```
+
+### `d1DayQuery()`
+
+Returns both the D1 query bounds and the matching `DateRange` for the slot engine in one call. This guarantees the DB query and the slot engine use the same UTC boundary, eliminating a class of mixed-format bugs.
+
+```typescript
+const { bounds, dateRange } = d1DayQuery("2026-03-09");
+
+// 1. Query D1 with bounds
+const rows = await db.select().from(bookings)
+  .where(and(
+    eq(bookings.barberId, barberId),
+    gte(bookings.startsAt, bounds.gte),
+    lte(bookings.startsAt, bounds.lte),
+  )).all();
+
+// 2. Feed into slot engine — same UTC boundary, no mismatch
+const slots = getAvailableSlots(
+  rules, [], d1BookingRowsToInputs(rows), dateRange, timezone, opts
+);
+```
+
+### `d1LocalDayQuery()`
+
+Timezone-aware variant of `d1DayQuery()`. Use when the provider's timezone is far from UTC (e.g. `"Australia/Sydney"`, `"Asia/Tokyo"`). The UTC-midnight bounds from `d1DayQuery` miss bookings that cross midnight UTC.
+
+```typescript
+const { bounds, dateRange } = d1LocalDayQuery("2026-03-09", "Australia/Sydney");
+// bounds.gte = "2026-03-08T13:00:00.000Z"  (March 9 midnight AEDT)
+// bounds.lte = "2026-03-09T12:59:59.999Z"  (1ms before March 10 midnight AEDT)
+// dateRange  = UTC midnight March 9 → 23:59:59.999Z (proven correct for RRULE expansion)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `dateStr` | `string` | Local calendar day in `"YYYY-MM-DD"` format |
+| `timezone` | `string` | IANA timezone identifier for the provider |
+
+### `localToday()`
+
+Returns today's date as a `"YYYY-MM-DD"` string in the given timezone. Essential for Cloudflare Workers, which run in UTC but need to know "today" relative to a location.
+
+```typescript
+const today = localToday("Australia/Sydney");
+// => "2026-03-10" even if UTC is still March 9
+
+const { bounds, dateRange } = d1LocalDayQuery(today, "Australia/Sydney");
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `timezone` | `string` | IANA timezone identifier |
+| `now` | `Date` (optional) | Reference date, defaults to `new Date()`. Useful for testing. |
+
+---
+
+## Advisory Lock (Double-Booking Prevention)
+
+SQLite / D1 serializes writes at the connection level but does NOT make a read-then-write sequence atomic. Without a lock, two concurrent requests can both read an empty slot and both insert, producing a double booking.
+
+`D1BookingLock` implements an advisory lock via a dedicated `booking_locks` table using Compare-And-Swap semantics.
+
+### Required schema
+
+Add this table to your D1 schema:
+
+```sql
+CREATE TABLE IF NOT EXISTS booking_locks (
+  lock_key   TEXT PRIMARY KEY,
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+```
+
+The DDL constant `BOOKING_LOCKS_DDL` is also exported from `@thebookingkit/d1` for programmatic use.
+
+### `D1BookingLock`
+
+```typescript
+import { D1BookingLock } from "@thebookingkit/d1";
+
+const lock = new D1BookingLock(rawDb, {
+  tableName:   "booking_locks", // default
+  lockTtlMs:   10_000,          // 10 seconds (safety valve for crashed workers)
+  maxRetries:  5,               // default
+  baseDelayMs: 100,             // default
+});
+
+await lock.withLock(`${barberId}:${dateStr}`, async () => {
+  // This block is serialized per lockKey
+  const existing = await db.select().from(bookings).where(...).all();
+  const available = isSlotAvailable(rules, [], d1BookingRowsToInputs(existing), start, end);
+  if (!available.available) throw new BookingConflictError();
+  await db.insert(bookings).values({ ... });
+});
+```
+
+**Constructor parameters**
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `db` | `LockDb` | — | DB client with a `run(sql, params)` method |
+| `options.tableName` | `string` | `"booking_locks"` | Name of the lock table |
+| `options.lockTtlMs` | `number` | `10_000` | Lock TTL in ms (prevents stale locks from crashed workers) |
+| `options.maxRetries` | `number` | `5` | Maximum acquire attempts before throwing |
+| `options.baseDelayMs` | `number` | `100` | Base delay for jittered exponential backoff |
+
+**`withLock()` parameters**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `lockKey` | `string` | Unique key for the resource. Convention: `"${providerId}:${dateStr}"` |
+| `fn` | `() => Promise<T>` | Async callback containing the availability check and insert |
+
+**Returns** the return value of `fn`.
+**Throws** `LockAcquisitionError` if all retries are exhausted. Propagates any error thrown by `fn`.
+
+**Backoff formula:** `min(baseDelayMs * 2^attempt + jitter, 5000ms)`.
+
+### `createD1BookingLock()`
+
+Factory function alternative to `new D1BookingLock()`:
+
+```typescript
+import { createD1BookingLock } from "@thebookingkit/d1";
+
+const lock = createD1BookingLock(db, { lockTtlMs: 15_000 });
+```
+
+### `LockAcquisitionError`
+
+Thrown when the lock cannot be acquired after all retry attempts.
+
+```typescript
+import { LockAcquisitionError } from "@thebookingkit/d1";
+
+try {
+  await lock.withLock(key, fn);
+} catch (err) {
+  if (err instanceof LockAcquisitionError) {
+    // err.code === "LOCK_ACQUISITION_EXHAUSTED"
+    return Response.json({ error: "Slot busy, please retry" }, { status: 503 });
+  }
+  throw err;
+}
+```
+
+### `LockDb` interface
+
+Minimum interface the `D1BookingLock` requires from the database client:
+
+```typescript
+interface LockDb {
+  run(sql: string, params?: unknown[]): Promise<unknown>;
+}
+```
+
+---
+
+## Schedule Adapter
+
+Converts day-of-week JSON schedule objects (common in simpler D1 schemas) into `AvailabilityRuleInput[]` for the slot engine.
+
+```typescript
+import {
+  weeklyScheduleToRules,
+  intersectSchedulesToRules,
+  type WeeklySchedule,
+  type DaySchedule,
+  type DayOfWeek,
+} from "@thebookingkit/d1";
+```
+
+### `weeklyScheduleToRules()`
+
+Converts a `WeeklySchedule` object into `AvailabilityRuleInput[]`. Days with the same `startTime`/`endTime` pair are grouped into a single `FREQ=WEEKLY;BYDAY=...` rule to minimize RRULE expansion cost.
+
+```typescript
+const rules = weeklyScheduleToRules(barber.weeklySchedule, "Australia/Sydney");
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `schedule` | `WeeklySchedule \| null \| undefined` | Weekly schedule, or null/undefined (returns `[]`) |
+| `timezone` | `string` | IANA timezone identifier |
+
+### `intersectSchedulesToRules()`
+
+Intersects two `WeeklySchedule` objects (e.g. barber + location) into rules representing the overlapping available windows. The intersection enforces that the provider is only available when both schedules have them working.
+
+```typescript
+const rules = intersectSchedulesToRules(
+  barber.weeklySchedule,
+  location.weeklySchedule,
+  location.timezone,
+);
+```
+
+### Schedule types
+
+**`WeeklySchedule`** — `Record<DayOfWeek, DaySchedule>`
+
+**`DaySchedule`**
+
+| Field | Type | Description |
+|---|---|---|
+| `startTime` | `string \| null` | Wall-clock start in `"HH:mm"` format, or `null` when `isOff` is `true` |
+| `endTime` | `string \| null` | Wall-clock end in `"HH:mm"` format, or `null` when `isOff` is `true` |
+| `isOff` | `boolean` | `true` means the provider is closed for the full day |
+
+**`DayOfWeek`** — `"monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday"`
+
+---
+
+## Resource Helpers
+
+Parallel helpers for the resource-capacity booking feature (E-22).
+
+```typescript
+import {
+  d1ResourceAvailabilityRowsToInputs,
+  d1ResourceOverrideRowsToInputs,
+  D1ResourceBookingLock,
+  createD1ResourceBookingLock,
+  type D1ResourceRow,
+  type D1ResourceAvailabilityRuleRow,
+  type D1ResourceAvailabilityOverrideRow,
+} from "@thebookingkit/d1";
+```
+
+These functions follow the same patterns as their booking counterparts. `D1ResourceBookingLock` uses the same advisory lock table with a resource-scoped key (e.g. `"resource:${resourceId}:${dateStr}"`).
+
+---
+
+## Migration Utilities
+
+Tools for the one-time data migration from legacy local-ISO date storage to canonical UTC-Z format.
+
+```typescript
+import {
+  findLegacyRows,
+  migrateRowDates,
+  buildMigrationSql,
+  type MigrationColumn,
+  type TableMigrationPlan,
+} from "@thebookingkit/d1";
+```
+
+### `findLegacyRows()`
+
+Scans a table and returns rows whose date columns are in legacy local-ISO format.
+
+### `migrateRowDates()`
+
+Rewrites legacy date strings to canonical UTC-Z format. Uses `D1DateCodec.isLegacyFormat()` to detect and `D1DateCodec.encode()` to normalize.
+
+### `buildMigrationSql()`
+
+Generates the SQL `UPDATE` statements needed to migrate legacy rows. Useful for reviewing before applying.
+
+### `TableMigrationPlan`
+
+| Field | Type | Description |
+|---|---|---|
+| `tableName` | `string` | Table to migrate |
+| `primaryKey` | `string` (optional) | Primary key column for `UPDATE WHERE` clause |
+| `columns` | `MigrationColumn[]` | Columns containing date strings |
+
+### `MigrationColumn`
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `name` | `string` | — | Column name in the SQL table |
+| `legacyInterpretation` | `"utc" \| "tz"` | `"utc"` | How to interpret legacy local-ISO values. Use `"utc"` for Cloudflare Workers (always UTC), `"tz"` for servers with a non-UTC local timezone |
+| `timezone` | `string` | — | Required when `legacyInterpretation` is `"tz"` |
+
+---
+
+## DDL Constants
+
+Pre-built `CREATE TABLE` SQL statements for all BookingKit tables. Import and execute them in your D1 migration scripts.
+
+```typescript
+import {
+  BOOKING_LOCKS_DDL,
+  RESOURCE_DDL,
+  ORGANIZATIONS_DDL,
+  TEAMS_DDL,
+  PROVIDERS_DDL,
+  EVENT_TYPES_DDL,
+  AVAILABILITY_DDL,
+  BOOKINGS_DDL,
+  RECURRING_DDL,
+  PAYMENTS_DDL,
+  ROUTING_DDL,
+  WORKFLOWS_DDL,
+  WEBHOOKS_DDL,
+  EMAIL_DDL,
+  CUSTOMER_DDL,
+  WALK_IN_DDL,
+  ALL_DDL,       // All of the above concatenated
+} from "@thebookingkit/d1";
+
+// Apply all tables in one migration:
+await db.exec(ALL_DDL);
+```
+
+---
+
+## Complete Booking Flow Example
+
+```typescript
+import {
+  D1BookingLock,
+  d1DayQuery,
+  d1LocalDayQuery,
+  d1BookingRowsToInputs,
+  d1AvailabilityRuleRowsToInputs,
+  weeklyScheduleToRules,
+  encodeD1Date,
+  localToday,
+} from "@thebookingkit/d1";
+import { getAvailableSlots, isSlotAvailable } from "@thebookingkit/core";
+import { BookingConflictError } from "@thebookingkit/server";
+
+// ── Step 1: Get today's date in the provider's timezone ──────────────────────
+const timezone = "Australia/Sydney";
+const today = localToday(timezone);
+
+// ── Step 2: Build query bounds + DateRange together ──────────────────────────
+const { bounds, dateRange } = d1LocalDayQuery(today, timezone);
+
+// ── Step 3: Fetch data from D1 ───────────────────────────────────────────────
+const [ruleRows, bookingRows] = await Promise.all([
+  db.select().from(availabilityRules).where(eq(availabilityRules.barberId, barberId)).all(),
+  db.select().from(bookings).where(
+    and(
+      eq(bookings.barberId, barberId),
+      gte(bookings.startsAt, bounds.gte),
+      lte(bookings.startsAt, bounds.lte),
+    )
+  ).all(),
+]);
+
+// ── Step 4: Convert to core types ────────────────────────────────────────────
+const rules = d1AvailabilityRuleRowsToInputs(ruleRows);
+const existingBookings = d1BookingRowsToInputs(bookingRows);
+
+// ── Step 5: Compute available slots ─────────────────────────────────────────
+const slots = getAvailableSlots(rules, [], existingBookings, dateRange, timezone, {
+  duration: 30,
+  bufferAfter: 10,
+});
+
+// ── Step 6: Book a slot with double-booking protection ───────────────────────
+const lock = new D1BookingLock(rawDb);
+
+await lock.withLock(`${barberId}:${today}`, async () => {
+  // Re-fetch inside the lock to catch concurrent bookings
+  const freshRows = await db.select().from(bookings).where(...).all();
+  const fresh = d1BookingRowsToInputs(freshRows);
+
+  const available = isSlotAvailable(rules, [], fresh, selectedStart, selectedEnd);
+  if (!available.available) throw new BookingConflictError();
+
+  await db.insert(bookings).values({
+    barberId,
+    startsAt: encodeD1Date(selectedStart),
+    endsAt:   encodeD1Date(selectedEnd),
+    status: "confirmed",
+  });
+});
+```

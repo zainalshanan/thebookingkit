@@ -36,9 +36,24 @@ export function CTAFooterSection() {
         </p>
 
         <div className="cta-commands">
-          <CopyCommand command="npx thebookingkit init" label="Quick Start" />
-          <CopyCommand command="npm install @thebookingkit/core" label="Core Only" />
-          <CopyCommand command="npm install @thebookingkit/core @thebookingkit/server @thebookingkit/db" label="Full Stack" />
+          <div>
+            <CopyCommand command="npx thebookingkit init" label="Quick Start" />
+            <p style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
+              Scaffolds project config, env template, and component directory with interactive adapter selection
+            </p>
+          </div>
+          <div>
+            <CopyCommand command="npm install @thebookingkit/core" label="Core Only" />
+            <p style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
+              Just the scheduling engine &mdash; pure functions, zero framework dependencies
+            </p>
+          </div>
+          <div>
+            <CopyCommand command="npm install @thebookingkit/core @thebookingkit/server @thebookingkit/db" label="Full Stack" />
+            <p style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
+              Engine + server adapters + database schema for complete booking system
+            </p>
+          </div>
         </div>
 
         <div className="cta-links">

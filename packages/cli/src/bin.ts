@@ -16,9 +16,12 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import * as readline from "node:readline";
 import { Command } from "commander";
-import pkg from "../package.json" assert { type: "json" };
+
+const __cliDir = dirname(fileURLToPath(import.meta.url));
+const pkg = JSON.parse(readFileSync(join(__cliDir, "../package.json"), "utf-8")) as { version: string; name: string };
 import {
   findComponent,
   resolveComponentDependencies,

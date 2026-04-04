@@ -1,0 +1,750 @@
+---
+title: "Server Reference (@thebookingkit/server)"
+description: "Complete API reference for @thebookingkit/server — auth middleware, adapters, webhooks, API keys, booking tokens, multi-tenancy, and workflow utilities."
+---
+
+`@thebookingkit/server` provides server-side utilities for Next.js API routes: authentication middleware, pluggable adapters, webhook signing, API key management, booking tokens, multi-tenancy helpers, and workflow evaluation.
+
+```bash
+npm install @thebookingkit/server
+```
+
+---
+
+## Authentication
+
+### `withAuth()`
+
+Middleware wrapper that injects the authenticated user into every request handler. Rejects unauthenticated requests with HTTP 401. Optionally enforces a minimum role.
+
+```typescript
+import { withAuth } from "@thebookingkit/server";
+
+// app/api/bookings/route.ts
+export const GET = withAuth(authAdapter, async (req) => {
+  // req.user is fully typed as AuthUser
+  const bookings = await db.query.bookings.findMany({
+    where: (b, { eq }) => eq(b.providerId, req.user.id),
+  });
+  return Response.json(bookings);
+});
+
+// With required role
+export const DELETE = withAuth(
+  authAdapter,
+  async (req) => { /* ... */ },
+  { requiredRole: "admin" },
+);
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `adapter` | `AuthAdapter` | Auth adapter instance |
+| `handler` | `(req: AuthenticatedRequest) => Promise<Response>` | Request handler with injected `user` |
+| `options.requiredRole` | `"admin" \| "provider" \| "member" \| "customer"` | Minimum role required (uses hierarchy: admin > provider > member > customer) |
+
+**Error responses**
+
+| Condition | HTTP status | Error code |
+|---|---|---|
+| No session and no Bearer token | 401 | `UNAUTHORIZED` |
+| Insufficient role | 403 | `FORBIDDEN` |
+| Booking conflict inside handler | 409 | `BOOKING_CONFLICT` |
+| Resource unavailable inside handler | 409 | `RESOURCE_UNAVAILABLE` |
+
+### `assertProviderOwnership()`
+
+Throws `ForbiddenError` if the authenticated user's ID does not match the resource owner's user ID. Use to scope provider data access.
+
+```typescript
+import { assertProviderOwnership } from "@thebookingkit/server";
+
+assertProviderOwnership(req.user.id, provider.userId);
+// throws ForbiddenError if IDs do not match
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `userId` | `string` | Authenticated user's ID |
+| `resourceUserId` | `string` | Owner ID on the resource being accessed |
+
+### `assertCustomerAccess()`
+
+Throws `ForbiddenError` if the authenticated user's email does not match the booking's customer email.
+
+```typescript
+import { assertCustomerAccess } from "@thebookingkit/server";
+
+assertCustomerAccess(req.user.email, booking.customerEmail);
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `userEmail` | `string` | Authenticated user's email |
+| `bookingCustomerEmail` | `string` | Customer email on the booking |
+
+---
+
+## Auth Adapter Interface
+
+The `AuthAdapter` interface is the contract for pluggable authentication backends. Implement it to integrate any auth provider.
+
+```typescript
+import type { AuthAdapter, AuthUser, AuthSession } from "@thebookingkit/server";
+
+class MyAuthAdapter implements AuthAdapter {
+  async getCurrentUser(request: Request): Promise<AuthUser | null> {
+    // resolve session cookie, return user or null
+  }
+  async getSession(request: Request): Promise<AuthSession | null> {
+    // return full session including expiry
+  }
+  async verifyToken(token: string): Promise<AuthUser | null> {
+    // validate API token or signed booking token
+  }
+}
+```
+
+**`AuthUser` fields**
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `string` | Unique user identifier |
+| `email` | `string` | User email address |
+| `name` | `string` (optional) | Display name |
+| `role` | `"admin" \| "provider" \| "member" \| "customer"` (optional) | User role |
+
+**`AuthSession` fields**
+
+| Field | Type | Description |
+|---|---|---|
+| `user` | `AuthUser` | The authenticated user |
+| `expires` | `Date` | Session expiry time |
+
+Default implementation: NextAuth.js. Alternatives: Supabase Auth, Clerk, Lucia.
+
+---
+
+## Booking Tokens
+
+Signed, time-limited tokens that let customers view or manage their booking without a full auth session. The token embeds the booking ID and expiry, signed with HMAC-SHA256.
+
+### `generateBookingToken()`
+
+```typescript
+import { generateBookingToken } from "@thebookingkit/server";
+
+const token = generateBookingToken(
+  booking.id,
+  new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+  process.env.BOOKING_TOKEN_SECRET!,
+);
+// => base64url-encoded signed token
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `bookingId` | `string` | The booking UUID |
+| `expiresAt` | `Date` | Token expiry time |
+| `secret` | `string` | HMAC signing secret |
+
+**Returns** `string` — base64url-encoded token safe for use in URLs.
+
+### `verifyBookingToken()`
+
+```typescript
+import { verifyBookingToken } from "@thebookingkit/server";
+
+const result = verifyBookingToken(token, process.env.BOOKING_TOKEN_SECRET!);
+if (!result) {
+  return new Response("Invalid or expired token", { status: 401 });
+}
+const { bookingId, expiresAt } = result;
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `token` | `string` | The base64url-encoded token |
+| `secret` | `string` | HMAC signing secret (must match generation) |
+
+**Returns** `{ bookingId: string; expiresAt: Date } | null` — `null` if the token is invalid, malformed, or expired. Uses constant-time comparison to prevent timing attacks.
+
+---
+
+## Webhooks
+
+HMAC-SHA256 signed webhook delivery with replay protection.
+
+### `signWebhookPayload()`
+
+```typescript
+import { signWebhookPayload, SIGNATURE_HEADER, TIMESTAMP_HEADER } from "@thebookingkit/server";
+
+const timestampSeconds = Math.floor(Date.now() / 1000);
+const rawBody = JSON.stringify(envelope);
+const signature = signWebhookPayload(rawBody, webhookSecret, timestampSeconds);
+
+// Add to delivery headers:
+// X-BookingKit-Signature: <signature>
+// X-BookingKit-Timestamp: <timestampSeconds>
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `rawBody` | `string` | Raw JSON string of the payload |
+| `secret` | `string` | Webhook secret key |
+| `timestampSeconds` | `number` | Unix timestamp in seconds |
+
+**Returns** `string` — hex-encoded HMAC-SHA256 signature. Signed message is `${timestamp}.${rawBody}`.
+
+### `verifyWebhookSignature()`
+
+```typescript
+import { verifyWebhookSignature } from "@thebookingkit/server";
+
+const result = verifyWebhookSignature(
+  rawBody,
+  req.headers.get("X-BookingKit-Signature")!,
+  Number(req.headers.get("X-BookingKit-Timestamp")),
+  webhookSecret,
+  { toleranceSeconds: 300 }, // default: 5 minutes
+);
+
+if (!result.valid) {
+  return Response.json({ error: result.reason }, { status: 401 });
+}
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `rawBody` | `string` | Raw JSON string of the received payload |
+| `signature` | `string` | Value of the `X-BookingKit-Signature` header |
+| `timestampSeconds` | `number` | Value of the `X-BookingKit-Timestamp` header |
+| `secret` | `string` | Webhook secret key |
+| `options.toleranceSeconds` | `number` | Maximum timestamp age in seconds. Default: `300` |
+
+**Returns** `WebhookVerificationResult` — `{ valid: true }` or `{ valid: false, reason: "timestamp_expired" | "signature_mismatch" }`.
+
+### `createWebhookEnvelope()`
+
+Constructs the standard webhook envelope object.
+
+```typescript
+import { createWebhookEnvelope } from "@thebookingkit/server";
+
+const envelope = createWebhookEnvelope("BOOKING_CONFIRMED", {
+  bookingId: booking.id,
+  eventType: eventType.title,
+  startTime: booking.startsAt.toISOString(),
+  endTime: booking.endsAt.toISOString(),
+  organizer: { name: provider.name, email: provider.email },
+  attendees: [{ email: booking.customerEmail, name: booking.customerName }],
+  status: booking.status,
+});
+```
+
+### `matchWebhookSubscriptions()`
+
+Filters a list of subscriptions to those that are active and subscribed to the given trigger, with optional event type or team scope.
+
+```typescript
+import { matchWebhookSubscriptions } from "@thebookingkit/server";
+
+const matching = matchWebhookSubscriptions(
+  allSubscriptions,
+  "BOOKING_CONFIRMED",
+  { eventTypeId: booking.eventTypeId },
+);
+```
+
+### `validateWebhookSubscription()`
+
+Validates a subscription before saving it. Throws `WebhookValidationError` if the URL or triggers are invalid.
+
+### Webhook types
+
+| Type | Description |
+|---|---|
+| `WebhookTrigger` | Union of all 21 trigger strings (e.g. `"BOOKING_CONFIRMED"`, `"SLOT_RELEASED"`) |
+| `WebhookPayload` | Standard payload body |
+| `WebhookEnvelope` | Full envelope with `triggerEvent`, `createdAt`, and `payload` |
+| `WebhookSubscription` | Subscription record with URL, triggers, secret, and optional scope |
+| `WebhookDeliveryResult` | Delivery attempt result with response code and success flag |
+| `WebhookRetryConfig` | Retry config: `maxRetries` and `backoffSeconds` array |
+| `WebhookVerificationResult` | `{ valid: boolean; reason?: string }` |
+
+**Constants**
+
+| Constant | Value |
+|---|---|
+| `SIGNATURE_HEADER` | `"X-BookingKit-Signature"` |
+| `TIMESTAMP_HEADER` | `"X-BookingKit-Timestamp"` |
+| `DEFAULT_TOLERANCE_SECONDS` | `300` |
+| `DEFAULT_RETRY_CONFIG` | `{ maxRetries: 3, backoffSeconds: [10, 60, 300] }` |
+| `WEBHOOK_TRIGGERS` | Array of all 21 valid trigger strings |
+
+---
+
+## API Keys
+
+### `generateApiKey()`
+
+Generates a new API key. The full key is returned only once and must be shown to the user immediately. Only the hash is stored in the database.
+
+```typescript
+import { generateApiKey } from "@thebookingkit/server";
+
+const { key, prefix, hash } = generateApiKey("sk_live_");
+// key:    "sk_live_a3f2..." (show once, never store)
+// prefix: "sk_live_a3f2..."  (display prefix for UI)
+// hash:   "e9b1..." (store in DB as keyHash)
+```
+
+**Parameters**
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `prefix` | `string` | `"sk_live_"` | Key prefix (e.g. `"sk_test_"`) |
+
+### `hashApiKey()`
+
+Hashes an API key with HMAC-SHA256 using the `THEBOOKINGKIT_API_KEY_SECRET` environment variable. Throws if the secret is not set.
+
+```typescript
+import { hashApiKey } from "@thebookingkit/server";
+
+const hash = hashApiKey(incomingKey);
+```
+
+### `verifyApiKey()`
+
+Verifies an incoming API key against a stored hash using constant-time comparison.
+
+```typescript
+import { verifyApiKey } from "@thebookingkit/server";
+
+const valid = verifyApiKey(incomingKey, storedRecord.keyHash);
+```
+
+### `hasScope()`
+
+Checks whether an API key's scopes include the required scope. The `"admin"` scope grants all permissions.
+
+```typescript
+import { hasScope } from "@thebookingkit/server";
+
+if (!hasScope(apiKey.scopes, "write:bookings")) {
+  return Response.json({ error: "Insufficient scope" }, { status: 403 });
+}
+```
+
+### `isKeyExpired()`
+
+```typescript
+import { isKeyExpired } from "@thebookingkit/server";
+
+if (isKeyExpired(apiKey.expiresAt)) {
+  return Response.json({ error: "API key expired" }, { status: 401 });
+}
+```
+
+**API key scopes**
+
+`"read:bookings"` | `"write:bookings"` | `"read:availability"` | `"write:availability"` | `"read:event-types"` | `"write:event-types"` | `"read:webhooks"` | `"write:webhooks"` | `"read:analytics"` | `"admin"`
+
+### Rate limiting
+
+```typescript
+import { checkRateLimit } from "@thebookingkit/server";
+
+const { result, newState } = checkRateLimit(
+  storedRateLimitState,  // null for first request
+  apiKey.rateLimit,      // requests per minute
+);
+
+if (!result.allowed) {
+  return new Response("Too Many Requests", {
+    status: 429,
+    headers: {
+      "X-RateLimit-Limit": String(result.limit),
+      "X-RateLimit-Remaining": String(result.remaining),
+      "X-RateLimit-Reset": String(result.resetMs),
+    },
+  });
+}
+// Persist newState to your rate limit store
+```
+
+Uses a fixed 1-minute sliding window. Returns `remaining`, `resetMs` (timestamp in ms), and `limit`.
+
+---
+
+## Serialization Retry
+
+### `withSerializableRetry()`
+
+Wraps a database operation in retry logic for `SERIALIZABLE` transaction isolation. Handles two Postgres error codes:
+
+- `40001` (`serialization_failure`): retries up to `maxRetries` times with jittered exponential backoff.
+- `23P01` (`exclusion_violation`): immediately throws `BookingConflictError` — the slot is taken, retry would not help.
+
+```typescript
+import { withSerializableRetry } from "@thebookingkit/server";
+
+const booking = await withSerializableRetry(
+  () => db.transaction(async (tx) => {
+    // Check availability
+    const existing = await tx.select()...
+    if (!isSlotAvailable(...)) throw new BookingConflictError();
+    // Insert with EXCLUDE constraint protection
+    const [row] = await tx.insert(bookings).values({...}).returning();
+    return row;
+  }),
+  { maxRetries: 3, baseDelayMs: 50 },
+);
+```
+
+**Parameters**
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `fn` | `() => Promise<T>` | — | Async operation to wrap |
+| `options.maxRetries` | `number` | `3` | Maximum retry attempts on serialization failure |
+| `options.baseDelayMs` | `number` | `50` | Base delay for exponential backoff in milliseconds |
+
+**Backoff formula:** `baseDelayMs * 2^attempt + jitter` where jitter is a random value in `[0, baseDelayMs)`.
+
+Throws `SerializationRetryExhaustedError` when all retries are exhausted.
+
+---
+
+## Response Helpers
+
+Standard response envelope utilities for Next.js API routes.
+
+```typescript
+import {
+  createErrorResponse,
+  createSuccessResponse,
+  createPaginatedResponse,
+  API_ERROR_CODES,
+} from "@thebookingkit/server";
+
+// Error response
+return Response.json(
+  createErrorResponse(API_ERROR_CODES.NOT_FOUND, "Booking not found"),
+  { status: 404 },
+);
+
+// Success response
+return Response.json(createSuccessResponse(booking));
+
+// Paginated list
+return Response.json(
+  createPaginatedResponse(items, nextCursor, total),
+);
+```
+
+**`API_ERROR_CODES` values**
+
+`NOT_FOUND` | `UNAUTHORIZED` | `FORBIDDEN` | `VALIDATION_ERROR` | `CONFLICT` | `RATE_LIMITED` | `INTERNAL_ERROR` | `PAYMENT_REQUIRED`
+
+### Pagination cursors
+
+```typescript
+import { encodeCursor, decodeCursor } from "@thebookingkit/server";
+
+const cursor = encodeCursor({ id: lastItem.id, createdAt: lastItem.createdAt });
+const decoded = decodeCursor(cursor); // => { id: "...", createdAt: "..." } | null
+```
+
+### Request validation
+
+```typescript
+import { validateSlotQueryParams, parseSortParam } from "@thebookingkit/server";
+
+const validation = validateSlotQueryParams({
+  providerId: params.get("providerId") ?? undefined,
+  start: params.get("start") ?? undefined,
+  end: params.get("end") ?? undefined,
+  timezone: params.get("timezone") ?? undefined,
+});
+
+if (!validation.valid) {
+  return Response.json(
+    createErrorResponse("VALIDATION_ERROR", "Invalid parameters", {
+      errors: validation.errors,
+    }),
+    { status: 400 },
+  );
+}
+```
+
+`validateSlotQueryParams` checks that `providerId` or `teamId` is present, validates UUID format, validates date strings, and enforces a 90-day maximum range.
+
+`parseSortParam` parses sort strings like `"-createdAt"` (descending) or `"startsAt"` (ascending). Returns `null` for unknown fields.
+
+---
+
+## Email
+
+### Notification jobs
+
+```typescript
+import {
+  sendConfirmationEmail,
+  sendReminderEmail,
+  sendCancellationEmail,
+  sendRescheduleEmail,
+  scheduleAutoReject,
+  syncBookingToCalendar,
+  deleteBookingFromCalendar,
+  formatDateTimeForEmail,
+  formatDurationForEmail,
+} from "@thebookingkit/server";
+```
+
+These functions accept a `NotificationBookingData` payload and delegate to your configured `EmailAdapter` and `CalendarAdapter`.
+
+### Email templates
+
+Pre-built HTML and plain-text templates with `{{variable}}` interpolation.
+
+```typescript
+import {
+  interpolateTemplate,
+  CONFIRMATION_EMAIL_HTML,
+  CONFIRMATION_EMAIL_TEXT,
+  REMINDER_EMAIL_HTML,
+  CANCELLATION_EMAIL_HTML,
+  RESCHEDULE_EMAIL_HTML,
+  type EmailTemplateVars,
+} from "@thebookingkit/server";
+
+const html = interpolateTemplate(CONFIRMATION_EMAIL_HTML, {
+  customerName: booking.customerName,
+  eventTitle: eventType.title,
+  startTime: formatDateTimeForEmail(booking.startsAt, booking.timezone),
+  // ...
+});
+```
+
+### Email Adapter interface
+
+```typescript
+import type { EmailAdapter, SendEmailOptions, EmailResult } from "@thebookingkit/server";
+
+class ResendEmailAdapter implements EmailAdapter {
+  async sendEmail(options: SendEmailOptions): Promise<EmailResult> {
+    // delegate to Resend, SendGrid, AWS SES, or Postmark
+  }
+}
+```
+
+---
+
+## Workflows
+
+### `evaluateConditions()`
+
+Evaluates a set of workflow conditions against a context object. Returns `true` only if all conditions pass.
+
+```typescript
+import { evaluateConditions } from "@thebookingkit/server";
+
+const matches = evaluateConditions(workflow.conditions, {
+  bookingStatus: "confirmed",
+  eventTypeId: booking.eventTypeId,
+});
+```
+
+### `matchWorkflows()`
+
+Finds all active workflows that match a trigger event and whose conditions evaluate to true for the given context.
+
+```typescript
+import { matchWorkflows } from "@thebookingkit/server";
+
+const triggered = matchWorkflows(allWorkflows, "booking_confirmed", context);
+```
+
+### `validateWorkflow()`
+
+Validates a workflow definition. Throws `WorkflowValidationError` if the structure is invalid.
+
+### `resolveTemplateVariables()`
+
+Replaces `{{variable}}` placeholders in workflow action templates with values from the booking context.
+
+### Workflow types
+
+| Type | Description |
+|---|---|
+| `WorkflowTrigger` | `"booking_created"` \| `"booking_confirmed"` \| `"booking_cancelled"` \| `"booking_rescheduled"` \| `"before_event"` \| `"after_event"` |
+| `WorkflowActionType` | `"send_email"` \| `"send_sms"` \| `"webhook"` \| `"update_status"` \| `"add_to_calendar"` |
+| `WorkflowCondition` | `{ field, operator, value }` |
+| `ConditionOperator` | `"eq"` \| `"neq"` \| `"contains"` \| `"gt"` \| `"lt"` |
+| `WorkflowDefinition` | Full workflow with trigger, conditions, and actions |
+| `WorkflowContext` | Booking data passed to condition evaluation |
+
+---
+
+## Multi-Tenancy
+
+### `resolveEffectiveSettings()`
+
+Resolves the effective configuration for a booking request by cascading settings from global defaults through organization, provider, and event type levels. More specific settings override less specific ones.
+
+```typescript
+import { resolveEffectiveSettings, GLOBAL_DEFAULTS } from "@thebookingkit/server";
+
+const settings = resolveEffectiveSettings(
+  GLOBAL_DEFAULTS,
+  orgSettings,
+  providerSettings,
+  eventTypeSettings,
+);
+// => ResolvedSettings with timezone, currency, bufferMinutes, branding, bookingLimits
+```
+
+### `assertOrgPermission()`
+
+Throws `TenantAuthorizationError` if the member does not hold the required permission within the organization.
+
+```typescript
+import { assertOrgPermission } from "@thebookingkit/server";
+
+assertOrgPermission(member, "manage:members");
+```
+
+### `getRolePermissions()` and `roleHasPermission()`
+
+```typescript
+import { getRolePermissions, roleHasPermission } from "@thebookingkit/server";
+
+const perms = getRolePermissions("admin");
+const can = roleHasPermission("member", "view:own-bookings"); // true
+```
+
+### `buildOrgBookingUrl()` and `parseOrgBookingPath()`
+
+Utilities for generating and parsing organization-scoped booking URLs.
+
+```typescript
+import { buildOrgBookingUrl, parseOrgBookingPath } from "@thebookingkit/server";
+
+const url = buildOrgBookingUrl("acme-corp", "consultation");
+// => "/org/acme-corp/consultation"
+
+const parsed = parseOrgBookingPath("/org/acme-corp/consultation");
+// => { orgSlug: "acme-corp", eventSlug: "consultation" }
+```
+
+### Multi-tenancy types
+
+| Type | Fields |
+|---|---|
+| `OrgRole` | `"owner"` \| `"admin"` \| `"member"` |
+| `OrgMember` | `userId`, `organizationId`, `role` |
+| `OrgSettings` | `defaultTimezone`, `defaultCurrency`, `branding`, `defaultBufferMinutes`, `defaultBookingLimits` |
+| `ProviderSettings` | `timezone`, `currency`, `branding`, `bufferMinutes`, `bookingLimits` |
+| `EventTypeSettings` | `timezone`, `currency`, `bufferBefore`, `bufferAfter`, `bookingLimits` |
+| `ResolvedSettings` | Fully merged `timezone`, `currency`, `bufferMinutes`, `branding`, `bookingLimits` |
+| `OrgPermission` | `"manage:members"` \| `"manage:teams"` \| `"manage:event-types"` \| `"view:all-bookings"` \| `"view:own-bookings"` \| `"manage:own-availability"` |
+
+**Constants**
+
+```typescript
+import { GLOBAL_DEFAULTS } from "@thebookingkit/server";
+// => { timezone: "UTC", currency: "usd", bufferMinutes: 0 }
+```
+
+---
+
+## Adapter Interfaces
+
+All external dependencies are abstracted behind these interfaces. Pass implementations to the functions that accept adapters.
+
+```typescript
+import type {
+  CalendarAdapter,
+  CalendarEventOptions,
+  CalendarEventResult,
+  JobAdapter,
+  StorageAdapter,
+  SmsAdapter,
+  SendSmsOptions,
+  SmsResult,
+  PaymentAdapter,
+  CreatePaymentIntentOptions,
+  CreatePaymentIntentResult,
+  CaptureResult,
+  RefundResult,
+} from "@thebookingkit/server";
+```
+
+| Interface | Default implementation | Alternatives |
+|---|---|---|
+| `AuthAdapter` | NextAuth.js | Supabase Auth, Clerk, Lucia |
+| `EmailAdapter` | Resend | SendGrid, AWS SES, Postmark |
+| `CalendarAdapter` | Google Calendar (OAuth) | Outlook, Apple Calendar |
+| `JobAdapter` | Inngest | Trigger.dev, BullMQ, Vercel Cron |
+| `StorageAdapter` | Env var encryption key | KMS, Vault |
+| `SmsAdapter` | Twilio | Vonage, AWS SNS |
+| `PaymentAdapter` | Stripe | Square, Adyen |
+
+### ICS calendar attachment
+
+```typescript
+import { generateICSAttachment, JOB_NAMES } from "@thebookingkit/server";
+
+const icsContent = generateICSAttachment({
+  bookingId: booking.id,
+  title: eventType.title,
+  startsAt: booking.startsAt,
+  endsAt: booking.endsAt,
+  timezone: booking.timezone,
+  organizerName: provider.name,
+  organizerEmail: provider.email,
+});
+```
+
+`JOB_NAMES` is a constant object with all background job name strings used by the `JobAdapter` integration.
+
+---
+
+## Errors
+
+```typescript
+import {
+  BookingConflictError,
+  SerializationRetryExhaustedError,
+  UnauthorizedError,
+  ForbiddenError,
+  ResourceUnavailableError,
+} from "@thebookingkit/server";
+```
+
+These are re-exported from `@thebookingkit/core` for convenience so server code does not need to depend on both packages to throw and catch the same error types.
+
+| Error class | HTTP status | When thrown |
+|---|---|---|
+| `BookingConflictError` | 409 | Slot already booked (exclusion constraint or optimistic check) |
+| `SerializationRetryExhaustedError` | 500 | SQLSTATE 40001 exhausted all retry attempts |
+| `UnauthorizedError` | 401 | No valid session or token |
+| `ForbiddenError` | 403 | Authenticated but insufficient permissions |
+| `ResourceUnavailableError` | 409 | Requested resource (room, equipment) is unavailable |

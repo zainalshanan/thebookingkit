@@ -6,8 +6,10 @@ import type { AssignmentStrategy } from "@thebookingkit/core";
 
 function getNextWeekday(): string {
   const d = new Date();
-  d.setDate(d.getDate() + 2);
-  while (d.getDay() === 0 || d.getDay() === 6) {
+  d.setDate(d.getDate() + 1);
+  // Skip to Wed/Thu/Fri — the only days all 3 team members overlap
+  // Marcus: MO-FR, Darius: TU-SA, Elena: MO,WE,FR,SA → intersection: WE,FR
+  while (![3, 4, 5].includes(d.getDay())) {
     d.setDate(d.getDate() + 1);
   }
   return d.toISOString().split("T")[0] as string;

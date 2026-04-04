@@ -1,0 +1,317 @@
+---
+title: "CLI Reference"
+description: "Complete reference for the @thebookingkit/cli command-line tool — scaffold configs, add components, run migrations, and check your setup."
+---
+
+The Booking Kit CLI scaffolds project files, manages copy-paste UI components from the registry, and provides health-check utilities.
+
+```bash
+npx thebookingkit <command> [arguments] [flags]
+```
+
+All commands are run from your project root (the directory containing `package.json`).
+
+---
+
+## Commands
+
+### `init`
+
+Scaffold the required project files to get started with The Booking Kit.
+
+```bash
+npx thebookingkit init [--auth <adapter>] [--jobs <adapter>] [--email <adapter>]
+```
+
+**What it creates**
+
+| File / Directory | Description |
+|---|---|
+| `thebookingkit.config.ts` | Main configuration file with your chosen adapter wiring |
+| `.env.local` | Environment variable template with all required keys |
+| `src/components/thebookingkit/` | Default directory for installed UI components |
+| `.thebookingkit-manifest.json` | Component manifest tracking installed versions and checksums |
+
+If `.env.local` is not already listed in `.gitignore`, `init` appends it automatically.
+
+**Interactive mode**
+
+When no adapter flags are provided and stdin is a TTY, `init` prompts for each adapter interactively:
+
+```
+The Booking Kit — interactive setup
+
+Auth adapter [nextauth, clerk, supabase, lucia] (default: nextauth):
+Job adapter [inngest, trigger, bullmq, none] (default: inngest):
+Email adapter [resend, sendgrid, ses, none] (default: resend):
+```
+
+**Non-interactive mode flags**
+
+| Flag | Options | Default | Description |
+|---|---|---|---|
+| `--auth <adapter>` | `nextauth`, `clerk`, `supabase`, `lucia` | `nextauth` | Auth adapter to configure |
+| `--jobs <adapter>` | `inngest`, `trigger`, `bullmq`, `none` | `inngest` | Background job adapter |
+| `--email <adapter>` | `resend`, `sendgrid`, `ses`, `none` | `resend` | Email delivery adapter |
+
+**Example — non-interactive CI setup**
+
+```bash
+npx thebookingkit init --auth clerk --jobs inngest --email resend
+```
+
+**Next steps after `init`**
+
+```
+1. Update .env.local with your database URL
+2. Run: npx thebookingkit add booking-calendar
+3. Run: npx thebookingkit migrate
+```
+
+---
+
+### `add`
+
+Add one or more UI components from the registry to your project. Dependencies are resolved and fetched automatically.
+
+```bash
+npx thebookingkit add <components...> [flags]
+```
+
+**Arguments**
+
+| Argument | Description |
+|---|---|
+| `<components...>` | One or more component names (e.g. `booking-calendar time-slot-picker`) |
+
+**Flags**
+
+| Flag | Default | Description |
+|---|---|---|
+| `-d, --dir <path>` | `src/components/thebookingkit` | Directory to write components into |
+| `-f, --force` | `false` | Overwrite locally modified files |
+| `--registry <url>` | `https://docs.thebookingkit.dev/registry` | Custom registry base URL (must be `https://`) |
+| `--dry-run` | `false` | Print what would be written without creating any files |
+
+The CLI detects your package manager from lockfiles (`pnpm-lock.yaml`, `yarn.lock`, `bun.lockb`, or `package-lock.json`) and prints the correct install command for npm dependencies.
+
+Components that have been locally modified are skipped unless `--force` is passed. The manifest checksum is used to detect modifications.
+
+**Examples**
+
+```bash
+# Add a single component
+npx thebookingkit add booking-calendar
+
+# Add multiple components at once
+npx thebookingkit add booking-calendar time-slot-picker booking-confirmation
+
+# Preview without writing
+npx thebookingkit add booking-calendar --dry-run
+
+# Overwrite a locally modified component
+npx thebookingkit add booking-calendar --force
+
+# Write to a custom directory
+npx thebookingkit add time-slot-picker --dir src/components/ui/booking
+```
+
+---
+
+### `list`
+
+List all components available in the registry, grouped by category.
+
+```bash
+npx thebookingkit list [--category <category>] [--json]
+```
+
+**Flags**
+
+| Flag | Description |
+|---|---|
+| `-c, --category <category>` | Filter output to a single category |
+| `--json` | Output the full registry as a JSON array |
+
+**Example output**
+
+```
+BOOKING
+  booking-calendar             Full booking calendar with slot picker
+  time-slot-picker             Standalone time slot grid (depends: booking-calendar)
+  booking-confirmation         Post-booking confirmation screen
+
+ADMIN
+  admin-schedule-view          Provider schedule management view
+  availability-editor          Weekly availability editor
+
+17 components available
+Run 'npx thebookingkit add <name>' to add a component.
+```
+
+---
+
+### `diff`
+
+Show which installed components have been locally modified since they were fetched from the registry.
+
+```bash
+npx thebookingkit diff
+```
+
+Reads `.thebookingkit-manifest.json` and compares the stored SHA-256 checksum of each component against the current file content. Reports one of three states per component:
+
+| State | Meaning |
+|---|---|
+| `CLEAN` | File matches the registry checksum |
+| `MODIFIED` | File has been edited since it was added |
+| `MISSING` | File was deleted but is still in the manifest |
+
+```
+  CLEAN     booking-confirmation
+  MODIFIED  booking-calendar  (src/components/thebookingkit/booking-calendar.tsx)
+  MISSING   time-slot-picker  (expected at src/components/thebookingkit/time-slot-picker.tsx)
+
+3 component(s) checked — 1 modified, 1 missing.
+```
+
+---
+
+### `update`
+
+Re-fetch one or more components from the registry, replacing the local file with the latest version.
+
+```bash
+npx thebookingkit update [components...] [flags]
+```
+
+**Arguments**
+
+| Argument | Description |
+|---|---|
+| `[components...]` | Component name(s) to update. Omit to update all installed components. |
+
+**Flags**
+
+| Flag | Default | Description |
+|---|---|---|
+| `-f, --force` | `false` | Overwrite locally modified components |
+| `--registry <url>` | `https://docs.thebookingkit.dev/registry` | Custom registry base URL |
+| `--dry-run` | `false` | Show what would be updated without writing files |
+
+Locally modified components are skipped unless `--force` is passed. The manifest is updated with the new checksum after each successful update.
+
+**Examples**
+
+```bash
+# Update all installed components
+npx thebookingkit update
+
+# Update a specific component
+npx thebookingkit update booking-calendar
+
+# Force-update a locally modified component
+npx thebookingkit update booking-calendar --force
+
+# Preview updates without writing
+npx thebookingkit update --dry-run
+```
+
+---
+
+### `doctor`
+
+Run a health check on your Booking Kit setup and report any configuration problems.
+
+```bash
+npx thebookingkit doctor
+```
+
+Checks the following and reports `PASS` or `FAIL` for each:
+
+| Check | Hint on failure |
+|---|---|
+| `thebookingkit.config.ts` exists | Run `npx thebookingkit init` |
+| `@thebookingkit/core` in `package.json` | Run `npm install @thebookingkit/core` |
+| `.thebookingkit-manifest.json` exists | Run `npx thebookingkit init` |
+| Each installed component file is present | Run `npx thebookingkit add <name>` to reinstall |
+| Each installed component checksum is clean | File has local modifications (informational) |
+
+Exits with code `1` if any check fails, making it suitable for CI pipelines.
+
+```
+The Booking Kit — doctor
+
+  PASS  thebookingkit.config.ts exists
+  PASS  @thebookingkit/core is in package.json
+  PASS  .thebookingkit-manifest.json exists
+  PASS  booking-calendar file present (src/components/thebookingkit/booking-calendar.tsx)
+  PASS  booking-calendar checksum clean
+
+5 passed, 0 failed.
+```
+
+---
+
+### `migrate`
+
+Run pending Booking Kit database migrations.
+
+```bash
+npx thebookingkit migrate
+```
+
+This command is a guided wrapper. It prints the Drizzle commands needed to apply your schema:
+
+```
+Migration support requires @thebookingkit/db.
+Run: npx drizzle-kit push
+Or:  npx drizzle-kit migrate
+```
+
+For custom migrations (extensions, exclusion constraints, audit triggers), use `runCustomMigrations` from `@thebookingkit/db` directly.
+
+---
+
+## Manifest File
+
+The `.thebookingkit-manifest.json` file tracks installed components. It is created by `init` and updated by `add` and `update`. Commit this file to version control so your team can see which component versions are installed.
+
+```json
+{
+  "version": "0.2.0",
+  "components": {
+    "booking-calendar": {
+      "name": "booking-calendar",
+      "kitVersion": "0.2.0",
+      "installedPath": "src/components/thebookingkit/booking-calendar.tsx",
+      "checksum": "a3f2...",
+      "installedAt": "2026-04-04T10:00:00.000Z"
+    }
+  }
+}
+```
+
+---
+
+## Configuration File
+
+`thebookingkit.config.ts` is generated by `init` and wires your chosen adapters together. Example output for the default adapter combination:
+
+```typescript
+import type { BookingKitConfig } from "@thebookingkit/core";
+
+const config: BookingKitConfig = {
+  auth: {
+    adapter: "nextauth",
+  },
+  jobs: {
+    adapter: "inngest",
+  },
+  email: {
+    adapter: "resend",
+  },
+};
+
+export default config;
+```

@@ -118,6 +118,36 @@ const LIVE_PREVIEWS = [
   },
 ];
 
+function CopyBtn({ name }: { name: string }) {
+  const [copied, setCopied] = useState(false);
+  const command = `npx thebookingkit add ${name}`;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(command).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <button
+      onClick={handleCopy}
+      aria-label={`Copy install command for ${name}`}
+      style={{
+        background: "none",
+        border: "none",
+        fontSize: "0.68rem",
+        color: "var(--text-muted)",
+        cursor: "pointer",
+        padding: 0,
+        fontFamily: "inherit",
+        flexShrink: 0,
+      }}
+    >
+      {copied ? "Copied" : "Copy"}
+    </button>
+  );
+}
+
 function ComponentCopyBtn({ name }: { name: string }) {
   const [copied, setCopied] = useState(false);
   const command = `npx thebookingkit add ${name}`;
@@ -187,7 +217,7 @@ export function UILibrarySection() {
             className="live-preview"
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))",
+              gridTemplateColumns: "repeat(auto-fill, minmax(min(340px, 100%), 1fr))",
               gap: "1.25rem",
             }}
           >
@@ -207,20 +237,22 @@ export function UILibrarySection() {
                   style={{
                     padding: "0.75rem 1rem",
                     borderBottom: "1px solid var(--border)",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
                   }}
                 >
-                  <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
                     <div style={{ fontFamily: "var(--font-mono)", fontSize: "0.82rem", fontWeight: 600, color: "var(--accent)" }}>
                       {preview.label}
                     </div>
-                    <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: "0.15rem" }}>
+                    <span style={{ fontSize: "0.68rem", color: "var(--text-muted)" }}>
                       {preview.category}
-                    </div>
+                    </span>
                   </div>
-                  <ComponentCopyBtn name={preview.name} />
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", background: "var(--surface-dark, rgba(0,0,0,0.2))", borderRadius: 6, padding: "0.3rem 0.55rem" }}>
+                    <code style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--text-muted)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      npx thebookingkit add {preview.name}
+                    </code>
+                    <CopyBtn name={preview.name} />
+                  </div>
                 </div>
                 <div style={{ padding: "1rem", minHeight: 120 }}>
                   <preview.component />
