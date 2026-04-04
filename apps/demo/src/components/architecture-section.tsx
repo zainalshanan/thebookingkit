@@ -146,7 +146,7 @@ export function ArchitectureSection() {
           <h3 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: "1rem", color: "var(--brand)" }}>
             Adapter Swap Table
           </h3>
-          <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius)", overflow: "hidden" }}>
+          <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius)", overflow: "auto" }}>
             <table className="adapter-table">
               <thead>
                 <tr>
