@@ -141,6 +141,8 @@ export const eventTypes = pgTable(
     isRecurring: boolean("is_recurring").notNull().default(false),
     maxSeats: integer("max_seats").notNull().default(1),
     noShowFeeCents: integer("no_show_fee_cents").default(0),
+    depositCents: integer("deposit_cents").default(0),
+    depositPercentage: integer("deposit_percentage").default(0),
     cancellationPolicy: jsonb("cancellation_policy").default([]),
     customQuestions: jsonb("custom_questions").default([]),
     minimumNoticeMinutes: integer("minimum_notice_minutes").default(0),

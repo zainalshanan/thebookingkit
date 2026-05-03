@@ -34,3 +34,9 @@ export type {
   CaptureResult,
   RefundResult,
 } from "./payment-adapter.js";
+
+export {
+  StripePaymentAdapter,
+  type StripePaymentAdapterOptions,
+  type StripeLike,
+} from "./stripe-payment-adapter.js";

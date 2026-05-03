@@ -48,6 +48,7 @@ export default defineConfig({
                     { label: 'Resource & Capacity Booking', slug: 'features/resource-booking' },
                     { label: 'Slot Release Strategies', slug: 'features/slot-release' },
                     { label: 'Payments & Stripe', slug: 'features/payments' },
+                    { label: 'Deposits with Stripe', slug: 'features/deposits' },
                     { label: 'Workflow Automation', slug: 'features/workflows' },
                     { label: 'Webhooks', slug: 'features/webhooks' },
                     { label: 'Routing Forms', slug: 'features/routing-forms' },
@@ -99,6 +100,7 @@ export default defineConfig({
                         items: [
                             { label: 'PaymentGate', slug: 'components/payment-gate' },
                             { label: 'PaymentHistory', slug: 'components/payment-history' },
+                            { label: 'EventTypeDepositFields', slug: 'components/event-type-deposit-fields' },
                         ],
                     },
                     {

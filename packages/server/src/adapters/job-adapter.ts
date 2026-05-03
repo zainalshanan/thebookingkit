@@ -28,4 +28,6 @@ export const JOB_NAMES = {
   PROCESS_RECURRING_SERIES: "thebookingkit/process-recurring-series",
   PROCESS_SLOT_RELEASE: "thebookingkit/process-slot-release",
   ADVANCE_WALK_IN_QUEUE: "thebookingkit/advance-walk-in-queue",
+  PROCESS_DEPOSIT_REFUND: "thebookingkit/process-deposit-refund",
+  RETRY_DEPOSIT_CHARGE: "thebookingkit/retry-deposit-charge",
 } as const;

@@ -351,6 +351,8 @@ CREATE TABLE IF NOT EXISTS event_types (
   is_recurring            INTEGER NOT NULL DEFAULT 0,
   max_seats               INTEGER NOT NULL DEFAULT 1,
   no_show_fee_cents       INTEGER DEFAULT 0,
+  deposit_cents           INTEGER NOT NULL DEFAULT 0,
+  deposit_percentage      INTEGER NOT NULL DEFAULT 0,
   cancellation_policy     TEXT NOT NULL DEFAULT '[]',
   custom_questions        TEXT NOT NULL DEFAULT '[]',
   minimum_notice_minutes  INTEGER DEFAULT 0,
@@ -486,6 +488,9 @@ CREATE TABLE IF NOT EXISTS recurring_bookings (
  * DDL for the `payments` table.
  *
  * Mirrors `packages/db/src/schema/tables.ts` → `payments`.
+ *
+ * `payment_type` is stored as TEXT and accepts: `'prepayment'`, `'no_show_hold'`,
+ * `'cancellation_fee'`, `'deposit'` (kept in sync with the Postgres enum).
  */
 export const PAYMENTS_DDL = `
 CREATE TABLE IF NOT EXISTS payments (
@@ -682,4 +687,20 @@ export const ALL_DDL = [
   WALK_IN_DDL,
   RESOURCE_DDL,
   BOOKING_LOCKS_DDL,
+].join(";\n\n");
+
+/**
+ * In-place migration to add deposit columns to `event_types` for databases
+ * created before deposit support landed.
+ *
+ * Idempotent for fresh installs (the columns are already present in
+ * {@link EVENT_TYPES_DDL}); for existing installs, run each statement
+ * individually and treat "duplicate column" errors as non-fatal.
+ *
+ * SQLite does not support `ADD COLUMN IF NOT EXISTS`; wrap calls in a
+ * try/catch or pre-check via `PRAGMA table_info(event_types)`.
+ */
+export const MIGRATION_0002_DEPOSITS_DDL = [
+  "ALTER TABLE event_types ADD COLUMN deposit_cents INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE event_types ADD COLUMN deposit_percentage INTEGER NOT NULL DEFAULT 0",
 ].join(";\n\n");

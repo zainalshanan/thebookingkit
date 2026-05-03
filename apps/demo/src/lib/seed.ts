@@ -43,6 +43,11 @@ async function seed() {
   console.log("[demo-seed] Creating event types...");
   const eventTypeIds: Record<string, string> = {};
   for (const svc of SERVICES) {
+    // Showcase deposits on the highest-value services so the demo exercises
+    // the full Stripe deposit flow end-to-end.
+    const depositPercentage =
+      svc.slug === "deluxe-grooming" ? 25 : svc.slug === "haircut-beard" ? 20 : 0;
+
     const [et] = await db
       .insert(eventTypes)
       .values({
@@ -52,6 +57,7 @@ async function seed() {
         durationMinutes: svc.duration,
         description: svc.description,
         priceCents: Math.round(svc.price * 100),
+        depositPercentage,
         isActive: true,
       })
       .returning();

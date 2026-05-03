@@ -10,7 +10,7 @@ export interface PaymentDisplayRecord {
   amountCents: number;
   currency: string;
   status: "pending" | "succeeded" | "failed" | "refunded" | "partially_refunded";
-  paymentType: "prepayment" | "no_show_hold" | "cancellation_fee";
+  paymentType: "prepayment" | "deposit" | "no_show_hold" | "cancellation_fee";
   refundAmountCents: number;
   createdAt: Date;
 }
@@ -51,6 +51,7 @@ export function PaymentHistory({
   style,
 }: PaymentHistoryProps) {
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
@@ -59,6 +60,10 @@ export function PaymentHistory({
 
     if (statusFilter !== "all") {
       result = result.filter((p) => p.status === statusFilter);
+    }
+
+    if (typeFilter !== "all") {
+      result = result.filter((p) => p.paymentType === typeFilter);
     }
 
     if (dateFrom) {
@@ -73,15 +78,19 @@ export function PaymentHistory({
     }
 
     return result;
-  }, [payments, statusFilter, dateFrom, dateTo]);
+  }, [payments, statusFilter, typeFilter, dateFrom, dateTo]);
 
   const summary = useMemo(() => {
     let totalRevenue = 0;
     let totalRefunded = 0;
+    let depositRevenue = 0;
 
     for (const p of filteredPayments) {
       if (p.status === "succeeded" || p.status === "partially_refunded") {
         totalRevenue += p.amountCents;
+        if (p.paymentType === "deposit") {
+          depositRevenue += p.amountCents;
+        }
       }
       totalRefunded += p.refundAmountCents;
     }
@@ -89,6 +98,7 @@ export function PaymentHistory({
     return {
       totalRevenue,
       totalRefunded,
+      depositRevenue,
       netRevenue: totalRevenue - totalRefunded,
       count: filteredPayments.length,
     };
@@ -121,6 +131,12 @@ export function PaymentHistory({
             {formatAmount(summary.netRevenue, currency)}
           </span>
         </div>
+        <div className="tbk-summary-card">
+          <span className="tbk-summary-label">Deposit Revenue</span>
+          <span className="tbk-summary-value">
+            {formatAmount(summary.depositRevenue, currency)}
+          </span>
+        </div>
       </div>
 
       {/* Filters */}
@@ -141,6 +157,24 @@ export function PaymentHistory({
             <option value="partially_refunded">Partially Refunded</option>
             <option value="pending">Pending</option>
             <option value="failed">Failed</option>
+          </select>
+        </div>
+
+        <div className="tbk-filter-group">
+          <label htmlFor="payment-type-filter" className="tbk-label">
+            Type
+          </label>
+          <select
+            id="payment-type-filter"
+            className="tbk-select"
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+          >
+            <option value="all">All</option>
+            <option value="prepayment">Prepayments</option>
+            <option value="deposit">Deposits</option>
+            <option value="no_show_hold">No-Show Holds</option>
+            <option value="cancellation_fee">Cancellation Fees</option>
           </select>
         </div>
 
@@ -205,7 +239,12 @@ export function PaymentHistory({
                     {payment.customerName ?? payment.customerEmail ?? "—"}
                   </td>
                   <td>
-                    <span className="tbk-payment-type-badge">
+                    <span
+                      className={cn(
+                        "tbk-payment-type-badge",
+                        `tbk-payment-type-${payment.paymentType}`,
+                      )}
+                    >
                       {formatPaymentType(payment.paymentType)}
                     </span>
                   </td>
@@ -261,6 +300,8 @@ function formatPaymentType(type: string): string {
   switch (type) {
     case "prepayment":
       return "Prepayment";
+    case "deposit":
+      return "Deposit";
     case "no_show_hold":
       return "No-Show Hold";
     case "cancellation_fee":

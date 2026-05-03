@@ -25,11 +25,18 @@ export type CancellationPolicy = CancellationPolicyTier[];
  * Payment type discriminator.
  *
  * Values match `PaymentRecord.paymentType` exactly.
- * - `"prepayment"` — full or partial upfront charge at booking time.
+ * - `"prepayment"` — full upfront charge at booking time.
+ * - `"deposit"` — partial upfront charge configured via `deposit_cents` /
+ *   `deposit_percentage` on the event type. Remaining balance is collected
+ *   out-of-band (in person, separate invoice, etc.).
  * - `"no_show_hold"` — authorization hold released or captured on no-show.
  * - `"cancellation_fee"` — fee charged on late cancellation per policy tier.
  */
-export type PaymentType = "prepayment" | "no_show_hold" | "cancellation_fee";
+export type PaymentType =
+  | "prepayment"
+  | "deposit"
+  | "no_show_hold"
+  | "cancellation_fee";
 
 /** Hold status for no-show fee holds */
 export type HoldStatus = "authorized" | "captured" | "released";
@@ -68,10 +75,27 @@ export interface PaymentSummary {
   totalRefundedCents: number;
   /** Net revenue (total - refunds) */
   netRevenueCents: number;
+  /** Revenue from deposit-type payments (subset of totalRevenueCents) */
+  depositRevenueCents: number;
   /** Count by status */
   countByStatus: Record<string, number>;
+  /** Count by payment type */
+  countByType: Record<PaymentType, number>;
   /** Total number of payments */
   totalPayments: number;
+}
+
+/**
+ * Per-event-type deposit configuration.
+ *
+ * Matches the `deposit_cents` and `deposit_percentage` columns on the
+ * `event_types` table. If both are set, percentage takes precedence.
+ */
+export interface DepositConfig {
+  /** Fixed deposit amount in cents */
+  depositCents?: number | null;
+  /** Deposit as percentage of priceCents (0–100) */
+  depositPercentage?: number | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -226,15 +250,27 @@ export function computePaymentSummary(
   payments: PaymentRecord[],
 ): PaymentSummary {
   const countByStatus: Record<string, number> = {};
+  const countByType: Record<PaymentType, number> = {
+    prepayment: 0,
+    deposit: 0,
+    no_show_hold: 0,
+    cancellation_fee: 0,
+  };
   let totalRevenueCents = 0;
   let totalRefundedCents = 0;
+  let depositRevenueCents = 0;
 
   for (const payment of payments) {
     countByStatus[payment.status] =
       (countByStatus[payment.status] || 0) + 1;
+    countByType[payment.paymentType] =
+      (countByType[payment.paymentType] || 0) + 1;
 
     if (payment.status === "succeeded" || payment.status === "partially_refunded") {
       totalRevenueCents += payment.amountCents;
+      if (payment.paymentType === "deposit") {
+        depositRevenueCents += payment.amountCents;
+      }
     }
 
     totalRefundedCents += payment.refundAmountCents;
@@ -244,7 +280,9 @@ export function computePaymentSummary(
     totalRevenueCents,
     totalRefundedCents,
     netRevenueCents: totalRevenueCents - totalRefundedCents,
+    depositRevenueCents,
     countByStatus,
+    countByType,
     totalPayments: payments.length,
   };
 }
@@ -271,6 +309,62 @@ export function requiresPayment(priceCents: number | null | undefined): boolean 
  */
 export function hasNoShowFee(noShowFeeCents: number | null | undefined): boolean {
   return typeof noShowFeeCents === "number" && noShowFeeCents > 0;
+}
+
+/**
+ * Compute the deposit amount in cents for a given event type configuration.
+ *
+ * Resolution rule:
+ * - If `depositPercentage` is a positive number, return `round(priceCents * pct / 100)`.
+ * - Else return `depositCents` (or 0 if unset).
+ * - The result is capped at `priceCents` so a deposit can never exceed the price.
+ *
+ * @param cfg - Deposit configuration from the event type
+ * @param priceCents - The event type price in cents (used for percentage math)
+ * @returns Deposit amount in cents (>= 0, <= priceCents)
+ * @throws {PaymentValidationError} On negative inputs or out-of-range percentage
+ */
+export function computeDepositAmount(
+  cfg: DepositConfig,
+  priceCents: number,
+): number {
+  if (!Number.isFinite(priceCents) || priceCents < 0) {
+    throw new PaymentValidationError(
+      `Invalid priceCents: ${priceCents}. Must be >= 0`,
+    );
+  }
+
+  const pct = cfg.depositPercentage ?? 0;
+  const fixed = cfg.depositCents ?? 0;
+
+  if (typeof pct !== "number" || pct < 0 || pct > 100) {
+    throw new PaymentValidationError(
+      `Invalid depositPercentage: ${pct}. Must be 0–100`,
+    );
+  }
+  if (typeof fixed !== "number" || fixed < 0) {
+    throw new PaymentValidationError(
+      `Invalid depositCents: ${fixed}. Must be >= 0`,
+    );
+  }
+
+  const raw = pct > 0 ? Math.round((priceCents * pct) / 100) : fixed;
+  return Math.min(raw, priceCents);
+}
+
+/**
+ * Determine whether an event type configuration requires a deposit.
+ *
+ * @param cfg - Deposit configuration from the event type
+ * @param priceCents - The event type price in cents
+ * @returns Whether a non-zero deposit must be collected
+ */
+export function requiresDeposit(
+  cfg: DepositConfig,
+  priceCents: number,
+): boolean {
+  if (!Number.isFinite(priceCents) || priceCents <= 0) return false;
+  return computeDepositAmount(cfg, priceCents) > 0;
 }
 
 /**

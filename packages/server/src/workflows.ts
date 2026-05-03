@@ -23,6 +23,8 @@ export type WorkflowTrigger =
   | "after_event"
   | "payment_received"
   | "payment_failed"
+  | "deposit_collected"
+  | "deposit_refunded"
   | "no_show_confirmed"
   | "form_submitted";
 
@@ -303,6 +305,8 @@ const VALID_TRIGGERS: WorkflowTrigger[] = [
   "after_event",
   "payment_received",
   "payment_failed",
+  "deposit_collected",
+  "deposit_refunded",
   "no_show_confirmed",
   "form_submitted",
 ];

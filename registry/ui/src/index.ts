@@ -19,8 +19,9 @@ export { ManualBookingForm, type ManualBookingFormProps, type ManualBookingFormV
 export { ProviderAuth, type ProviderAuthProps } from "./components/provider-auth.js";
 
 // Payment Components
-export { PaymentGate, type PaymentGateProps } from "./components/payment-gate.js";
+export { PaymentGate, type PaymentGateProps, type PaymentGateMode } from "./components/payment-gate.js";
 export { PaymentHistory, type PaymentHistoryProps, type PaymentDisplayRecord } from "./components/payment-history.js";
+export { EventTypeDepositFields, type EventTypeDepositFieldsProps } from "./components/event-type-deposit-fields.js";
 
 // Workflow Components
 export { WorkflowBuilder, type WorkflowBuilderProps, type WorkflowFormValues, type WorkflowLogDisplay, type TriggerOption, type ActionTypeOption } from "./components/workflow-builder.js";

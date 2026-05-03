@@ -41,6 +41,7 @@ export const paymentTypeEnum = pgEnum("payment_type", [
   "prepayment",
   "no_show_hold",
   "cancellation_fee",
+  "deposit",
 ]);
 
 /** Location type for event types */
@@ -102,6 +103,8 @@ export const workflowTriggerEnum = pgEnum("workflow_trigger", [
   "payment_failed",
   "no_show_confirmed",
   "form_submitted",
+  "deposit_collected",
+  "deposit_refunded",
 ]);
 
 /** Workflow action types */

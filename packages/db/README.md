@@ -26,7 +26,7 @@ const upcoming = await db.select().from(bookings).where(/* ... */);
 
 ## Key Features
 
-- **23 PostgreSQL tables** — Organizations, providers, event types, availability rules, bookings, payments, webhooks, workflows, and more
+- **23 PostgreSQL tables** — Organizations, providers, event types (with deposit configuration), availability rules, bookings, payments (prepayments, deposits, no-show holds, cancellation fees), webhooks, workflows, and more
 - **Double-booking prevention** — `EXCLUDE USING gist` constraint with `btree_gist` extension
 - **Full type exports** — Inferred select and insert types for every table (`Booking`, `NewBooking`, etc.)
 - **Booking audit trail** — Append-only `booking_events` table tracks every status change

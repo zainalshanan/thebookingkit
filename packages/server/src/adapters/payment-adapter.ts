@@ -88,27 +88,49 @@ export interface PaymentAdapter {
   /**
    * Capture a previously authorized (manual capture) payment intent.
    * Used when marking a booking as no-show.
+   *
+   * @param connectedAccountId - When the original PaymentIntent was created on
+   *   a Stripe Connect account, the same account must be passed here.
    */
-  capturePaymentIntent(paymentIntentId: string, amountCents?: number): Promise<CaptureResult>;
+  capturePaymentIntent(
+    paymentIntentId: string,
+    amountCents?: number,
+    connectedAccountId?: string,
+  ): Promise<CaptureResult>;
 
   /**
    * Cancel a payment intent (release a hold).
    * Used when a booking completes normally and the no-show hold should be released.
+   *
+   * @param connectedAccountId - See {@link capturePaymentIntent}.
    */
-  cancelPaymentIntent(paymentIntentId: string): Promise<void>;
+  cancelPaymentIntent(
+    paymentIntentId: string,
+    connectedAccountId?: string,
+  ): Promise<void>;
 
   /**
    * Refund a payment intent (full or partial).
+   *
+   * @param connectedAccountId - See {@link capturePaymentIntent}.
    */
-  refund(paymentIntentId: string, amountCents?: number): Promise<RefundResult>;
+  refund(
+    paymentIntentId: string,
+    amountCents?: number,
+    connectedAccountId?: string,
+  ): Promise<RefundResult>;
 
   /**
    * Generate a Stripe Connect onboarding URL for a provider.
    * Returns the URL the provider should be redirected to.
+   *
+   * @param connectedAccountId - Existing connected account ID. If omitted, a
+   *   fresh Express account is created and onboarding starts from scratch.
    */
   createConnectOnboardingUrl(options: {
     returnUrl: string;
     refreshUrl: string;
+    connectedAccountId?: string;
   }): Promise<string>;
 
   /**

@@ -3,19 +3,69 @@ title: Payments & Stripe
 description: Accept payments, handle cancellation fees, and manage no-show holds.
 ---
 
-The Booking Kit provides payment logic through the `PaymentAdapter` interface and pure computation functions for cancellation policies and fees.
+The Booking Kit provides payment logic through the `PaymentAdapter` interface and pure computation functions for deposits, cancellation policies, and fees.
+
+For a step-by-step deposit walkthrough, see the [Deposits guide](/features/deposits/).
 
 ## Payment adapter
 
-The `PaymentAdapter` interface abstracts payment processing:
+The `PaymentAdapter` interface abstracts payment processing. `connectedAccountId` is honored on every method for Stripe Connect routing:
 
 ```typescript
 interface PaymentAdapter {
   createPaymentIntent(options: CreatePaymentIntentOptions): Promise<CreatePaymentIntentResult>;
   createSetupIntent(options: CreateSetupIntentOptions): Promise<CreateSetupIntentResult>;
-  capturePayment(paymentIntentId: string): Promise<CaptureResult>;
-  refundPayment(paymentIntentId: string, amountCents?: number): Promise<RefundResult>;
+  capturePaymentIntent(paymentIntentId: string, amountCents?: number, connectedAccountId?: string): Promise<CaptureResult>;
+  cancelPaymentIntent(paymentIntentId: string, connectedAccountId?: string): Promise<void>;
+  refund(paymentIntentId: string, amountCents?: number, connectedAccountId?: string): Promise<RefundResult>;
+  createConnectOnboardingUrl(options: { returnUrl: string; refreshUrl: string; connectedAccountId?: string }): Promise<string>;
+  disconnectAccount(connectedAccountId: string): Promise<void>;
 }
+```
+
+`@thebookingkit/server` ships `StripePaymentAdapter` as a concrete implementation. `stripe` is an optional peer dependency — install it only if you use this adapter:
+
+```bash
+npm install stripe
+```
+
+```typescript
+import Stripe from "stripe";
+import { StripePaymentAdapter } from "@thebookingkit/server";
+
+export const paymentAdapter = new StripePaymentAdapter({
+  stripe: new Stripe(process.env.STRIPE_SECRET_KEY!),
+  webhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
+});
+```
+
+## Deposits
+
+Configure a partial upfront charge per event type via `deposit_cents` (fixed) or `deposit_percentage` (variable). When both are set, percentage wins.
+
+```typescript
+import { computeDepositAmount, requiresDeposit } from "@thebookingkit/core";
+
+requiresDeposit({}, 10000);                                  // false
+requiresDeposit({ depositPercentage: 25 }, 10000);            // true
+computeDepositAmount({ depositPercentage: 25 }, 10000);       // 2500
+computeDepositAmount({ depositCents: 5000 }, 10000);          // 5000
+computeDepositAmount({ depositCents: 99999 }, 10000);         // 10000 (capped at price)
+```
+
+The booking flow uses `initiateDeposit` to create the PaymentIntent and `refundDeposit` to release it on cancellation per the policy below:
+
+```typescript
+import { initiateDeposit, refundDeposit } from "@thebookingkit/server";
+
+const result = await initiateDeposit(paymentAdapter, {
+  bookingId: booking.id,
+  deposit: { depositPercentage: eventType.depositPercentage },
+  priceCents: eventType.priceCents,
+  currency: eventType.currency,
+  connectedAccountId: provider.stripeAccountId,
+});
+// result.intent.clientSecret is what PaymentGate confirms in the browser.
 ```
 
 ## Cancellation policies
@@ -173,9 +223,31 @@ console.log(summary);
 //   totalRevenueCents: 5000,
 //   totalRefundedCents: 8000,
 //   netRevenueCents: -3000,
+//   depositRevenueCents: 0,
 //   countByStatus: { succeeded: 1, refunded: 1 },
+//   countByType: { prepayment: 2, deposit: 0, no_show_hold: 0, cancellation_fee: 0 },
 //   totalPayments: 2
 // }
+```
+
+## Webhooks
+
+`handleStripeWebhook` is a framework-agnostic handler — verify the signature, dispatch `payment_intent.*` events, and persist `event.id` for idempotency. Mount it from a Next.js route handler:
+
+```typescript
+// app/api/webhooks/stripe/route.ts
+import { handleStripeWebhook } from "@thebookingkit/server";
+
+export async function POST(req: Request) {
+  const result = await handleStripeWebhook(
+    {
+      rawBody: await req.text(),
+      signature: req.headers.get("stripe-signature") ?? "",
+    },
+    { stripe, webhookSecret, store },
+  );
+  return new Response(null, { status: result.status });
+}
 ```
 
 ## UI components
@@ -183,14 +255,30 @@ console.log(summary);
 ```tsx
 import { PaymentGate } from "./components/payment-gate";
 import { PaymentHistory } from "./components/payment-history";
+import { EventTypeDepositFields } from "./components/event-type-deposit-fields";
 
-// Wrap the booking confirmation in a payment step
+// Collect a deposit during checkout — shows "Pay deposit of $X" copy and
+// "Balance of $Y due at the appointment".
 <PaymentGate
-  amountCents={5000}
+  mode="deposit"
+  amountCents={2500}
+  totalPriceCents={10000}
   currency="usd"
-  onPaymentComplete={handlePaymentComplete}
+  clientSecret={clientSecret}
+  onPaymentSuccess={handlePaymentComplete}
+  renderPaymentElement={() => <PaymentElement />}
 />
 
-// Show payment history to provider
+// Configure the deposit on an event type
+<EventTypeDepositFields
+  depositCents={form.depositCents}
+  depositPercentage={form.depositPercentage}
+  priceCents={form.priceCents}
+  currency={form.currency}
+  onDepositCentsChange={form.setDepositCents}
+  onDepositPercentageChange={form.setDepositPercentage}
+/>
+
+// Show payment history with type filtering
 <PaymentHistory payments={bookingPayments} />
 ```

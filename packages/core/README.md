@@ -42,7 +42,7 @@ const check = isSlotAvailable(rules, overrides, bookings, startTime, endTime);
 - **Walk-In Queue** — Wait time estimation, gap finding, queue management, analytics
 - **Kiosk Mode** — Settings validation, break/block management, multi-provider resource views
 - **Routing Forms** — Form validation, rule evaluation, response routing, analytics
-- **Payments** — Cancellation policies, fee calculation, payment summaries, currency validation
+- **Payments** — Deposits (fixed or percentage), cancellation policies, fee calculation, payment summaries, currency validation
 - **Embeddable Widgets** — Config validation and embed snippet generation
 - **Zero dependencies on React or Node.js** — runs in browser, edge, and server environments
 

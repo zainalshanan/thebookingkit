@@ -5,6 +5,8 @@ import {
   computePaymentSummary,
   requiresPayment,
   hasNoShowFee,
+  computeDepositAmount,
+  requiresDeposit,
   validatePaymentAmount,
   validateCurrency,
   formatPaymentAmount,
@@ -439,5 +441,105 @@ describe("formatPaymentAmount", () => {
 
   it("handles fractional cents via rounding", () => {
     expect(formatPaymentAmount(1, "USD")).toBe("$0.01");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// computeDepositAmount / requiresDeposit
+// ---------------------------------------------------------------------------
+
+describe("computeDepositAmount", () => {
+  it("returns 0 when no deposit is configured", () => {
+    expect(computeDepositAmount({}, 10000)).toBe(0);
+    expect(computeDepositAmount({ depositCents: 0, depositPercentage: 0 }, 10000)).toBe(0);
+  });
+
+  it("uses fixed deposit when only depositCents is set", () => {
+    expect(computeDepositAmount({ depositCents: 2500 }, 10000)).toBe(2500);
+  });
+
+  it("uses percentage deposit when only depositPercentage is set", () => {
+    expect(computeDepositAmount({ depositPercentage: 25 }, 10000)).toBe(2500);
+  });
+
+  it("prefers percentage when both are set", () => {
+    expect(
+      computeDepositAmount({ depositCents: 9999, depositPercentage: 25 }, 10000),
+    ).toBe(2500);
+  });
+
+  it("rounds percentage results to nearest cent", () => {
+    expect(computeDepositAmount({ depositPercentage: 33 }, 10000)).toBe(3300);
+    expect(computeDepositAmount({ depositPercentage: 33 }, 9999)).toBe(3300);
+  });
+
+  it("caps deposit at priceCents", () => {
+    expect(computeDepositAmount({ depositCents: 99999 }, 10000)).toBe(10000);
+    expect(computeDepositAmount({ depositPercentage: 100 }, 10000)).toBe(10000);
+  });
+
+  it("treats null fields as unset", () => {
+    expect(
+      computeDepositAmount({ depositCents: null, depositPercentage: null }, 10000),
+    ).toBe(0);
+  });
+
+  it("rejects negative depositCents", () => {
+    expect(() => computeDepositAmount({ depositCents: -100 }, 10000)).toThrow(
+      PaymentValidationError,
+    );
+  });
+
+  it("rejects out-of-range depositPercentage", () => {
+    expect(() => computeDepositAmount({ depositPercentage: -1 }, 10000)).toThrow(
+      PaymentValidationError,
+    );
+    expect(() => computeDepositAmount({ depositPercentage: 101 }, 10000)).toThrow(
+      PaymentValidationError,
+    );
+  });
+
+  it("rejects negative priceCents", () => {
+    expect(() => computeDepositAmount({ depositPercentage: 25 }, -1)).toThrow(
+      PaymentValidationError,
+    );
+  });
+
+  it("returns 0 when priceCents is 0", () => {
+    expect(computeDepositAmount({ depositPercentage: 50 }, 0)).toBe(0);
+    expect(computeDepositAmount({ depositCents: 100 }, 0)).toBe(0);
+  });
+});
+
+describe("requiresDeposit", () => {
+  it("returns false when priceCents is 0", () => {
+    expect(requiresDeposit({ depositCents: 100 }, 0)).toBe(false);
+  });
+
+  it("returns false when no deposit is configured", () => {
+    expect(requiresDeposit({}, 10000)).toBe(false);
+  });
+
+  it("returns true when fixed deposit is set", () => {
+    expect(requiresDeposit({ depositCents: 100 }, 10000)).toBe(true);
+  });
+
+  it("returns true when percentage deposit is set", () => {
+    expect(requiresDeposit({ depositPercentage: 1 }, 10000)).toBe(true);
+  });
+});
+
+describe("computePaymentSummary — deposits", () => {
+  it("aggregates deposit revenue separately", () => {
+    const payments: PaymentRecord[] = [
+      makePayment({ id: "p1", paymentType: "deposit", amountCents: 2500 }),
+      makePayment({ id: "p2", paymentType: "prepayment", amountCents: 7500 }),
+      makePayment({ id: "p3", paymentType: "deposit", amountCents: 1500, status: "pending" }),
+    ];
+    const summary = computePaymentSummary(payments);
+    expect(summary.totalRevenueCents).toBe(10000);
+    expect(summary.depositRevenueCents).toBe(2500);
+    expect(summary.countByType.deposit).toBe(2);
+    expect(summary.countByType.prepayment).toBe(1);
   });
 });

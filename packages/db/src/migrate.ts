@@ -18,6 +18,7 @@ export async function runCustomMigrations(databaseUrl: string) {
     "0003_gdpr_anonymize.sql",
     "0004_create_booking_function.sql",
     "0005_resources.sql",
+    "0006_deposits.sql",
   ];
 
   for (const file of migrationFiles) {

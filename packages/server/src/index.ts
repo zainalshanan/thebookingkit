@@ -63,8 +63,35 @@ export type {
   CreateSetupIntentResult,
   CaptureResult,
   RefundResult,
+  StripePaymentAdapterOptions,
+  StripeLike,
 } from "./adapters/index.js";
-export { generateICSAttachment, JOB_NAMES } from "./adapters/index.js";
+export {
+  generateICSAttachment,
+  JOB_NAMES,
+  StripePaymentAdapter,
+} from "./adapters/index.js";
+
+// Deposit orchestration
+export {
+  initiateDeposit,
+  refundDeposit,
+  type InitiateDepositInput,
+  type InitiateDepositResult,
+  type RefundDepositInput,
+  type RefundDepositResult,
+} from "./deposit-flow.js";
+
+// Stripe webhooks
+export {
+  handleStripeWebhook,
+  type HandleStripeWebhookRequest,
+  type HandleStripeWebhookDeps,
+  type HandleStripeWebhookResult,
+  type PaymentEventStore,
+  type PaymentIntentEvent,
+  type StripeWebhookVerifier,
+} from "./webhooks/stripe.js";
 
 // Booking Tokens
 export {

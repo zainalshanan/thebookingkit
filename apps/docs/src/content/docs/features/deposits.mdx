@@ -1,0 +1,195 @@
+---
+title: Deposits with Stripe
+description: Collect a partial upfront payment on bookings via Stripe Connect.
+---
+
+import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
+
+Deposits let you charge customers a portion of the price at booking time and
+collect the balance at the appointment. They're configured per event type as
+either a fixed amount or a percentage of the price, and they're collected via
+the same `PaymentAdapter` interface used for prepayments and no-show holds.
+
+## How it works
+
+Three pieces collaborate:
+
+1. **`event_types.deposit_cents` / `event_types.deposit_percentage`** —
+   per-event-type configuration. If both are set, the percentage wins.
+2. **`StripePaymentAdapter`** — concrete `PaymentAdapter` implementation. Routes
+   the charge to the provider's connected Stripe account.
+3. **`handleStripeWebhook`** — verifies signed Stripe events, updates the
+   `payments` row, and emits the `deposit_collected` workflow trigger.
+
+Existing event types automatically opt out: both columns default to `0`, so
+`requiresDeposit()` returns `false` and the booking flow skips Stripe entirely.
+
+## 1. Configure the deposit on an event type
+
+```ts
+await db.update(eventTypes)
+  .set({ depositPercentage: 25 }) // or { depositCents: 5000 }
+  .where(eq(eventTypes.id, eventTypeId));
+```
+
+In the UI:
+
+```tsx
+import { EventTypeDepositFields } from "@thebookingkit/registry";
+
+<EventTypeDepositFields
+  depositCents={form.depositCents}
+  depositPercentage={form.depositPercentage}
+  priceCents={form.priceCents}
+  currency={form.currency}
+  onDepositCentsChange={form.setDepositCents}
+  onDepositPercentageChange={form.setDepositPercentage}
+/>
+```
+
+## 2. Wire up the Stripe adapter
+
+```ts
+import Stripe from "stripe";
+import { StripePaymentAdapter } from "@thebookingkit/server";
+
+export const paymentAdapter = new StripePaymentAdapter({
+  stripe: new Stripe(process.env.STRIPE_SECRET_KEY!),
+  webhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
+});
+```
+
+`stripe` is an **optional peer dependency** of `@thebookingkit/server` —
+install it if you use this adapter:
+
+```bash
+npm install stripe
+```
+
+## 3. Initiate the deposit during booking creation
+
+After persisting the `bookings` row, call `initiateDeposit`:
+
+```ts
+import { initiateDeposit } from "@thebookingkit/server";
+import { computeDepositAmount } from "@thebookingkit/core";
+
+const result = await initiateDeposit(paymentAdapter, {
+  bookingId: booking.id,
+  deposit: {
+    depositCents: eventType.depositCents,
+    depositPercentage: eventType.depositPercentage,
+  },
+  priceCents: eventType.priceCents,
+  currency: eventType.currency,
+  connectedAccountId: provider.stripeAccountId,
+  customerEmail: booking.customerEmail,
+});
+
+if (result.required) {
+  await db.insert(payments).values({
+    bookingId: booking.id,
+    stripePaymentIntentId: result.intent!.paymentIntentId,
+    amountCents: result.amountCents,
+    currency: eventType.currency,
+    status: "pending",
+    paymentType: "deposit",
+  });
+
+  // Return clientSecret to the frontend so PaymentGate can confirm payment.
+  return { booking, clientSecret: result.intent!.clientSecret };
+}
+```
+
+In the booking flow:
+
+```tsx
+<PaymentGate
+  mode="deposit"
+  amountCents={depositCents}
+  totalPriceCents={eventType.priceCents}
+  currency={eventType.currency}
+  clientSecret={clientSecret}
+  onPaymentSuccess={() => router.push(`/bookings/${booking.id}`)}
+  renderPaymentElement={() => <PaymentElement />}
+/>
+```
+
+## 4. Mount the webhook handler
+
+```ts
+// app/api/webhooks/stripe/route.ts
+import { handleStripeWebhook } from "@thebookingkit/server";
+import { paymentAdapter, paymentEventStore } from "@/lib/payments";
+
+export async function POST(req: Request) {
+  const result = await handleStripeWebhook(
+    {
+      rawBody: await req.text(),
+      signature: req.headers.get("stripe-signature") ?? "",
+    },
+    {
+      stripe: paymentAdapter["stripe"], // or your Stripe instance
+      webhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
+      store: paymentEventStore,
+    },
+  );
+  return new Response(null, { status: result.status });
+}
+```
+
+`PaymentEventStore` is a small interface your app implements against its
+database. On `payment_intent.succeeded`, transition the `payments` row to
+`succeeded`, set `bookings.payment_status = 'paid'`, and (if the deposit
+was required to confirm) move the booking to `confirmed`.
+
+## 5. Handle cancellations
+
+`refundDeposit` evaluates the event type's cancellation policy via
+`evaluateCancellationFee` and issues a partial refund:
+
+```ts
+import { refundDeposit } from "@thebookingkit/server";
+
+const result = await refundDeposit(paymentAdapter, {
+  paymentIntentId: depositPayment.stripePaymentIntentId,
+  originalAmountCents: depositPayment.amountCents,
+  policy: eventType.cancellationPolicy,
+  bookingStartsAt: booking.startsAt,
+  connectedAccountId: provider.stripeAccountId,
+});
+
+if (result.feeCents > 0) {
+  await db.insert(payments).values({
+    bookingId: booking.id,
+    amountCents: result.feeCents,
+    currency: eventType.currency,
+    paymentType: "cancellation_fee",
+    status: "succeeded",
+  });
+}
+```
+
+## Stripe Connect
+
+Deposits are routed through the provider's connected Stripe account via the
+`connectedAccountId` parameter. The provider's account ID lives on
+`providers.stripe_account_id` — onboard them once via:
+
+```ts
+const url = await paymentAdapter.createConnectOnboardingUrl({
+  returnUrl: "https://app.example.com/connect/return",
+  refreshUrl: "https://app.example.com/connect/refresh",
+});
+// Redirect the provider to `url` to complete Stripe onboarding.
+```
+
+After onboarding, save the resulting account ID to `providers.stripe_account_id`.
+All subsequent deposits, refunds, and captures for that provider will route
+through their account automatically.
+
+## Related
+
+- [`PaymentGate`](/components/payment-gate/) — checkout UI with deposit-aware copy.
+- [`PaymentHistory`](/components/payment-history/) — provider dashboard with deposit filtering.
+- [`EventTypeDepositFields`](/components/event-type-deposit-fields/) — drop-in fieldset for deposit configuration.

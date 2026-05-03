@@ -1,0 +1,77 @@
+---
+title: EventTypeDepositFields
+description: Drop-in fieldset for configuring per-event-type deposits (fixed amount or percentage of price).
+---
+
+Renders a labeled fieldset with two inputs — a **fixed deposit** in cents and a **percentage of price** — plus a live preview of the resolved deposit amount and the remaining balance. Mirrors the resolution rule in `@thebookingkit/core`'s `computeDepositAmount`: percentage wins when both are set, and the deposit is capped at the event price.
+
+## Install
+
+```bash
+npx thebookingkit add event-type-deposit-fields
+```
+
+## Usage
+
+Drop it into any event-type editor. The component is fully controlled — wire each input to your form state:
+
+```tsx
+import { EventTypeDepositFields } from "@/components/event-type-deposit-fields";
+
+export function EventTypeForm({ form }: { form: EventTypeFormState }) {
+  return (
+    <EventTypeDepositFields
+      depositCents={form.depositCents}
+      depositPercentage={form.depositPercentage}
+      priceCents={form.priceCents}
+      currency={form.currency}
+      onDepositCentsChange={form.setDepositCents}
+      onDepositPercentageChange={form.setDepositPercentage}
+    />
+  );
+}
+```
+
+When persisting, write the values straight to `event_types.deposit_cents` / `event_types.deposit_percentage` — the server-side `requiresDeposit` and `computeDepositAmount` helpers consume the same shape.
+
+## Props
+
+```typescript
+export interface EventTypeDepositFieldsProps {
+  /** Fixed deposit amount in cents (or null if unset) */
+  depositCents: number | null;
+  /** Deposit as a percentage of price (0–100), or null if unset */
+  depositPercentage: number | null;
+  /** Event-type price in cents — used to preview the resolved deposit */
+  priceCents: number;
+  /** ISO 4217 currency for preview formatting */
+  currency: string;
+  /** Called when the fixed deposit changes */
+  onDepositCentsChange: (value: number | null) => void;
+  /** Called when the percentage deposit changes */
+  onDepositPercentageChange: (value: number | null) => void;
+  /** Disable both inputs */
+  disabled?: boolean;
+  /** Additional CSS class name */
+  className?: string;
+  /** Inline styles */
+  style?: React.CSSProperties;
+}
+```
+
+## Resolution rule
+
+The resolved deposit is computed live as the user types and matches `computeDepositAmount` exactly:
+
+| `depositCents` | `depositPercentage` | `priceCents` | Resolved |
+|---|---|---|---|
+| `null` / `0` | `null` / `0` | any | `0` (no deposit) |
+| `2500` | `null` / `0` | any | `2500` |
+| `null` / `0` | `25` | `10000` | `2500` |
+| `5000` | `25` | `10000` | `2500` (percentage wins) |
+| `99999` | `0` | `10000` | `10000` (capped at price) |
+
+## Related
+
+- [Deposits guide](/features/deposits/)
+- [`PaymentGate`](/components/payment-gate/) — uses these values during checkout.

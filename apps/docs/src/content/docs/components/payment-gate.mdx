@@ -1,9 +1,9 @@
 ---
 title: PaymentGate
-description: Payment collection component wrapping Stripe Payment Element.
+description: Payment collection component wrapping Stripe Payment Element with prepayment / deposit / no-show-hold modes.
 ---
 
-Provides the UI shell for collecting payment during booking. The actual Stripe Elements integration is injected via a render prop, allowing flexibility in payment method support (card, Apple Pay, Google Pay).
+Provides the UI shell for collecting payment during booking. The actual Stripe Elements integration is injected via a render prop, allowing flexibility in payment method support (card, Apple Pay, Google Pay). The `mode` prop selects between full prepayment, deposit, and no-show-hold copy — for deposits, the component also displays the balance due at the appointment when `totalPriceCents` is supplied.
 
 ## Install
 
@@ -13,6 +13,8 @@ npx thebookingkit add payment-gate
 
 ## Usage
 
+### Full prepayment
+
 ```tsx
 import { PaymentGate } from "@/components/payment-gate";
 import { PaymentElement, useStripe } from "@stripe/react-stripe-js";
@@ -20,16 +22,12 @@ import { PaymentElement, useStripe } from "@stripe/react-stripe-js";
 export function BookingPayment({ clientSecret }: { clientSecret: string }) {
   const stripe = useStripe();
 
-  const handlePaymentSuccess = async (paymentIntentId: string) => {
+  const handlePaymentSuccess = async () => {
     const { error } = await stripe!.confirmPayment({
-      elements: elements,
+      elements,
       redirect: "if_required",
     });
-
-    if (!error) {
-      // Booking confirmed
-      router.push("/confirmation");
-    }
+    if (!error) router.push("/confirmation");
   };
 
   return (
@@ -44,9 +42,42 @@ export function BookingPayment({ clientSecret }: { clientSecret: string }) {
 }
 ```
 
+### Deposit
+
+When the event type has a deposit configured, set `mode="deposit"` and pass `totalPriceCents` so the customer sees the remaining balance:
+
+```tsx
+<PaymentGate
+  mode="deposit"
+  amountCents={2500}
+  totalPriceCents={10000}
+  currency="USD"
+  clientSecret={clientSecret}
+  onPaymentSuccess={handlePaymentSuccess}
+  renderPaymentElement={() => <PaymentElement />}
+/>
+```
+
+The header shows "Pay deposit" and the helper text reads "Balance of $75.00 due at the appointment."
+
+### No-show hold
+
+```tsx
+<PaymentGate
+  mode="no_show_hold"
+  amountCents={5000}
+  currency="USD"
+  clientSecret={clientSecret}
+  onPaymentSuccess={handlePaymentSuccess}
+  renderPaymentElement={() => <PaymentElement />}
+/>
+```
+
 ## Props
 
 ```typescript
+export type PaymentGateMode = "prepayment" | "deposit" | "no_show_hold";
+
 export interface PaymentGateProps {
   /** Amount in smallest currency unit (e.g., cents) */
   amountCents: number;
@@ -54,6 +85,16 @@ export interface PaymentGateProps {
   currency: string;
   /** Stripe client secret for the PaymentIntent */
   clientSecret: string;
+  /**
+   * Type of payment being collected. Affects header copy and the submit label.
+   * Defaults to "prepayment" for backwards compatibility.
+   */
+  mode?: PaymentGateMode;
+  /**
+   * Total event price in cents. When `mode === "deposit"`, used to display
+   * the remaining balance ("Balance of $X due at the appointment").
+   */
+  totalPriceCents?: number;
   /** Called when payment succeeds */
   onPaymentSuccess: (paymentIntentId: string) => void;
   /** Called when payment fails */
@@ -68,173 +109,11 @@ export interface PaymentGateProps {
   className?: string;
   /** Inline styles */
   style?: React.CSSProperties;
-  /**
-   * Render prop for the payment form element.
-   * Integrators mount their Stripe Elements (or other payment UI) here.
-   * If not provided, a placeholder is rendered.
-   */
+  /** Render prop for the payment form element. */
   renderPaymentElement?: () => React.ReactNode;
 }
 ```
 
 ## Source
 
-```tsx
-import React, { useState, useCallback } from "react";
-import { cn } from "../utils/cn.js";
-
-/** Props for the PaymentGate component */
-export interface PaymentGateProps {
-  /** Amount in smallest currency unit (e.g., cents) */
-  amountCents: number;
-  /** ISO 4217 currency code (e.g., "USD") */
-  currency: string;
-  /** Stripe client secret for the PaymentIntent */
-  clientSecret: string;
-  /** Called when payment succeeds */
-  onPaymentSuccess: (paymentIntentId: string) => void;
-  /** Called when payment fails */
-  onPaymentError?: (error: string) => void;
-  /** Called when the user cancels/goes back */
-  onCancel?: () => void;
-  /** Whether the payment is currently processing */
-  isProcessing?: boolean;
-  /** Label for the pay button (default: "Pay {amount}") */
-  submitLabel?: string;
-  /** Additional CSS class name */
-  className?: string;
-  /** Inline styles */
-  style?: React.CSSProperties;
-  /**
-   * Render prop for the payment form element.
-   * Integrators mount their Stripe Elements (or other payment UI) here.
-   * If not provided, a placeholder is rendered.
-   */
-  renderPaymentElement?: () => React.ReactNode;
-}
-
-/**
- * Payment gate component that wraps a Stripe Payment Element (or similar).
- *
- * This component provides the UI shell for collecting payment during booking.
- * The actual Stripe Elements integration is injected via `renderPaymentElement`
- * since it requires `@stripe/react-stripe-js` which is an app-level dependency.
- *
- * Supports: Card, Apple Pay, Google Pay (via Stripe Payment Element).
- *
- * @example
- * ```tsx
- * <PaymentGate
- *   amountCents={2500}
- *   currency="USD"
- *   clientSecret={clientSecret}
- *   onPaymentSuccess={(id) => confirmBooking(id)}
- *   renderPaymentElement={() => <PaymentElement />}
- * />
- * ```
- */
-export function PaymentGate({
-  amountCents,
-  currency,
-  clientSecret,
-  onPaymentSuccess,
-  onPaymentError,
-  onCancel,
-  isProcessing: externalProcessing,
-  submitLabel,
-  className,
-  style,
-  renderPaymentElement,
-}: PaymentGateProps) {
-  const [internalProcessing, setInternalProcessing] = useState(false);
-  const processing = externalProcessing ?? internalProcessing;
-
-  const formattedAmount = formatAmount(amountCents, currency);
-  const buttonLabel = submitLabel ?? `Pay ${formattedAmount}`;
-
-  const handleSubmit = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (processing) return;
-
-      setInternalProcessing(true);
-
-      try {
-        // In a real integration, the parent would call stripe.confirmPayment()
-        // using the clientSecret. This component signals readiness via the form submit.
-        // The parent handles actual Stripe confirmation and calls onPaymentSuccess/onPaymentError.
-        onPaymentSuccess(clientSecret);
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Payment failed";
-        onPaymentError?.(message);
-      } finally {
-        setInternalProcessing(false);
-      }
-    },
-    [processing, clientSecret, onPaymentSuccess, onPaymentError],
-  );
-
-  return (
-    <div
-      className={cn("tbk-payment-gate", className)}
-      style={style}
-    >
-      <div className="tbk-payment-header">
-        <h3 className="tbk-payment-title">Payment</h3>
-        <p className="tbk-payment-amount">{formattedAmount}</p>
-      </div>
-
-      <form onSubmit={handleSubmit} className="tbk-payment-form">
-        <div className="tbk-payment-element">
-          {renderPaymentElement ? (
-            renderPaymentElement()
-          ) : (
-            <div className="tbk-payment-placeholder">
-              <p>Payment element will be mounted here.</p>
-              <p className="tbk-payment-hint">
-                Provide a <code>renderPaymentElement</code> prop to render
-                your Stripe PaymentElement.
-              </p>
-            </div>
-          )}
-        </div>
-
-        <div className="tbk-payment-actions">
-          <button
-            type="submit"
-            className="tbk-button-primary"
-            disabled={processing}
-          >
-            {processing ? "Processing..." : buttonLabel}
-          </button>
-
-          {onCancel && (
-            <button
-              type="button"
-              className="tbk-button-secondary"
-              onClick={onCancel}
-              disabled={processing}
-            >
-              Cancel
-            </button>
-          )}
-        </div>
-      </form>
-    </div>
-  );
-}
-
-/** Format an amount in cents to a display string */
-function formatAmount(amountCents: number, currency: string): string {
-  const amount = amountCents / 100;
-  try {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: currency.toUpperCase(),
-    }).format(amount);
-  } catch {
-    return `${currency.toUpperCase()} ${amount.toFixed(2)}`;
-  }
-}
-```
+The component source is fetched from the docs registry at install time. Run `npx thebookingkit add payment-gate` to copy it into your project, or browse the latest source on [GitHub](https://github.com/thebookingkit/thebookingkit/blob/main/registry/ui/src/components/payment-gate.tsx).

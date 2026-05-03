@@ -108,11 +108,11 @@ This constraint prevents overlapping bookings for the same provider, except for 
 |---|---|
 | `booking_status` | `pending`, `confirmed`, `completed`, `cancelled`, `rescheduled`, `no_show`, `rejected` |
 | `payment_status` | `pending`, `authorized`, `succeeded`, `failed`, `refunded`, `partially_refunded`, `released` |
-| `payment_type` | `prepayment`, `no_show_hold`, `cancellation_fee` |
+| `payment_type` | `prepayment`, `deposit`, `no_show_hold`, `cancellation_fee` |
 | `assignment_strategy` | `round_robin`, `collective`, `managed`, `fixed` |
 | `recurring_frequency` | `weekly`, `biweekly`, `monthly` |
 | `seat_status` | `confirmed`, `cancelled` |
-| `workflow_trigger` | `booking_created`, `booking_confirmed`, `booking_cancelled`, `booking_rescheduled`, `before_event`, `after_event`, `payment_received`, `payment_failed`, `no_show_confirmed`, `form_submitted` |
+| `workflow_trigger` | `booking_created`, `booking_confirmed`, `booking_cancelled`, `booking_rescheduled`, `before_event`, `after_event`, `payment_received`, `payment_failed`, `deposit_collected`, `deposit_refunded`, `no_show_confirmed`, `form_submitted` |
 | `booking_source` | `online`, `walk_in`, `phone`, `admin` |
 | `walk_in_status` | `queued`, `in_service`, `completed`, `no_show`, `cancelled` |
 

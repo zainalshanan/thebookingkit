@@ -1,6 +1,9 @@
 import React, { useState, useCallback } from "react";
 import { cn } from "../utils/cn.js";
 
+/** What kind of payment is being collected. Drives copy and labels. */
+export type PaymentGateMode = "prepayment" | "deposit" | "no_show_hold";
+
 /** Props for the PaymentGate component */
 export interface PaymentGateProps {
   /** Amount in smallest currency unit (e.g., cents) */
@@ -9,6 +12,16 @@ export interface PaymentGateProps {
   currency: string;
   /** Stripe client secret for the PaymentIntent */
   clientSecret: string;
+  /**
+   * Type of payment being collected. Affects header copy and the submit label.
+   * Defaults to "prepayment" for backwards compatibility.
+   */
+  mode?: PaymentGateMode;
+  /**
+   * Total event price in cents. When `mode === "deposit"`, used to display
+   * the remaining balance ("Balance of $X due at the appointment").
+   */
+  totalPriceCents?: number;
   /** Called when payment succeeds */
   onPaymentSuccess: (paymentIntentId: string) => void;
   /** Called when payment fails */
@@ -30,6 +43,12 @@ export interface PaymentGateProps {
    */
   renderPaymentElement?: () => React.ReactNode;
 }
+
+const MODE_COPY: Record<PaymentGateMode, { title: string; verb: string }> = {
+  prepayment: { title: "Payment", verb: "Pay" },
+  deposit: { title: "Pay deposit", verb: "Pay deposit of" },
+  no_show_hold: { title: "Authorize card", verb: "Authorize" },
+};
 
 /**
  * Payment gate component that wraps a Stripe Payment Element (or similar).
@@ -55,6 +74,8 @@ export function PaymentGate({
   amountCents,
   currency,
   clientSecret,
+  mode = "prepayment",
+  totalPriceCents,
   onPaymentSuccess,
   onPaymentError,
   onCancel,
@@ -68,7 +89,12 @@ export function PaymentGate({
   const processing = externalProcessing ?? internalProcessing;
 
   const formattedAmount = formatAmount(amountCents, currency);
-  const buttonLabel = submitLabel ?? `Pay ${formattedAmount}`;
+  const copy = MODE_COPY[mode];
+  const buttonLabel = submitLabel ?? `${copy.verb} ${formattedAmount}`;
+  const remainingCents =
+    mode === "deposit" && typeof totalPriceCents === "number"
+      ? Math.max(0, totalPriceCents - amountCents)
+      : 0;
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -99,8 +125,13 @@ export function PaymentGate({
       style={style}
     >
       <div className="tbk-payment-header">
-        <h3 className="tbk-payment-title">Payment</h3>
+        <h3 className="tbk-payment-title">{copy.title}</h3>
         <p className="tbk-payment-amount">{formattedAmount}</p>
+        {mode === "deposit" && remainingCents > 0 && (
+          <p className="tbk-payment-balance-note">
+            Balance of {formatAmount(remainingCents, currency)} due at the appointment.
+          </p>
+        )}
       </div>
 
       <form onSubmit={handleSubmit} className="tbk-payment-form">

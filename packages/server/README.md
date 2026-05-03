@@ -39,7 +39,8 @@ const signature = signWebhookPayload(payload, secret);
 - **Notifications** — Email templates (confirmation, reminder, cancellation, reschedule) and calendar sync
 - **Multi-Tenancy** — Role-based permissions, settings inheritance (org > provider > event type), tenant scoping
 - **Serialization Retry** — `withSerializableRetry` for SERIALIZABLE transaction conflict handling
-- **Adapter Interfaces** — Swappable `EmailAdapter`, `CalendarAdapter`, `JobAdapter`, `StorageAdapter`, `SmsAdapter`, `PaymentAdapter`
+- **Adapter Interfaces** — Swappable `EmailAdapter`, `CalendarAdapter`, `JobAdapter`, `StorageAdapter`, `SmsAdapter`, `PaymentAdapter` (with built-in `StripePaymentAdapter`)
+- **Stripe Deposits** — `initiateDeposit`/`refundDeposit` orchestration helpers and a `handleStripeWebhook` handler with signature verification and idempotency on `event.id`
 
 ## Documentation
 

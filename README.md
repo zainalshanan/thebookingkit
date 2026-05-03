@@ -52,7 +52,8 @@ The Booking Kit gives you the database schema, scheduling math, and UI component
 - **Fixed assignment** — Direct booking with a specific team member
 
 ### Payments & Pricing
-- **Stripe integration** — Payment intents, setup intents, holds, captures, refunds via `PaymentAdapter`
+- **Stripe integration** — Payment intents, setup intents, holds, captures, refunds via `PaymentAdapter` (`StripePaymentAdapter` ships with Connect support)
+- **Deposits** — Per-event-type fixed-amount or percentage deposits, collected upfront and refunded per the cancellation policy
 - **Cancellation policies** — Tiered fee schedules based on hours before appointment
 - **No-show fees** — Automatic hold capture for missed appointments
 
@@ -235,7 +236,7 @@ External dependencies are abstracted behind TypeScript interfaces:
 | `RecurringBookingPicker` | Series frequency, count, and occurrence preview |
 | `SeatsPicker` | Attendee count selector for group events |
 | `RoutingForm` | Pre-booking questionnaire with conditional routing |
-| `PaymentGate` | Payment step wrapper |
+| `PaymentGate` | Payment step wrapper with prepayment / deposit / no-show-hold modes |
 | `EmbedConfigurator` | Embed snippet generator with live preview |
 
 ### Host/Admin
@@ -251,7 +252,8 @@ External dependencies are abstracted behind TypeScript interfaces:
 | `TeamAssignmentEditor` | Team member config with strategy selector |
 | `WorkflowBuilder` | Visual workflow trigger/condition/action editor |
 | `WebhookManager` | Webhook subscription CRUD with delivery logs |
-| `PaymentHistory` | Payment and refund ledger |
+| `PaymentHistory` | Payment and refund ledger with type filtering and deposit revenue card |
+| `EventTypeDepositFields` | Drop-in fieldset for configuring deposits on an event type |
 
 ---
 
