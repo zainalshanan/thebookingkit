@@ -1,6 +1,6 @@
 {
   "name": "@thebookingkit/db",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Drizzle ORM schema, migrations, and TypeScript types for The Booking Kit's 25 Postgres tables",
   "license": "MIT",
   "repository": {
