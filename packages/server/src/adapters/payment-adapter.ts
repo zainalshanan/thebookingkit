@@ -11,8 +11,21 @@ export interface CreatePaymentIntentResult {
   paymentIntentId: string;
   /** Client secret for confirming payment on the frontend */
   clientSecret: string;
-  /** Current status of the payment intent */
-  status: "requires_payment_method" | "requires_confirmation" | "requires_action" | "processing" | "succeeded" | "canceled";
+  /**
+   * Current status of the payment intent.
+   *
+   * `requires_capture` means a manual-capture intent has been authorized —
+   * the funds are held and await {@link PaymentAdapter.capturePaymentIntent}
+   * or {@link PaymentAdapter.cancelPaymentIntent}.
+   */
+  status:
+    | "requires_payment_method"
+    | "requires_confirmation"
+    | "requires_action"
+    | "requires_capture"
+    | "processing"
+    | "succeeded"
+    | "canceled";
 }
 
 /** Result of creating a setup intent for card authorization */
@@ -55,6 +68,38 @@ export interface CreatePaymentIntentOptions {
   metadata?: Record<string, string>;
   /** Customer email for receipt */
   customerEmail?: string;
+  /**
+   * Payment-provider customer to attach the intent to (Stripe `customer`).
+   * Required for {@link setupFutureUsage} and for off-session charges —
+   * the saved payment method lives on this customer.
+   *
+   * With Connect: the customer must exist on the same account the intent is
+   * created on (the connected account when `connectedAccountId` is set).
+   */
+  customerId?: string;
+  /**
+   * Save the payment method during this payment for later reuse
+   * (Stripe `setup_future_usage`). Use `"off_session"` to allow charging the
+   * card later without the customer present — e.g. no-show / late-cancel fees
+   * — in one sheet, with no separate SetupIntent step. Requires
+   * {@link customerId}.
+   */
+  setupFutureUsage?: "off_session" | "on_session";
+  /**
+   * Charge a previously saved payment method (Stripe `payment_method`).
+   * Combine with `offSession: true` + `confirm: true` to charge a card on
+   * file without the customer present.
+   */
+  paymentMethodId?: string;
+  /** Mark the payment as merchant-initiated (Stripe `off_session`). */
+  offSession?: boolean;
+  /** Confirm the intent immediately on creation (Stripe `confirm`). */
+  confirm?: boolean;
+  /**
+   * Idempotency key forwarded to the provider. Pass a stable value (e.g.
+   * `deposit:<bookingId>`) so client retries can't create duplicate charges.
+   */
+  idempotencyKey?: string;
 }
 
 /** Options for creating a setup intent */
@@ -63,6 +108,12 @@ export interface CreateSetupIntentOptions {
   connectedAccountId?: string;
   /** Customer email */
   customerEmail?: string;
+  /**
+   * Payment-provider customer to attach the saved payment method to
+   * (Stripe `customer`). Without it the stored card is not reusable for
+   * off-session charges.
+   */
+  customerId?: string;
   /** Metadata */
   metadata?: Record<string, string>;
 }

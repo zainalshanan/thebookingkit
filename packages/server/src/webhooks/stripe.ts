@@ -17,10 +17,24 @@
  * ```
  *
  * The handler:
- * 1. Verifies the signature via `stripe.webhooks.constructEvent`.
+ * 1. Verifies the signature — via `stripe.webhooks.constructEventAsync` when
+ *    the SDK provides it (always preferred; it is the only variant that works
+ *    on edge runtimes such as Cloudflare Workers, where SubtleCrypto is
+ *    async-only and the sync `constructEvent` throws), falling back to the
+ *    synchronous `constructEvent` otherwise.
  * 2. Looks up `event.id` in the idempotency store; returns 200 if seen.
  * 3. Dispatches `payment_intent.*` events to the {@link PaymentEventStore}.
  * 4. Persists `event.id` to the idempotency store on success.
+ *
+ * On Workers, construct the SDK with an async crypto provider so verification
+ * uses SubtleCrypto:
+ *
+ * ```ts
+ * const stripe = new Stripe(env.STRIPE_SECRET_KEY, {
+ *   httpClient: Stripe.createFetchHttpClient(),
+ * });
+ * // handleStripeWebhook picks constructEventAsync automatically.
+ * ```
  *
  * The handler does **not** know about your database directly — it talks to a
  * `PaymentEventStore` that the consuming app implements against its DB
@@ -35,6 +49,16 @@ export interface StripeWebhookVerifier {
       header: string,
       secret: string,
     ): { id: string; type: string; data: { object: unknown } };
+    /**
+     * Async variant (present on the real Stripe SDK). Preferred when defined —
+     * required on edge runtimes (Cloudflare Workers) where the sync variant
+     * throws because SubtleCrypto cannot be used synchronously.
+     */
+    constructEventAsync?(
+      payload: string | Buffer,
+      header: string,
+      secret: string,
+    ): Promise<{ id: string; type: string; data: { object: unknown } }>;
   };
 }
 
@@ -76,6 +100,15 @@ export interface PaymentEventStore {
   onPaymentIntentFailed(event: PaymentIntentEvent): Promise<void>;
   /** Called for `payment_intent.canceled`. */
   onPaymentIntentCanceled?(event: PaymentIntentEvent): Promise<void>;
+  /**
+   * Called for `payment_intent.amount_capturable_updated` — fires when a
+   * manual-capture PaymentIntent is successfully authorized (card held, not
+   * charged). This is the signal that a deposit hold / pending-review booking
+   * is secured and awaiting the provider's capture-or-cancel decision.
+   */
+  onPaymentIntentAmountCapturableUpdated?(
+    event: PaymentIntentEvent,
+  ): Promise<void>;
   /** Called for `charge.refunded`. */
   onChargeRefunded?(event: {
     eventId: string;
@@ -160,10 +193,20 @@ export async function handleStripeWebhook(
 ): Promise<HandleStripeWebhookResult> {
   let event: { id: string; type: string; data: { object: unknown }; account?: string };
   try {
-    event = deps.stripe.webhooks.constructEvent(
-      req.rawBody,
-      req.signature,
-      deps.webhookSecret,
+    // Prefer the async variant — the only one that works on edge runtimes
+    // (Workers), and equally correct on Node.
+    event = (
+      deps.stripe.webhooks.constructEventAsync
+        ? await deps.stripe.webhooks.constructEventAsync(
+            req.rawBody,
+            req.signature,
+            deps.webhookSecret,
+          )
+        : deps.stripe.webhooks.constructEvent(
+            req.rawBody,
+            req.signature,
+            deps.webhookSecret,
+          )
     ) as typeof event;
   } catch (err) {
     return {
@@ -187,6 +230,13 @@ export async function handleStripeWebhook(
       case "payment_intent.canceled":
         if (deps.store.onPaymentIntentCanceled) {
           await deps.store.onPaymentIntentCanceled(decodePaymentIntentEvent(event));
+        }
+        break;
+      case "payment_intent.amount_capturable_updated":
+        if (deps.store.onPaymentIntentAmountCapturableUpdated) {
+          await deps.store.onPaymentIntentAmountCapturableUpdated(
+            decodePaymentIntentEvent(event),
+          );
         }
         break;
       case "charge.refunded": {

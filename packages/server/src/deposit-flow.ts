@@ -44,6 +44,22 @@ export interface InitiateDepositInput {
   customerEmail?: string;
   /** Extra metadata to merge onto the PaymentIntent. */
   metadata?: Record<string, string>;
+  /**
+   * Capture behaviour for the deposit. Defaults to `"automatic"` (charge on
+   * confirmation). Pass `"manual"` to authorize-only — e.g. short-notice
+   * bookings that a provider must approve before any money moves; capture or
+   * cancel via the adapter when the decision is made.
+   */
+  captureMethod?: "automatic" | "manual";
+  /** Stripe customer to attach the intent to (required for card-on-file). */
+  customerId?: string;
+  /**
+   * Save the card during the deposit payment for later off-session charges
+   * (no-show / late-cancel fees). Requires {@link customerId}.
+   */
+  setupFutureUsage?: "off_session" | "on_session";
+  /** Idempotency key — pass e.g. `deposit:<bookingId>` to make retries safe. */
+  idempotencyKey?: string;
 }
 
 export interface InitiateDepositResult {
@@ -78,9 +94,12 @@ export async function initiateDeposit(
   const intent = await adapter.createPaymentIntent({
     amountCents,
     currency: input.currency,
-    captureMethod: "automatic",
+    captureMethod: input.captureMethod ?? "automatic",
     connectedAccountId: input.connectedAccountId ?? undefined,
     customerEmail: input.customerEmail,
+    customerId: input.customerId,
+    setupFutureUsage: input.setupFutureUsage,
+    idempotencyKey: input.idempotencyKey,
     metadata: {
       ...input.metadata,
       bookingId: input.bookingId,

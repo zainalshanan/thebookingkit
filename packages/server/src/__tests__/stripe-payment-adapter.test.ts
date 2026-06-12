@@ -115,6 +115,114 @@ describe("StripePaymentAdapter", () => {
     );
   });
 
+  it("passes card-on-file params through (customer + setup_future_usage)", async () => {
+    const stripe = makeStripeMock();
+    const adapter = new StripePaymentAdapter({ stripe });
+
+    await adapter.createPaymentIntent({
+      amountCents: 7500,
+      currency: "AUD",
+      customerId: "cus_1",
+      setupFutureUsage: "off_session",
+    });
+
+    expect(stripe.paymentIntents.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        amount: 7500,
+        currency: "aud",
+        customer: "cus_1",
+        setup_future_usage: "off_session",
+      }),
+      undefined,
+    );
+  });
+
+  it("supports merchant-initiated off-session charges with a saved card", async () => {
+    const stripe = makeStripeMock();
+    stripe.paymentIntents.create = vi.fn().mockResolvedValue({
+      id: "pi_fee",
+      client_secret: "pi_fee_secret",
+      status: "succeeded",
+    });
+    const adapter = new StripePaymentAdapter({ stripe });
+
+    const result = await adapter.createPaymentIntent({
+      amountCents: 17000,
+      currency: "AUD",
+      customerId: "cus_1",
+      paymentMethodId: "pm_saved",
+      offSession: true,
+      confirm: true,
+    });
+
+    expect(stripe.paymentIntents.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customer: "cus_1",
+        payment_method: "pm_saved",
+        off_session: true,
+        confirm: true,
+      }),
+      undefined,
+    );
+    expect(result.status).toBe("succeeded");
+  });
+
+  it("forwards an idempotency key (with and without Connect)", async () => {
+    const stripe = makeStripeMock();
+    const adapter = new StripePaymentAdapter({ stripe });
+
+    await adapter.createPaymentIntent({
+      amountCents: 7500,
+      currency: "AUD",
+      idempotencyKey: "deposit:bk_1",
+    });
+    expect(stripe.paymentIntents.create).toHaveBeenLastCalledWith(
+      expect.any(Object),
+      { idempotencyKey: "deposit:bk_1" },
+    );
+
+    await adapter.createPaymentIntent({
+      amountCents: 7500,
+      currency: "AUD",
+      connectedAccountId: "acct_1",
+      idempotencyKey: "deposit:bk_2",
+    });
+    expect(stripe.paymentIntents.create).toHaveBeenLastCalledWith(
+      expect.any(Object),
+      { stripeAccount: "acct_1", idempotencyKey: "deposit:bk_2" },
+    );
+  });
+
+  it("reports requires_capture unmapped (authorized manual-capture intent)", async () => {
+    const stripe = makeStripeMock();
+    stripe.paymentIntents.create = vi.fn().mockResolvedValue({
+      id: "pi_hold",
+      client_secret: "pi_hold_secret",
+      status: "requires_capture",
+    });
+    const adapter = new StripePaymentAdapter({ stripe });
+
+    const result = await adapter.createPaymentIntent({
+      amountCents: 7500,
+      currency: "AUD",
+      captureMethod: "manual",
+    });
+
+    expect(result.status).toBe("requires_capture");
+  });
+
+  it("attaches setup intents to the given customer", async () => {
+    const stripe = makeStripeMock();
+    const adapter = new StripePaymentAdapter({ stripe });
+
+    await adapter.createSetupIntent({ customerId: "cus_1" });
+
+    expect(stripe.setupIntents.create).toHaveBeenCalledWith(
+      expect.objectContaining({ usage: "off_session", customer: "cus_1" }),
+      undefined,
+    );
+  });
+
   it("creates a fresh Connect account when no connectedAccountId is supplied for onboarding", async () => {
     const stripe = makeStripeMock();
     const adapter = new StripePaymentAdapter({
@@ -175,6 +283,33 @@ describe("initiateDeposit", () => {
         }),
       }),
       { stripeAccount: "acct_provider" },
+    );
+  });
+
+  it("supports authorize-only deposits with card-on-file (short-notice approval flow)", async () => {
+    const stripe = makeStripeMock();
+    const adapter = new StripePaymentAdapter({ stripe });
+
+    await initiateDeposit(adapter, {
+      bookingId: "bk_72h",
+      deposit: { depositCents: 7500 },
+      priceCents: 17000,
+      currency: "AUD",
+      captureMethod: "manual",
+      customerId: "cus_1",
+      setupFutureUsage: "off_session",
+      idempotencyKey: "deposit:bk_72h",
+    });
+
+    expect(stripe.paymentIntents.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        amount: 7500,
+        capture_method: "manual",
+        customer: "cus_1",
+        setup_future_usage: "off_session",
+        metadata: expect.objectContaining({ bookingId: "bk_72h" }),
+      }),
+      { idempotencyKey: "deposit:bk_72h" },
     );
   });
 });

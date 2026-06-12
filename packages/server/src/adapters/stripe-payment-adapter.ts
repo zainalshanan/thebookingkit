@@ -104,10 +104,11 @@ export interface StripePaymentAdapterOptions {
   defaultCountry?: string;
 }
 
-const TERMINAL_STATUSES = new Set([
+const KNOWN_STATUSES = new Set([
   "requires_payment_method",
   "requires_confirmation",
   "requires_action",
+  "requires_capture",
   "processing",
   "succeeded",
   "canceled",
@@ -116,12 +117,10 @@ const TERMINAL_STATUSES = new Set([
 function normalizeIntentStatus(
   status: string,
 ): CreatePaymentIntentResult["status"] {
-  if (TERMINAL_STATUSES.has(status)) {
+  if (KNOWN_STATUSES.has(status)) {
     return status as CreatePaymentIntentResult["status"];
   }
-  // `requires_capture` and `requires_source` are mapped to the closest
-  // documented variant — anything else falls back to `processing`.
-  if (status === "requires_capture") return "requires_confirmation";
+  // Legacy/unknown statuses (e.g. `requires_source`) fall back to `processing`.
   return "processing";
 }
 
@@ -155,10 +154,24 @@ export class StripePaymentAdapter implements PaymentAdapter {
     };
     if (options.metadata) params.metadata = options.metadata;
     if (options.customerEmail) params.receipt_email = options.customerEmail;
+    if (options.customerId) params.customer = options.customerId;
+    if (options.setupFutureUsage)
+      params.setup_future_usage = options.setupFutureUsage;
+    if (options.paymentMethodId) params.payment_method = options.paymentMethodId;
+    if (options.offSession !== undefined) params.off_session = options.offSession;
+    if (options.confirm !== undefined) params.confirm = options.confirm;
 
-    const requestOpts = options.connectedAccountId
-      ? { stripeAccount: options.connectedAccountId }
-      : undefined;
+    const requestOpts =
+      options.connectedAccountId || options.idempotencyKey
+        ? {
+            ...(options.connectedAccountId
+              ? { stripeAccount: options.connectedAccountId }
+              : {}),
+            ...(options.idempotencyKey
+              ? { idempotencyKey: options.idempotencyKey }
+              : {}),
+          }
+        : undefined;
 
     const intent = await this.stripe.paymentIntents.create(params, requestOpts);
 
@@ -181,6 +194,7 @@ export class StripePaymentAdapter implements PaymentAdapter {
     const params: Record<string, unknown> = { usage: "off_session" };
     if (options.metadata) params.metadata = options.metadata;
     if (options.customerEmail) params.receipt_email = options.customerEmail;
+    if (options.customerId) params.customer = options.customerId;
 
     const requestOpts = options.connectedAccountId
       ? { stripeAccount: options.connectedAccountId }
