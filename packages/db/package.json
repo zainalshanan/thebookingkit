@@ -5,7 +5,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/thebookingkit/thebookingkit.git",
+    "url": "git+https://github.com/zainalshanan/thebookingkit.git",
     "directory": "packages/db"
   },
   "homepage": "https://thebookingkit.com",
