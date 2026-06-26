@@ -1,5 +1,7 @@
 # @thebookingkit/cli
 
+## 0.3.1
+
 ## 0.1.5
 
 ### Minor Changes — QA Audit (2026-03-12)

@@ -1,6 +1,6 @@
 {
   "name": "@thebookingkit/d1",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Cloudflare D1/SQLite adapter for The Booking Kit — date codec, row converters, and advisory locking",
   "license": "MIT",
   "repository": {
@@ -42,7 +42,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@thebookingkit/core": "^0.3.0",
+    "@thebookingkit/core": "^0.3.1",
     "date-fns": "^3.6.0",
     "date-fns-tz": "^3.2.0"
   },

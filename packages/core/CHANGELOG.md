@@ -1,5 +1,11 @@
 # @thebookingkit/core
 
+## 0.3.1
+
+### Patch Changes
+
+- Fix repository URL in package metadata and adopt lockstep versioning across all published packages.
+
 ## 0.3.0
 
 ### Minor Changes
