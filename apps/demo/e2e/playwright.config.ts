@@ -17,6 +17,10 @@ export default defineConfig({
     baseURL: "http://localhost:3333",
     trace: "on-first-retry",
     screenshot: "only-on-failure",
+    // Pin the browser timezone so slot availability is deterministic regardless of
+    // the host machine's local timezone. This matches the demo's availability rules
+    // (America/New_York), guaranteeing every enabled weekday has bookable slots.
+    timezoneId: "America/New_York",
   },
 
   projects: [
@@ -34,6 +38,9 @@ export default defineConfig({
     cwd: path.resolve(__dirname, ".."),
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
+    // Render the server in the same timezone the browser is pinned to (see use.timezoneId)
+    // so SSR and client produce identical timezone-dependent markup — avoids hydration mismatch.
+    env: { TZ: "America/New_York" },
   },
 
   globalSetup: process.env.E2E_WITH_DB ? "./global-setup.ts" : undefined,

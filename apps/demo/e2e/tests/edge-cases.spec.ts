@@ -195,13 +195,12 @@ test.describe("Edge Cases & Confidence Tests", () => {
       await expect(serviceCards.first()).toBeVisible({ timeout: 10_000 });
       await serviceCards.first().click();
 
-      // Past dates should have the "past" class
+      // Past dates should have the "past" class and be disabled (not selectable)
       const pastCells = bookingSection.locator(".day-cell.past");
       if (await pastCells.count() > 0) {
-        // Clicking a past date should not produce slots
-        await pastCells.first().click();
-        await page.waitForTimeout(500);
-        // No slot buttons should appear for past dates
+        // Past dates are rendered as disabled buttons, so they cannot be clicked
+        await expect(pastCells.first()).toBeDisabled();
+        // And no slots panel is shown because no date is selected
         const slots = bookingSection.locator(".slot-btn");
         expect(await slots.count()).toBe(0);
       }

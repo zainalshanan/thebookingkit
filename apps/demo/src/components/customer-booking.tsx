@@ -525,7 +525,7 @@ function MiniCalendar({
           return (
             <button
               key={day.toISOString()}
-              className={`day-cell ${isSelected ? "selected" : ""} ${isToday ? "today" : ""}`}
+              className={`day-cell ${isSelected ? "selected" : ""} ${isToday ? "today" : ""} ${isPast ? "past" : ""} ${disabled ? "disabled" : ""}`}
               disabled={disabled}
               onClick={() => onSelect(day)}
             >
