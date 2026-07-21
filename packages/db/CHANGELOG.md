@@ -1,5 +1,48 @@
 # @thebookingkit/db
 
+## 0.4.0
+
+### Minor Changes
+
+- 88f91f5: Reconcile slot-occupancy semantics across the slot engine, PostgreSQL, and D1.
+
+  The three backends disagreed about which terminal booking statuses free a slot,
+  and were **inverted** on both of the statuses in question:
+
+  |               | core / D1 (before) | PostgreSQL (before) |
+  | ------------- | ------------------ | ------------------- |
+  | `no_show`     | free               | **blocks**          |
+  | `rescheduled` | **blocks**         | free                |
+
+  A booking the slot engine offered could therefore be rejected by the database
+  constraint, and a slot the database considered free could be hidden by the
+  engine.
+
+  All three now use the full set of terminal states — `cancelled`, `rejected`,
+  `no_show`, `rescheduled`:
+
+  - **`rescheduled` no longer blocks** (change for `core` and `d1`). A rescheduled
+    booking moves to a _new_ row while the original keeps its original
+    `startsAt`/`endsAt`; if it kept blocking, every reschedule would permanently
+    burn the slot it left. PostgreSQL already had this right.
+  - **`no_show` no longer blocks** (change for `db`). The appointment did not
+    happen, so its slot is free. `core` already had this right.
+  - `completed` still blocks: the appointment happened and the slot was consumed.
+
+  `packages/db` adds migration `0007_reconcile_inactive_statuses.sql`, which drops
+  and recreates `bookings_no_overlap` and `bookings_resource_no_overlap`. It only
+  ever makes the constraints more permissive, so it cannot fail on existing data —
+  no row satisfying the old constraint can violate the new one. Verified against
+  PostgreSQL 15 with pre-migration data, including a re-run for idempotency.
+
+  **Action required for PostgreSQL consumers:** run `runCustomMigrations()` (or
+  apply `0007` directly). Until you do, your database keeps blocking `no_show`
+  slots that the slot engine now offers, and `insertBookingIfFree` on D1 will
+  disagree with it.
+
+  `INACTIVE_STATUSES` (core) and `D1_INACTIVE_STATUSES` (d1) are now asserted
+  equal in the test suite, so the three definitions cannot silently drift again.
+
 ## 0.3.1
 
 ## 0.3.0

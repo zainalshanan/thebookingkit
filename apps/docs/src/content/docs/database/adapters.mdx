@@ -112,18 +112,28 @@ While The Booking Kit is built for PostgreSQL, it provides specialized adapters 
 Cloudflare D1 requires special handling for date storage and concurrency. This package provides:
 
 - **Canonical Date Encoding**: SQLite has no native timestamp type. `D1DateCodec` ensures all dates are stored as sortable UTC-Z strings.
-- **Advisory Locking**: Since SQLite lacks `EXCLUDE` constraints, `D1BookingLock` provides application-level mutexes to prevent double-booking.
+- **Atomic Booking Guard**: Since SQLite lacks `EXCLUDE` constraints, `insertBookingIfFree()` performs the overlap check and the INSERT in a single SQL statement — concurrent requests cannot interleave, so no two bookings written through it can overlap. Writes that bypass it entirely are covered by the optional `BOOKINGS_UNIQUE_SLOT_DDL` index.
+- **Advisory Locking**: `D1BookingLock` adds fencing-token mutexes to keep contention low and produce friendly errors. It is defence in depth, not the guarantee.
 - **Schedule Adapters**: Utilities to intersect personal and location schedules into RRULE windows.
 
 ```typescript
-import { D1DateCodec, D1BookingLock } from "@thebookingkit/d1";
+import { insertBookingIfFree } from "@thebookingkit/d1";
 
-// Ensure a slot is available and book it atomically
-const lock = new D1BookingLock(db);
-await lock.withLock(`provider:${id}`, async () => {
-  // Read-check-write logic here
+// The overlap check and the INSERT are one atomic statement — no lock required
+const { inserted } = await insertBookingIfFree(db, {
+  id: crypto.randomUUID(),
+  provider_id: providerId,
+  starts_at: slot.startTime,
+  ends_at: slot.endTime,
+  status: "confirmed",
 });
+
+if (!inserted) {
+  return Response.json({ error: "Slot just taken" }, { status: 409 });
+}
 ```
+
+See the [D1 API reference](/api-reference/d1/) for buffer time, rescheduling, resource-scoped bookings, and the optional schema-level unique index.
 
 ## Implementing an adapter
 

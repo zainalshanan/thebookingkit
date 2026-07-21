@@ -490,13 +490,15 @@ describe("D1ResourceBookingLock.withResourceLock()", () => {
     await lock.withResourceLock("res-1", "2026-06-15", async () => "done");
 
     const insertCalls = runCalls.filter((c) => c.sql.includes("INSERT INTO"));
+    // Release is scoped by the fencing token: DELETE ... lock_key = ? AND holder = ?
     const releaseCalls = runCalls.filter(
-      (c) => c.sql.includes("DELETE FROM") && c.params.length === 1,
+      (c) => c.sql.includes("DELETE FROM") && c.sql.includes("holder = ?"),
     );
 
     expect(insertCalls).toHaveLength(1);
     expect(releaseCalls).toHaveLength(1);
     expect(releaseCalls[0].params[0]).toBe("resource:res-1:2026-06-15");
+    expect(releaseCalls[0].params[1]).toBe(insertCalls[0].params[3]);
   });
 
   it("releases the lock even when the callback throws", async () => {

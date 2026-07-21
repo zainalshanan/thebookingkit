@@ -17,7 +17,13 @@
 import type { AvailabilityRuleInput, AvailabilityOverrideInput } from "@thebookingkit/core";
 import { D1DateCodec } from "./codec.js";
 import { D1BookingLock } from "./lock.js";
-import type { LockDb, D1BookingLockOptions } from "./lock.js";
+import type { LockDb, D1BookingLockOptions, LockHandle } from "./lock.js";
+import { insertBookingIfFree } from "./booking-guard.js";
+import type {
+  GuardDb,
+  InsertIfFreeOptions,
+  InsertIfFreeResult,
+} from "./booking-guard.js";
 import { mapOverrideRow } from "./d1-shared.js";
 
 // ---------------------------------------------------------------------------
@@ -273,9 +279,9 @@ export class D1ResourceBookingLock extends D1BookingLock {
   async withResourceLock<T>(
     resourceId: string,
     dateStr: string,
-    fn: () => Promise<T>,
+    fn: (handle: LockHandle) => Promise<T>,
   ): Promise<T> {
-    const lockKey = `resource:${resourceId}:${dateStr}`;
+    const lockKey = D1ResourceBookingLock.buildLockKey(resourceId, dateStr);
     return this.withLock(lockKey, fn);
   }
 
@@ -312,4 +318,93 @@ export function createD1ResourceBookingLock(
   options?: D1BookingLockOptions,
 ): D1ResourceBookingLock {
   return new D1ResourceBookingLock(db, options);
+}
+
+// ---------------------------------------------------------------------------
+// Atomic resource booking guard
+// ---------------------------------------------------------------------------
+
+/**
+ * Insert a resource booking only if that resource is still free, atomically.
+ *
+ * This is `insertBookingIfFree()` pre-scoped to `resource_id` — the D1
+ * equivalent of PostgreSQL's `EXCLUDE USING gist` on
+ * `(resource_id, tstzrange(starts_at, ends_at))`. The conflict check and the
+ * INSERT are a single SQL statement, so no advisory lock is needed and no
+ * concurrent request can interleave between them.
+ *
+ * Note this enforces **one booking per resource at a time**, matching the
+ * PostgreSQL constraint. A resource's `capacity` is the party size it seats,
+ * not a number of concurrent bookings.
+ *
+ * ## It guards the resource, and only the resource
+ *
+ * The scope column is `resource_id`, so this checks that the *resource* is
+ * free. It does **not** check the provider. If your bookings carry both, a
+ * provider can still be double-booked across two different resources:
+ *
+ * ```ts
+ * // p1 booked at table t1, 09:00-10:00 — then this is ACCEPTED:
+ * await insertResourceBookingIfFree(db, { provider_id: "p1", resource_id: "t2", ... });
+ * ```
+ *
+ * A single statement can only guard one scope atomically. When both must hold,
+ * run the provider-scoped guard first and the resource-scoped guard second, and
+ * delete the first row if the second is refused:
+ *
+ * ```ts
+ * const byProvider = await insertBookingIfFree(db, values);
+ * if (!byProvider.inserted) throw new BookingConflictError();
+ *
+ * const byResource = await insertBookingIfFree(db, values, {
+ *   columns: { scope: "resource_id" },
+ *   excludeId: values.id,          // ignore the row we just wrote
+ * });
+ * if (!byResource.inserted) {
+ *   await db.run(`DELETE FROM bookings WHERE id = ?`, [values.id]);
+ *   throw new BookingConflictError();
+ * }
+ * ```
+ *
+ * Simpler still, apply `BOOKINGS_UNIQUE_SLOT_DDL`, whose two partial unique
+ * indexes cover provider and resource independently at the schema level.
+ *
+ * @param db - Any object exposing `run(sql, params)` that returns the driver result.
+ * @param values - Column/value pairs to insert. Must include `resource_id`,
+ *   `starts_at`, and `ends_at` (or your overrides for those columns).
+ * @param options - Column overrides, buffer window, and reschedule exclusion.
+ *   The `scope` column defaults to `"resource_id"` here and may still be overridden.
+ * @returns `{ inserted, changes, statement }`; `inserted` is `false` when the
+ *   resource is already booked for an overlapping interval.
+ * @throws RangeError for malformed input.
+ * @throws GuardResultError when the driver result exposes no row count.
+ *
+ * @example
+ * ```ts
+ * const { inserted } = await insertResourceBookingIfFree(db, {
+ *   id: crypto.randomUUID(),
+ *   resource_id: tableId,
+ *   provider_id: providerId,
+ *   event_type_id: eventTypeId,
+ *   customer_email: email,
+ *   customer_name: name,
+ *   starts_at: slot.startTime,
+ *   ends_at: slot.endTime,
+ *   status: "confirmed",
+ *   created_at: new Date(),
+ *   updated_at: new Date(),
+ * });
+ *
+ * if (!inserted) return Response.json({ error: "Table just booked" }, { status: 409 });
+ * ```
+ */
+export function insertResourceBookingIfFree(
+  db: GuardDb,
+  values: Record<string, unknown>,
+  options?: InsertIfFreeOptions,
+): Promise<InsertIfFreeResult> {
+  return insertBookingIfFree(db, values, {
+    ...options,
+    columns: { scope: "resource_id", ...options?.columns },
+  });
 }

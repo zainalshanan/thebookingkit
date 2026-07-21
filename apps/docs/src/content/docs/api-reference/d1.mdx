@@ -1,9 +1,9 @@
 ---
 title: "D1 Reference (@thebookingkit/d1)"
-description: "Complete API reference for @thebookingkit/d1 — Cloudflare D1 / SQLite adapter providing date encoding, advisory locks, schedule helpers, query utilities, and migration tools."
+description: "Complete API reference for @thebookingkit/d1 — Cloudflare D1 / SQLite adapter providing atomic double-booking prevention, date encoding, advisory locks, schedule helpers, query utilities, and migration tools."
 ---
 
-`@thebookingkit/d1` bridges Cloudflare D1's text-based date storage with `@thebookingkit/core`'s UTC `Date` object expectations. It also provides the advisory lock pattern required for double-booking prevention in SQLite, which lacks Postgres's `EXCLUDE USING gist` constraint.
+`@thebookingkit/d1` bridges Cloudflare D1's text-based date storage with `@thebookingkit/core`'s UTC `Date` object expectations. It also provides double-booking prevention for SQLite, which lacks Postgres's `EXCLUDE USING gist` constraint — an atomic overlap-guarded insert, an optional schema-level unique index, and an advisory lock.
 
 ```bash
 npm install @thebookingkit/d1
@@ -312,11 +312,231 @@ const { bounds, dateRange } = d1LocalDayQuery(today, "Australia/Sydney");
 
 ---
 
-## Advisory Lock (Double-Booking Prevention)
+## Double-Booking Prevention
 
-SQLite / D1 serializes writes at the connection level but does NOT make a read-then-write sequence atomic. Without a lock, two concurrent requests can both read an empty slot and both insert, producing a double booking.
+SQLite / D1 serializes writes at the statement level but does NOT make a read-then-write *sequence* atomic. Two concurrent requests can both read an empty slot, both pass the availability check, and both insert.
 
-`D1BookingLock` implements an advisory lock via a dedicated `booking_locks` table using Compare-And-Swap semantics.
+Postgres solves this with `EXCLUDE USING gist`. D1 has no range-exclusion constraint, so this package provides the equivalent guarantee in three layers:
+
+| Layer | Mechanism | Guarantee |
+|---|---|---|
+| [`insertBookingIfFree()`](#insertbookingiffree) | Overlap check + INSERT in **one** SQL statement | **Authoritative.** Concurrent requests cannot interleave, with or without a lock |
+| [`BOOKINGS_UNIQUE_SLOT_DDL`](#bookings_unique_slot_ddl) | Opt-in partial unique index | Schema-level backstop for code paths that bypass the guard |
+| [`D1BookingLock`](#d1bookinglock) | Advisory compare-and-swap lock | Reduces contention, returns friendly errors. **Advisory only** |
+
+:::caution[The lock alone is not enough]
+`D1BookingLock` is advisory: it protects a slot only if every writer takes it, and its lease can expire mid-operation. Always perform the write itself with `insertBookingIfFree()` — that is what makes double booking impossible.
+:::
+
+### Building a `GuardDb` / `LockDb`
+
+:::danger[Neither a raw D1 binding nor Drizzle satisfies this interface]
+`env.DB` exposes `prepare`/`batch`/`exec` but no `run`. Drizzle's `run(query)` takes a **single** argument, so passing it directly silently discards `params` and binds every `?` as `NULL` — which the guard reports as a successful insert while writing an all-`NULL` row. Always go through a small adapter:
+:::
+
+```typescript
+import type { GuardDb } from "@thebookingkit/d1";
+
+// Raw D1 binding (Workers)
+const db: GuardDb = {
+  run: (sql, params = []) => env.DB.prepare(sql).bind(...params).run(),
+};
+
+// Drizzle (drizzle-orm/d1) — reach through to the underlying binding
+const db: GuardDb = {
+  run: (sql, params = []) => drizzle.$client.prepare(sql).bind(...params).run(),
+};
+```
+
+The same object satisfies `LockDb`, so one adapter serves both the guard and `D1BookingLock`.
+
+### `insertBookingIfFree()`
+
+Inserts a booking only if the slot is still free, atomically. Needs no lock and no retry loop.
+
+```typescript
+import { insertBookingIfFree } from "@thebookingkit/d1";
+
+const { inserted } = await insertBookingIfFree(db, {
+  id:            crypto.randomUUID(),
+  provider_id:   barberId,
+  event_type_id: eventTypeId,
+  customer_email: email,
+  customer_name:  name,
+  starts_at:     slot.startTime,   // Date — encoded to UTC-Z automatically
+  ends_at:       slot.endTime,
+  status:        "confirmed",
+  created_at:    new Date(),
+  updated_at:    new Date(),
+});
+
+if (!inserted) {
+  return Response.json({ error: "Slot just taken" }, { status: 409 });
+}
+```
+
+The generated statement is a single `INSERT ... SELECT ... WHERE NOT EXISTS`. Every
+value — including the inactive statuses — is a bound parameter:
+
+```sql
+INSERT INTO "bookings" ("id", "provider_id", "starts_at", "ends_at", "status")
+SELECT ?, ?, ?, ?, ?
+WHERE NOT EXISTS (
+  SELECT 1 FROM "bookings"
+  WHERE "provider_id" = ?
+    AND ("status" IS NULL OR "status" NOT IN (?, ?, ?))
+    AND "starts_at" < ?   -- new end
+    AND "ends_at"   > ?   -- new start
+)
+```
+
+`statement.params` carries 11 entries in this example, in order: the 5 inserted
+values, the scope value, the 3 inactive statuses, the window end, then the
+window start.
+
+SQLite runs a single statement inside an implicit transaction holding the write lock, and D1 serializes all writes against one primary — so the `NOT EXISTS` check cannot be invalidated between evaluation and insertion.
+
+**Parameters**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `db` | `GuardDb` | DB client with a `run(sql, params)` method returning the driver result |
+| `values` | `Record<string, unknown>` | Columns to insert. Must include the scope, start, and end columns |
+| `options.columns` | `BookingGuardColumns` | Override table/column names. Defaults: `bookings`, `provider_id`, `starts_at`, `ends_at`, `status`, `id` |
+| `options.inactiveStatuses` | `readonly string[]` | Statuses that do NOT block. Default `["cancelled", "rejected", "no_show"]` |
+| `options.conflictWindow` | `{ startsAt, endsAt }` | Widen the *conflict check* without changing inserted values — use for buffer time |
+| `options.excludeId` | `string` | Ignore this row id when checking. Required when rescheduling a booking into an overlapping window |
+
+**Returns** `{ inserted: boolean, changes: number, statement: { sql, params } }`.
+
+**Throws** `RangeError` for malformed input (missing/null scope or interval, inverted interval, invalid identifier), and `GuardResultError` when the driver reports no affected-row count.
+
+#### Overlap semantics
+
+Intervals are half-open `[startsAt, endsAt)`, matching the slot engine. Back-to-back bookings do **not** conflict:
+
+| Existing | Candidate | Result |
+|---|---|---|
+| 09:00–09:30 | 09:00–09:30 | Blocked |
+| 09:00–09:30 | 09:15–09:45 | Blocked |
+| 09:00–09:30 | 08:00–10:00 | Blocked |
+| 09:00–09:30 | 09:30–10:00 | **Allowed** |
+| 09:00–09:30 | 08:30–09:00 | **Allowed** |
+
+A row blocks unless its status is `cancelled`, `rejected`, or `no_show` — identical to `getActiveBookings()` in `@thebookingkit/core`. The predicate is `NOT IN`, so any status added in future blocks by default.
+
+:::note[Requires canonical dates]
+The guard compares date columns lexicographically as TEXT, which is exact only for the fixed-width UTC-Z format from `D1DateCodec.encode()`. Run [`findLegacyRows()`](#findlegacyrows) and [`migrateRowDates()`](#migraterowdates) before relying on it if your table predates the codec.
+:::
+
+#### Buffer time
+
+Pass a widened `conflictWindow` while `values` carries the true appointment times:
+
+```typescript
+await insertBookingIfFree(db, values, {
+  conflictWindow: {
+    startsAt: subMinutes(slot.startTime, 15),
+    endsAt:   addMinutes(slot.endTime, 15),
+  },
+});
+```
+
+#### Rescheduling
+
+Rescheduling writes a *new* row and retires the old one. Without `excludeId`
+the new row conflicts with the booking it is replacing:
+
+```typescript
+// 1. Retire the old booking so it stops blocking the slot.
+await db.run(`UPDATE bookings SET status = 'rescheduled' WHERE id = ?`, [originalId]);
+
+// 2. Insert the replacement, ignoring the row being moved.
+const { inserted } = await insertBookingIfFree(db, newValues, { excludeId: originalId });
+if (!inserted) {
+  await db.run(`UPDATE bookings SET status = 'confirmed' WHERE id = ?`, [originalId]);
+  throw new BookingConflictError();
+}
+```
+
+`excludeId` must be a non-empty string. A non-string binds as SQL `NULL`, and
+`"id" <> NULL` is `NULL` for every row — which would null the whole predicate and
+disable the guard, so it is rejected with a `RangeError`.
+
+Note `'rescheduled'` still blocks on D1 (it is not in `D1_INACTIVE_STATUSES`), which
+is why step 1 alone is not enough and `excludeId` is required.
+
+### `insertBookingOrThrow()`
+
+Identical to `insertBookingIfFree()` but throws `BookingConflictError` (from `@thebookingkit/core`, code `BOOKING_CONFLICT`) instead of returning `inserted: false`. Use it when your handler already maps that error to HTTP 409, so the D1 and Postgres paths raise the same error type.
+
+:::caution[Blocking statuses differ between backends]
+The D1 guard mirrors core's `INACTIVE_STATUSES` (`cancelled`, `rejected`, `no_show`), while the Postgres `EXCLUDE` constraint uses `cancelled`, `rejected`, `rescheduled`. So a `no_show` blocks the slot in Postgres but not on D1, and a `rescheduled` blocks on D1 but not in Postgres. Align them before relying on identical behaviour across backends.
+:::
+
+### `insertResourceBookingIfFree()`
+
+`insertBookingIfFree()` pre-scoped to `resource_id` — the D1 counterpart of the Postgres `EXCLUDE` constraint on `(resource_id, tstzrange(starts_at, ends_at))`.
+
+This guards the **resource only**. It does not check the provider, so a provider can still be double-booked across two different resources. A single statement can guard one scope atomically; see the JSDoc on `insertResourceBookingIfFree` for the two-step pattern when both must hold, or apply `BOOKINGS_UNIQUE_SLOT_DDL`, whose two indexes cover provider and resource independently.
+
+It also enforces **one booking per resource at a time**, matching Postgres. A resource's `capacity` is the party size it seats, not a number of concurrent bookings.
+
+```typescript
+import { insertResourceBookingIfFree } from "@thebookingkit/d1";
+
+const { inserted } = await insertResourceBookingIfFree(db, {
+  id:             crypto.randomUUID(),
+  resource_id:    tableId,
+  provider_id:    providerId,      // NOT NULL in BOOKINGS_DDL
+  event_type_id:  eventTypeId,     // NOT NULL
+  customer_email: email,           // NOT NULL
+  customer_name:  name,            // NOT NULL
+  starts_at:      slot.startTime,
+  ends_at:        slot.endTime,
+  status:         "confirmed",
+  created_at:     new Date(),      // NOT NULL
+  updated_at:     new Date(),      // NOT NULL
+});
+```
+
+### `buildInsertIfFree()`
+
+Builds the statement without executing it — for `db.batch([...])`, a custom driver, or inspection.
+
+```typescript
+const { sql, params } = buildInsertIfFree(values);
+const res = await env.DB.prepare(sql).bind(...params).run();
+if (res.meta.changes === 0) throw new BookingConflictError();
+```
+
+### `BOOKINGS_UNIQUE_SLOT_DDL`
+
+**Opt-in** schema-level backstop. Creates partial unique indexes so a provider — and a resource — cannot hold two *active* bookings starting at the same instant, enforced by SQLite itself. This catches any code path that bypasses the guard, including manual SQL.
+
+```typescript
+import { BOOKINGS_UNIQUE_SLOT_DDL } from "@thebookingkit/d1";
+await db.exec(BOOKINGS_UNIQUE_SLOT_DDL); // two statements — exec, not run
+```
+
+Scope and limits:
+
+- Catches **identical start times** only. Partial overlaps are not covered — a unique index cannot express range exclusion. `insertBookingIfFree()` remains the authoritative overlap guard.
+- Cancelled, rejected, and no-show rows are excluded, so a cancelled slot can be rebooked.
+- **Do not apply this if your deployment writes one booking row per attendee** for group events. The standard schema models group bookings as one `bookings` row with N `booking_seats` children, which this index supports.
+- Creation fails if the table already contains violating rows. Find them first:
+
+```sql
+SELECT provider_id, starts_at, COUNT(*) FROM bookings
+WHERE status NOT IN ('cancelled', 'rejected', 'no_show')
+GROUP BY provider_id, starts_at HAVING COUNT(*) > 1;
+```
+
+---
+
+## Advisory Lock
+
+`D1BookingLock` implements an advisory lock via a dedicated `booking_locks` table using Compare-And-Swap semantics. Use it to serialize expensive work and return friendly errors — not as your only defence against double booking.
 
 ### Required schema
 
@@ -326,11 +546,26 @@ Add this table to your D1 schema:
 CREATE TABLE IF NOT EXISTS booking_locks (
   lock_key   TEXT PRIMARY KEY,
   expires_at TEXT NOT NULL,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  holder     TEXT
 );
 ```
 
 The DDL constant `BOOKING_LOCKS_DDL` is also exported from `@thebookingkit/d1` for programmatic use.
+
+**Upgrading an existing table.** The `holder` column carries the fencing token. Tables created before it existed are upgraded automatically on first use; set `autoMigrate: false` to forbid runtime DDL and apply `BOOKING_LOCKS_HOLDER_MIGRATION_SQL` yourself instead.
+
+### Fencing token
+
+Every acquisition writes a random `holder` token, and release is scoped to it:
+
+```sql
+DELETE FROM booking_locks WHERE lock_key = ? AND holder = ?
+```
+
+Without this, a holder whose lease expired — and whose lock was therefore reclaimed by another request — would delete the *new* holder's lock row on cleanup, silently unlocking a slot that request was actively using.
+
+A lease can still expire while its holder is mid-callback. That is detected: `withLock` throws `LockLeaseExpiredError` rather than hiding the race. Pair with `insertBookingIfFree()` and the racing write is rejected too.
 
 ### `D1BookingLock`
 
@@ -338,10 +573,12 @@ The DDL constant `BOOKING_LOCKS_DDL` is also exported from `@thebookingkit/d1` f
 import { D1BookingLock } from "@thebookingkit/d1";
 
 const lock = new D1BookingLock(rawDb, {
-  tableName:   "booking_locks", // default
-  lockTtlMs:   10_000,          // 10 seconds (safety valve for crashed workers)
-  maxRetries:  5,               // default
-  baseDelayMs: 100,             // default
+  tableName:     "booking_locks", // default
+  lockTtlMs:     10_000,          // 10 seconds (safety valve for crashed workers)
+  maxRetries:    5,               // default
+  baseDelayMs:   100,             // default
+  onLeaseExpiry: "throw",         // default
+  autoMigrate:   true,            // default
 });
 
 await lock.withLock(`${barberId}:${dateStr}`, async () => {
@@ -349,7 +586,9 @@ await lock.withLock(`${barberId}:${dateStr}`, async () => {
   const existing = await db.select().from(bookings).where(...).all();
   const available = isSlotAvailable(rules, [], d1BookingRowsToInputs(existing), start, end);
   if (!available.available) throw new BookingConflictError();
-  await db.insert(bookings).values({ ... });
+
+  // Authoritative write — rejects the race even if the lease lapsed
+  await insertBookingOrThrow(db, values);
 });
 ```
 
@@ -360,20 +599,51 @@ await lock.withLock(`${barberId}:${dateStr}`, async () => {
 | `db` | `LockDb` | — | DB client with a `run(sql, params)` method |
 | `options.tableName` | `string` | `"booking_locks"` | Name of the lock table |
 | `options.lockTtlMs` | `number` | `10_000` | Lock TTL in ms (prevents stale locks from crashed workers) |
-| `options.maxRetries` | `number` | `5` | Maximum acquire attempts before throwing |
+| `options.maxRetries` | `number` | `5` | Maximum acquire attempts before throwing. Must be ≥ 1 |
 | `options.baseDelayMs` | `number` | `100` | Base delay for jittered exponential backoff |
+| `options.onLeaseExpiry` | `"throw" \| "ignore"` | `"throw"` | Whether a lease that expires mid-callback raises `LockLeaseExpiredError` |
+| `options.autoMigrate` | `boolean` | `true` | Add the `holder` column in place when a legacy lock table lacks it |
+| `options.generateHolder` | `() => string` | `crypto.randomUUID` | Override the fencing-token generator (for deterministic tests) |
+
+Invalid options throw `RangeError` at construction — a non-positive `lockTtlMs`, a `maxRetries` below 1 or non-integer, a negative `baseDelayMs`, or a `tableName` that is not a plain SQL identifier.
 
 **`withLock()` parameters**
 
 | Parameter | Type | Description |
 |---|---|---|
-| `lockKey` | `string` | Unique key for the resource. Convention: `"${providerId}:${dateStr}"` |
-| `fn` | `() => Promise<T>` | Async callback containing the availability check and insert |
+| `lockKey` | `string` | Unique non-empty key for the resource. Convention: `"${providerId}:${dateStr}"` |
+| `fn` | `(handle: LockHandle) => Promise<T>` | Async callback containing the availability check and insert |
 
 **Returns** the return value of `fn`.
-**Throws** `LockAcquisitionError` if all retries are exhausted. Propagates any error thrown by `fn`.
+**Throws** `LockAcquisitionError` if all retries are exhausted, `LockLeaseExpiredError` if the lease lapsed mid-callback, `LockSchemaError` if the table lacks `holder` and `autoMigrate` is off, `RangeError` for an empty `lockKey`. Propagates any error thrown by `fn` — the callback's own error always takes precedence over a lease-expiry error.
 
 **Backoff formula:** `min(baseDelayMs * 2^attempt + jitter, 5000ms)`.
+
+Only uniqueness violations are treated as contention. Any other failure — a missing table, a network error, a NOT NULL violation — surfaces immediately instead of being masked as lock contention or burning the retry budget.
+
+### `LockHandle`
+
+Passed to the `withLock` callback:
+
+```typescript
+interface LockHandle {
+  readonly lockKey: string;
+  readonly holder: string;      // fencing token
+  readonly expiresAt: number;   // epoch ms; updated by extend()
+  isExpired(): boolean;
+  extend(ttlMs?: number): Promise<boolean>;
+}
+```
+
+`extend()` pushes the lease expiry further out for long-running work. It returns `false` when the lock has already been lost — the critical section is no longer protected and should be aborted:
+
+```typescript
+await lock.withLock(key, async (handle) => {
+  await chargeCard();                       // slow
+  if (!await handle.extend()) throw new Error("lost lock");
+  await insertBookingOrThrow(db, values);
+});
+```
 
 ### `createD1BookingLock()`
 
@@ -403,6 +673,35 @@ try {
 }
 ```
 
+### `LockLeaseExpiredError`
+
+Thrown when the lock was no longer held by the time the critical section finished. This is decided by the release itself — the `DELETE` is scoped to the holder token, so matching no row proves the lease was lost. A slow release does not trigger it. The callback already ran to completion, so any writes it performed may have raced with a request that reclaimed the expired lock. The callback's return value is preserved on `.result`.
+
+```typescript
+try {
+  await lock.withLock(key, fn);
+} catch (err) {
+  if (err instanceof LockLeaseExpiredError) {
+    // err.code === "LOCK_LEASE_EXPIRED"
+    // err.result, err.heldForMs, err.lockTtlMs
+  }
+}
+```
+
+Remedies, in order of preference:
+
+1. Perform the write with `insertBookingIfFree()` — the database then rejects the racing insert and this error is purely informational.
+2. Raise `lockTtlMs` above your worst-case critical-section duration.
+3. Call `handle.extend()` from inside a long-running callback.
+
+### `LockSchemaError`
+
+Thrown when the lock table lacks the `holder` column and `autoMigrate` is disabled (or the automatic upgrade failed). The message contains the exact `ALTER TABLE` statement to run.
+
+### `LockDriverError`
+
+Thrown by `handle.extend()` when the driver's result exposes no affected-row count, so the renewal cannot be confirmed. Reporting success without evidence would defeat the purpose of the lease.
+
 ### `LockDb` interface
 
 Minimum interface the `D1BookingLock` requires from the database client:
@@ -412,6 +711,10 @@ interface LockDb {
   run(sql: string, params?: unknown[]): Promise<unknown>;
 }
 ```
+
+### `GuardResultError`
+
+Thrown by `insertBookingIfFree()` when the driver's result exposes no affected-row count (`meta.changes`, `changes`, or `rowsAffected`), so the guard cannot tell whether the insert succeeded. Assuming success would reintroduce double bookings, so this fails loudly. Use `buildInsertIfFree()` and inspect your driver's result directly if it reports row counts in a non-standard shape.
 
 ---
 
@@ -508,15 +811,15 @@ import {
 
 ### `findLegacyRows()`
 
-Scans a table and returns rows whose date columns are in legacy local-ISO format.
+Filters an in-memory array of rows, returning those whose date columns are in legacy local-ISO format. It does not query the database — fetch the rows yourself first.
 
 ### `migrateRowDates()`
 
-Rewrites legacy date strings to canonical UTC-Z format. Uses `D1DateCodec.isLegacyFormat()` to detect and `D1DateCodec.encode()` to normalize.
+Returns the canonical UTC-Z replacements for one row's legacy date columns. It computes an updates object; it does not write anything. Uses `D1DateCodec.isLegacyFormat()` to detect and `D1DateCodec.encode()` to normalize.
 
 ### `buildMigrationSql()`
 
-Generates the SQL `UPDATE` statements needed to migrate legacy rows. Useful for reviewing before applying.
+Generates the single SQL `UPDATE` statement needed to migrate one row. Useful for reviewing before applying.
 
 ### `TableMigrationPlan`
 
@@ -572,6 +875,7 @@ await db.exec(ALL_DDL);
 ```typescript
 import {
   D1BookingLock,
+  insertBookingOrThrow,
   d1DayQuery,
   d1LocalDayQuery,
   d1BookingRowsToInputs,
@@ -613,21 +917,27 @@ const slots = getAvailableSlots(rules, [], existingBookings, dateRange, timezone
 });
 
 // ── Step 6: Book a slot with double-booking protection ───────────────────────
+// The lock keeps contention low and produces friendly errors; the guarded
+// insert is what actually makes a double booking impossible.
 const lock = new D1BookingLock(rawDb);
 
 await lock.withLock(`${barberId}:${today}`, async () => {
-  // Re-fetch inside the lock to catch concurrent bookings
+  // Re-fetch inside the lock to reject obvious conflicts early
   const freshRows = await db.select().from(bookings).where(...).all();
   const fresh = d1BookingRowsToInputs(freshRows);
 
   const available = isSlotAvailable(rules, [], fresh, selectedStart, selectedEnd);
   if (!available.available) throw new BookingConflictError();
 
-  await db.insert(bookings).values({
-    barberId,
-    startsAt: encodeD1Date(selectedStart),
-    endsAt:   encodeD1Date(selectedEnd),
-    status: "confirmed",
+  // Atomic: the overlap check and the INSERT are a single SQL statement
+  await insertBookingOrThrow(rawDb, {
+    id:          crypto.randomUUID(),
+    provider_id: barberId,
+    starts_at:   selectedStart,
+    ends_at:     selectedEnd,
+    status:      "confirmed",
+    created_at:  new Date(),
+    updated_at:  new Date(),
   });
 });
 ```

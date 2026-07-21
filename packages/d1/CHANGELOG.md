@@ -1,5 +1,181 @@
 # @thebookingkit/d1
 
+## 0.4.0
+
+### Minor Changes
+
+- 88f91f5: Reconcile slot-occupancy semantics across the slot engine, PostgreSQL, and D1.
+
+  The three backends disagreed about which terminal booking statuses free a slot,
+  and were **inverted** on both of the statuses in question:
+
+  |               | core / D1 (before) | PostgreSQL (before) |
+  | ------------- | ------------------ | ------------------- |
+  | `no_show`     | free               | **blocks**          |
+  | `rescheduled` | **blocks**         | free                |
+
+  A booking the slot engine offered could therefore be rejected by the database
+  constraint, and a slot the database considered free could be hidden by the
+  engine.
+
+  All three now use the full set of terminal states — `cancelled`, `rejected`,
+  `no_show`, `rescheduled`:
+
+  - **`rescheduled` no longer blocks** (change for `core` and `d1`). A rescheduled
+    booking moves to a _new_ row while the original keeps its original
+    `startsAt`/`endsAt`; if it kept blocking, every reschedule would permanently
+    burn the slot it left. PostgreSQL already had this right.
+  - **`no_show` no longer blocks** (change for `db`). The appointment did not
+    happen, so its slot is free. `core` already had this right.
+  - `completed` still blocks: the appointment happened and the slot was consumed.
+
+  `packages/db` adds migration `0007_reconcile_inactive_statuses.sql`, which drops
+  and recreates `bookings_no_overlap` and `bookings_resource_no_overlap`. It only
+  ever makes the constraints more permissive, so it cannot fail on existing data —
+  no row satisfying the old constraint can violate the new one. Verified against
+  PostgreSQL 15 with pre-migration data, including a re-run for idempotency.
+
+  **Action required for PostgreSQL consumers:** run `runCustomMigrations()` (or
+  apply `0007` directly). Until you do, your database keeps blocking `no_show`
+  slots that the slot engine now offers, and `insertBookingIfFree` on D1 will
+  disagree with it.
+
+  `INACTIVE_STATUSES` (core) and `D1_INACTIVE_STATUSES` (d1) are now asserted
+  equal in the test suite, so the three definitions cannot silently drift again.
+
+- 68a77b9: Add an atomic overlap guard for D1/SQLite, and close several correctness gaps in the advisory lock.
+
+  ## New: atomic overlap guard
+
+  `insertBookingIfFree`, `insertBookingOrThrow`, `buildInsertIfFree`, and
+  `insertResourceBookingIfFree` build a single
+  `INSERT ... SELECT ... WHERE NOT EXISTS` statement, so the overlap check and the
+  insert cannot be interleaved by a concurrent request. Unlike an advisory lock,
+  correctness does not depend on every writer remembering to cooperate.
+
+  Supports buffer time via `conflictWindow`, rescheduling via `excludeId`, custom
+  schemas via `columns`, and resource scoping. Overlap is half-open `[start, end)`
+  so back-to-back bookings do not conflict, and the blocking-status predicate
+  mirrors `INACTIVE_STATUSES` in `@thebookingkit/core`.
+
+  **What it does not cover.** The statement is atomic, but it is only as correct as
+  the data it compares against. It cannot prevent an overlap created by a write
+  that bypasses it — a hand-written `INSERT`, a Drizzle `db.insert()`, an admin
+  script. Apply the new opt-in `BOOKINGS_UNIQUE_SLOT_DDL` for a schema-level
+  backstop (identical start times only; a unique index cannot express range
+  exclusion). Three further preconditions fail _open_ if violated: date columns
+  must have TEXT affinity, existing rows must already be canonical UTC-Z (run
+  `findLegacyRows()` / `migrateRowDates()` first), and your `GuardDb.run` must
+  actually bind its `params` argument.
+
+  ## Fixed: advisory lock
+
+  - **A lapsed holder could unlock a slot another request was using.** Release was
+    `DELETE ... WHERE lock_key = ?` with no ownership check, so a holder whose
+    lease had expired — and whose lock had been reclaimed — deleted the new
+    holder's row on cleanup, admitting a second writer into the critical section.
+    Every acquisition now writes a random `holder` fencing token and release is
+    scoped to it.
+  - **A lease expiring mid-callback was silent.** `withLock` now throws
+    `LockLeaseExpiredError`, with the callback's return value on `.result`.
+    Whether the lease survived is determined by the release itself — the
+    holder-scoped `DELETE` matching a row proves ownership — not by the wall
+    clock, so a slow release cannot report an expiry that never happened and a
+    lock reclaimed by a peer cannot go unreported.
+  - **Contention detection missed wrapped errors.** Uniqueness violations reported
+    through a `cause` chain, an `AggregateError`, a `code`/`errcode` field, or
+    phrased `PRIMARY KEY must be unique` were treated as hard faults rather than
+    retried. Exported as `isUniqueConstraintError()`.
+  - **Auto-migration could hard-fail a concurrent request** and could never
+    recover from a schema regression, because it consulted a cached "already
+    migrated" flag when the rejection arrived rather than when the statement was
+    issued. The decision is now made from the error alone.
+  - `extend()` no longer shortens a lease, always verifies ownership, and
+    serialises concurrent calls so the in-memory lease cannot drift ahead of the
+    stored one.
+  - Added validation: `lockTtlMs`, `maxRetries`, `baseDelayMs`, a non-empty
+    `lockKey`, and a `generateHolder` that must return a non-empty string.
+    `lockTtlMs` is capped at ~24.8 days, beyond which expiry timestamps use the
+    expanded-year ISO form and sort below every normal timestamp, silently
+    removing mutual exclusion.
+
+  ## Also added
+
+  `LockHandle` (passed to the `withLock` callback: `holder`, `expiresAt`,
+  `isExpired()`, `extend()`), `LockLeaseExpiredError`, `LockSchemaError`,
+  `LockDriverError`, `GuardResultError`, `extractChanges`,
+  `D1_INACTIVE_STATUSES`, `BOOKINGS_UNIQUE_SLOT_DDL`, and
+  `BOOKING_LOCKS_HOLDER_MIGRATION_SQL`. No exports were removed or renamed.
+
+  ## Breaking changes
+
+  This is a `minor` bump because the package is 0.x, where that is the
+  conventional slot for breaking changes. Consumers on `^0.3.1` will not pick it
+  up automatically.
+
+  1. **`withLock` can now throw after a successful callback.** If the lease is lost
+     before the critical section ends, `LockLeaseExpiredError` is raised even
+     though the callback already ran and its side effects committed. The return
+     value is preserved on `.result`. Set `onLeaseExpiry: "ignore"` for the
+     previous behaviour, raise `lockTtlMs` above your worst-case critical section,
+     or call `handle.extend()` during long work.
+
+  2. **Invalid constructor options now throw `RangeError` at construction**, where
+     they were previously accepted: `maxRetries` of `0`, `Infinity`, or a
+     non-integer; a non-positive `lockTtlMs`; a negative `baseDelayMs`. Locks are
+     usually module-scope singletons, so an env-derived `Number(undefined)` moves
+     the failure from one rejected booking to a Worker that fails at import.
+     Validate config before constructing.
+
+  3. **A `db` without a `run` method now throws `TypeError` at construction.** Note
+     a raw `env.DB` binding has `prepare`/`batch`/`exec` but no `run` — see the
+     adapter snippet in the docs.
+
+  4. **`withLock` callbacks now receive a `LockHandle`.** Call sites are
+     unaffected, but _implementing_ the old signature breaks: subclasses that
+     override `withLock<T>(key, fn: () => Promise<T>)` and hand-written test
+     doubles typed that way fail to compile (TS2416). Widen the callback
+     parameter.
+
+  5. **`withLock` rejects an empty `lockKey`** instead of locking on the empty
+     string.
+
+  ## Migration
+
+  - **Apply `BOOKING_LOCKS_HOLDER_MIGRATION_SQL`** in your migrations folder.
+    `BOOKING_LOCKS_DDL` gained a `holder` column, but re-running it (or `ALL_DDL`)
+    will **not** retrofit an existing table — it is `CREATE TABLE IF NOT EXISTS`
+    and silently no-ops. The lock does upgrade the table in place on first use, so
+    no action is strictly required; but if you set `autoMigrate: false` believing
+    you have migrated, every `withLock` will throw `LockSchemaError`. Applying the
+    statement explicitly also keeps your schema in step with Drizzle/Wrangler
+    drift checks.
+  - **Upgrade `@thebookingkit/core` and `@thebookingkit/d1` together.** They are in
+    the same changesets `fixed` group. Upgrading d1 while pinning `core@^0.3.1`
+    yields two copies of core, and `instanceof BookingConflictError` will stop
+    matching.
+
+  ## Verification
+
+  276 new tests (290 → 566), including execution against a real SQLite engine:
+  50-way concurrent races on one slot admit exactly one winner, an 11-case overlap
+  matrix, status semantics, and a control case proving the naive read-then-write
+  flow double-books under the same scheduler.
+
+  The fencing defect is pinned by a dedicated regression test whose premise was
+  validated against the real pre-fix source from a git worktree; reverting the
+  ownership predicate fails 6 tests across 3 files. Adversarial review found six
+  further ways to bypass the guard — a non-string `excludeId` nulling the whole
+  predicate, case-variant duplicate column keys, a `conflictWindow` narrower than
+  the booking, a NULL primary key, expanded-year timestamps, and a malformed
+  `inactiveStatuses` — each is now rejected and each has a regression test
+  asserting zero overlapping rows against real SQLite.
+
+### Patch Changes
+
+- Updated dependencies [88f91f5]
+  - @thebookingkit/core@0.4.0
+
 ## 0.3.1
 
 ### Patch Changes

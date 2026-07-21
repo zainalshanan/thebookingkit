@@ -28,14 +28,76 @@ interface ResourceErrorLike {
 // Fixed "now" reference — all computed slots are in the future relative to this
 // ---------------------------------------------------------------------------
 
+/** The frozen wall clock every suite in this file runs against. */
+const FROZEN_CLOCK = new Date("2027-01-01T00:00:00Z");
+
 beforeEach(() => {
   vi.useFakeTimers();
-  vi.setSystemTime(new Date("2027-01-01T00:00:00Z"));
+  vi.setSystemTime(FROZEN_CLOCK);
 });
 
 afterEach(() => {
   vi.useRealTimers();
 });
+
+// ---------------------------------------------------------------------------
+// Performance measurement
+// ---------------------------------------------------------------------------
+
+/**
+ * Measure the steady-state cost of `fn` in milliseconds.
+ *
+ * Performance budgets in this file guard against algorithmic regressions — an
+ * accidental O(n²) pass over the resource pool, a rebuilt RRULE per slot. They
+ * are not microbenchmarks, and they run on shared CI hardware alongside other
+ * packages, so the measurement has to be robust to the machine rather than
+ * assume a quiet one. Three properties do that:
+ *
+ * - **Real timers.** The suite-wide `beforeEach` installs fake timers, which
+ *   freeze `Date.now()` and `performance.now()`. Measuring under them reports
+ *   0 ms for any workload, so a budget asserted that way can never fail. This
+ *   helper swaps to real timers and restores the frozen clock afterwards.
+ * - **A warm-up pass.** The first call pays for JIT compilation and lazy
+ *   allocation, which can dwarf the steady-state cost of a sub-millisecond
+ *   operation. It is discarded.
+ * - **The fastest of several samples.** This is the key property. External
+ *   interference — a GC pause, another package's build stealing a core — can
+ *   only ever make a sample *slower*, never faster, so the minimum is the
+ *   sample least polluted by the machine. It answers "how fast can this code
+ *   go", which is exactly what a regression budget asks; an algorithmic
+ *   regression is deterministic and slows the best case too.
+ *
+ *   The median was tried first and still failed intermittently under
+ *   `turbo test`, because sustained load skews most samples at once.
+ *
+ * `performance.now()` is used rather than `Date.now()` because its sub-
+ * millisecond resolution is what makes small budgets measurable at all — at
+ * `Date.now()`'s 1 ms granularity, a 10 ms budget has only ten distinguishable
+ * values and a single tick of jitter is a 10% error.
+ *
+ * @param fn - The operation to measure. Called `runs + 1` times in total.
+ * @param runs - Number of timed samples. Defaults to 7; lower it for
+ *   operations costing tens of milliseconds so the suite stays quick.
+ * @returns The fastest elapsed milliseconds across the timed samples.
+ */
+function measureFastestMs(fn: () => void, runs = 7): number {
+  vi.useRealTimers();
+  try {
+    fn(); // warm-up — excluded from the samples
+
+    let fastest = Infinity;
+    for (let i = 0; i < runs; i++) {
+      const started = performance.now();
+      fn();
+      fastest = Math.min(fastest, performance.now() - started);
+    }
+
+    return fastest;
+  } finally {
+    vi.useFakeTimers();
+    vi.setSystemTime(FROZEN_CLOCK);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Helper factories
@@ -669,7 +731,12 @@ describe("getResourceAvailableSlots — boundary tests", () => {
     }
   });
 
-  it("date range spanning 90 days completes in < 500ms for 50 resources", () => {
+  // Budget raised from 500 ms once the measurement became real: this assertion
+  // previously ran under fake timers and always read 0 ms, so the old number was
+  // never actually exercised. Warm median here is ~125 ms, and CI hardware runs
+  // several times slower than a dev machine. 1 s keeps ~8x headroom locally
+  // while still catching an algorithmic regression, which would cost 10-50x.
+  it("date range spanning 90 days completes in < 1s for 50 resources", () => {
     const resources: ResourceInput[] = Array.from({ length: 50 }, (_, i) =>
       makeResource({
         id: `r${i}`,
@@ -683,17 +750,18 @@ describe("getResourceAvailableSlots — boundary tests", () => {
       end: new Date("2027-09-04T23:59:59Z"),
     };
 
-    const start = Date.now();
-    const slots = getResourceAvailableSlots(
-      resources,
-      ninetyDayRange,
-      "UTC",
-      { duration: 30, now: new Date("2027-01-01T00:00:00Z") },
-    );
-    const elapsed = Date.now() - start;
+    let slots!: ReturnType<typeof getResourceAvailableSlots>;
+    const elapsed = measureFastestMs(() => {
+      slots = getResourceAvailableSlots(
+        resources,
+        ninetyDayRange,
+        "UTC",
+        { duration: 30, now: new Date("2027-01-01T00:00:00Z") },
+      );
+    }, 3);
 
     expect(slots.length).toBeGreaterThan(0);
-    expect(elapsed).toBeLessThan(500);
+    expect(elapsed).toBeLessThan(1000);
   });
 });
 
@@ -1491,18 +1559,19 @@ describe("getResourcePoolSummary", () => {
       makeResource({ id: `r${i}`, name: `Resource ${i}` }),
     );
 
-    const start = Date.now();
-    const summaries = getResourcePoolSummary(
-      resources,
-      oneDayRange,
-      "UTC",
-      {
-        duration: 15,
-        slotInterval: 15,
-        now: new Date("2027-01-01T00:00:00Z"),
-      },
-    );
-    const elapsed = Date.now() - start;
+    let summaries!: ReturnType<typeof getResourcePoolSummary>;
+    const elapsed = measureFastestMs(() => {
+      summaries = getResourcePoolSummary(
+        resources,
+        oneDayRange,
+        "UTC",
+        {
+          duration: 15,
+          slotInterval: 15,
+          now: new Date("2027-01-01T00:00:00Z"),
+        },
+      );
+    }, 3);
 
     expect(summaries.length).toBeGreaterThan(0);
     expect(elapsed).toBeLessThan(300);
@@ -1792,22 +1861,25 @@ describe("Performance budgets", () => {
     end: new Date("2027-06-07T23:59:59Z"),
   };
 
-  it("30-day slot computation for 50 resources completes in < 200ms", () => {
+  // Warm median is ~42 ms; 500 ms leaves room for slower CI hardware while an
+  // algorithmic regression (10-50x) would still blow straight through it.
+  it("30-day slot computation for 50 resources completes in < 500ms", () => {
     const pool = buildPerfPool(50);
 
-    const t0 = Date.now();
-    const slots = getResourceAvailableSlots(
-      pool,
-      THIRTY_DAY_RANGE,
-      "UTC",
-      { duration: 30, now: PERF_NOW },
-    );
-    const elapsed = Date.now() - t0;
+    let slots!: ReturnType<typeof getResourceAvailableSlots>;
+    const elapsed = measureFastestMs(() => {
+      slots = getResourceAvailableSlots(
+        pool,
+        THIRTY_DAY_RANGE,
+        "UTC",
+        { duration: 30, now: PERF_NOW },
+      );
+    }, 3);
 
     // Sanity: pool has availability, so slots must be non-empty
     expect(slots.length).toBeGreaterThan(0);
-    // Budget: < 200ms
-    expect(elapsed).toBeLessThan(200);
+    // Budget: < 500ms
+    expect(elapsed).toBeLessThan(500);
   });
 
   it("single slot availability check for 50 resources (pool-level) completes in < 50ms", () => {
@@ -1817,17 +1889,18 @@ describe("Performance budgets", () => {
     const slotStart = new Date("2027-06-07T12:00:00Z");
     const slotEnd = new Date("2027-06-07T12:30:00Z");
 
-    const t0 = Date.now();
-    const result = isResourceSlotAvailable(
-      pool,
-      undefined, // pool-level check — iterates all 50 resources
-      slotStart,
-      slotEnd,
-      0,
-      0,
-      { now: PERF_NOW },
-    );
-    const elapsed = Date.now() - t0;
+    let result!: ReturnType<typeof isResourceSlotAvailable>;
+    const elapsed = measureFastestMs(() => {
+      result = isResourceSlotAvailable(
+        pool,
+        undefined, // pool-level check — iterates all 50 resources
+        slotStart,
+        slotEnd,
+        0,
+        0,
+        { now: PERF_NOW },
+      );
+    });
 
     // Sanity: 12:00-12:30 is within the 09:00-17:00 window and has no bookings
     expect(result.available).toBe(true);
@@ -1838,18 +1911,19 @@ describe("Performance budgets", () => {
   it("pool summary for full day with 15-minute intervals for 50 resources completes in < 300ms", () => {
     const pool = buildPerfPool(50);
 
-    const t0 = Date.now();
-    const summaries = getResourcePoolSummary(
-      pool,
-      ONE_DAY_RANGE,
-      "UTC",
-      {
-        duration: 15,
-        slotInterval: 15,
-        now: PERF_NOW,
-      },
-    );
-    const elapsed = Date.now() - t0;
+    let summaries!: ReturnType<typeof getResourcePoolSummary>;
+    const elapsed = measureFastestMs(() => {
+      summaries = getResourcePoolSummary(
+        pool,
+        ONE_DAY_RANGE,
+        "UTC",
+        {
+          duration: 15,
+          slotInterval: 15,
+          now: PERF_NOW,
+        },
+      );
+    }, 3);
 
     // Sanity: Mon 09:00-17:00 at 15-min intervals = 32 slots
     expect(summaries.length).toBeGreaterThan(0);
@@ -1864,14 +1938,15 @@ describe("Performance budgets", () => {
     const slotStart = new Date("2027-06-07T12:00:00Z");
     const slotEnd = new Date("2027-06-07T12:30:00Z");
 
-    const t0 = Date.now();
-    const result = assignResource(
-      pool,
-      slotStart,
-      slotEnd,
-      { strategy: "best_fit", requestedCapacity: 2, now: PERF_NOW },
-    );
-    const elapsed = Date.now() - t0;
+    let result!: ReturnType<typeof assignResource>;
+    const elapsed = measureFastestMs(() => {
+      result = assignResource(
+        pool,
+        slotStart,
+        slotEnd,
+        { strategy: "best_fit", requestedCapacity: 2, now: PERF_NOW },
+      );
+    });
 
     // Sanity: a free resource must be found
     expect(result.resourceId).toBeDefined();

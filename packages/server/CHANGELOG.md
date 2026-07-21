@@ -1,5 +1,12 @@
 # @thebookingkit/server
 
+## 0.4.0
+
+### Patch Changes
+
+- Updated dependencies [88f91f5]
+  - @thebookingkit/core@0.4.0
+
 ## 0.3.1
 
 ### Patch Changes

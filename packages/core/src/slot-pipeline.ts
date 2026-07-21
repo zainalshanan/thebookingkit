@@ -34,23 +34,42 @@ import type {
 // ---------------------------------------------------------------------------
 
 /**
- * Statuses that indicate an inactive/terminal booking.
+ * Statuses that indicate an inactive/terminal booking — one that no longer
+ * occupies its time slot.
  *
- * `no_show` is included because a no-show appointment did not happen, so the
- * slot it occupied should be treated as free for scheduling purposes.
+ * Every terminal state in the booking state machine is here, because each means
+ * the appointment is not going to happen at that time:
+ *
+ * - `cancelled` / `rejected` — the booking was called off.
+ * - `no_show` — the appointment did not happen, so the slot it occupied should
+ *   be treated as free for scheduling purposes.
+ * - `rescheduled` — the booking moved to a new time, which is written as a
+ *   *separate* row. The original row keeps its original `startsAt`/`endsAt`, so
+ *   if it kept blocking, rescheduling would permanently burn the slot it left.
+ *
+ * `completed` is deliberately absent: the appointment did happen, and the slot
+ * was genuinely consumed.
+ *
+ * This list is the single source of truth for slot occupancy across all three
+ * backends — the in-memory slot engine, the PostgreSQL `EXCLUDE USING gist`
+ * constraints, and `D1_INACTIVE_STATUSES` in `@thebookingkit/d1`. Changing it
+ * requires changing all three together, or a booking accepted by one will be
+ * rejected by another.
  */
 export const INACTIVE_STATUSES = [
   "cancelled",
   "rejected",
   "no_show",
+  "rescheduled",
 ] as const;
 
 /**
  * Filter a booking array down to only active (non-terminal) entries.
  *
  * A booking is considered inactive when its status is `"cancelled"`,
- * `"rejected"`, or `"no_show"`. All other statuses (`"pending"`,
- * `"confirmed"`, `"completed"`, `"rescheduled"`) are treated as active.
+ * `"rejected"`, `"no_show"`, or `"rescheduled"`. The remaining statuses
+ * (`"pending"`, `"confirmed"`, `"completed"`) are treated as active and block
+ * their slot.
  *
  * @param bookings - The full list of bookings to filter
  * @returns Only the bookings that are still active

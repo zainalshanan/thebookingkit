@@ -19,6 +19,7 @@ export async function runCustomMigrations(databaseUrl: string) {
     "0004_create_booking_function.sql",
     "0005_resources.sql",
     "0006_deposits.sql",
+    "0007_reconcile_inactive_statuses.sql",
   ];
 
   for (const file of migrationFiles) {

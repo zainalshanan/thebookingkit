@@ -83,20 +83,20 @@ const upcoming = await db
       env: "edge",
       envLabel: "Cloudflare D1 / Edge",
       description:
-        "Cloudflare D1 (SQLite) adapter with UTC date codec, advisory locking for double-booking prevention, and weekly schedule conversion utilities.",
+        "Cloudflare D1 (SQLite) adapter with UTC date codec, an atomic overlap guard for double-booking prevention, advisory locking, and weekly schedule conversion utilities.",
       exports: [
         "D1DateCodec",
         "d1DayQuery",
+        "insertBookingIfFree",
         "D1BookingLock",
         "weeklyScheduleToRules",
-        "runMigrations",
       ],
-      snippet: `import { D1BookingLock } from "@thebookingkit/d1";
+      snippet: `import { insertBookingIfFree } from "@thebookingkit/d1";
 
-// Advisory lock prevents double-bookings
-// on Cloudflare D1 (no SKIP LOCKED)
-const lock = new D1BookingLock(db);
-await lock.withLock(slotKey, createBooking);`,
+// Overlap check + INSERT in one atomic statement,
+// so concurrent requests cannot double-book
+const { inserted } = await insertBookingIfFree(db, booking);
+if (!inserted) throw new BookingConflictError();`,
     },
     {
       name: "@thebookingkit/cli",

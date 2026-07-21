@@ -165,14 +165,37 @@ export function buildMigrationSql(
  * ```ts
  * await db.run(BOOKING_LOCKS_DDL);
  * ```
+ *
+ * The `holder` column carries the fencing token that scopes lock release to the
+ * request that actually owns the lease. See `BOOKING_LOCKS_HOLDER_MIGRATION_SQL`
+ * for upgrading a table created before that column existed.
  */
 export const BOOKING_LOCKS_DDL = `
 CREATE TABLE IF NOT EXISTS booking_locks (
   lock_key   TEXT PRIMARY KEY,
   expires_at TEXT NOT NULL,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  holder     TEXT
 )
 `.trim();
+
+/**
+ * Upgrade statement for a `booking_locks` table created before the `holder`
+ * fencing-token column was introduced.
+ *
+ * `D1BookingLock` applies this automatically on first use unless `autoMigrate`
+ * is disabled, so you only need it for explicit, versioned migration files.
+ *
+ * SQLite has no `ADD COLUMN IF NOT EXISTS`, so running this twice raises
+ * "duplicate column name" — that error is safe to ignore.
+ *
+ * ```ts
+ * try { await db.run(BOOKING_LOCKS_HOLDER_MIGRATION_SQL); }
+ * catch (e) { if (!String(e).includes("duplicate column name")) throw e; }
+ * ```
+ */
+export const BOOKING_LOCKS_HOLDER_MIGRATION_SQL =
+  `ALTER TABLE booking_locks ADD COLUMN holder TEXT`;
 
 /**
  * Ready-to-use SQL statements that create the three resource tables required
@@ -416,7 +439,9 @@ CREATE TABLE IF NOT EXISTS availability_rules (
  * `bookingSeats`, `bookingQuestionsResponses`.
  *
  * Note: The PostgreSQL `EXCLUDE USING gist` double-booking constraint is omitted
- * because SQLite does not support it. Use `D1BookingLock` for advisory locking.
+ * because SQLite has no range-exclusion constraint. Use `insertBookingIfFree()`
+ * for an equivalent atomic guarantee, and optionally apply
+ * `BOOKINGS_UNIQUE_SLOT_DDL` as a schema-level backstop.
  */
 export const BOOKINGS_DDL = `
 CREATE TABLE IF NOT EXISTS bookings (
@@ -459,6 +484,54 @@ CREATE TABLE IF NOT EXISTS bookings (
   response_value TEXT,
   created_at     TEXT NOT NULL
 );\n\nCREATE INDEX IF NOT EXISTS booking_questions_booking_id_idx ON booking_questions_responses (booking_id)
+`.trim();
+
+/**
+ * **Opt-in** schema-level backstop against duplicate bookings.
+ *
+ * Creates partial unique indexes so that a provider — and a resource — cannot
+ * hold two *active* bookings starting at the same instant, enforced by SQLite
+ * itself. This catches any code path that bypasses `insertBookingIfFree()`
+ * entirely, including manual SQL and future application code.
+ *
+ * This constant holds **two** statements, so it needs `exec`, not `run` — a
+ * single-statement `run()` will reject it:
+ *
+ * ```ts
+ * await db.exec(BOOKINGS_UNIQUE_SLOT_DDL);
+ * ```
+ *
+ * Scope and limits:
+ * - Catches **identical start times** only. Partial overlaps (10:00–10:30 vs
+ *   10:15–10:45) are not covered — a unique index cannot express range
+ *   exclusion. `insertBookingIfFree()` remains the authoritative overlap guard;
+ *   this is defence in depth beneath it.
+ * - The predicate matches `INACTIVE_STATUSES` in `@thebookingkit/core`, so
+ *   cancelled, rejected, and no-show rows do not occupy the slot and a
+ *   cancelled booking can be rebooked at the same time.
+ * - The resource index is `WHERE resource_id IS NOT NULL`, so provider-only
+ *   bookings are unaffected.
+ *
+ * **Do not apply this if your deployment writes one booking row per attendee**
+ * for group events. The standard schema models group bookings as a single
+ * `bookings` row with N `booking_seats` children, which this index supports;
+ * a row-per-attendee model would violate it.
+ *
+ * Creating the index fails if the table already contains violating rows. Find
+ * them first:
+ *
+ * ```sql
+ * SELECT provider_id, starts_at, COUNT(*) FROM bookings
+ * WHERE status NOT IN ('cancelled', 'rejected', 'no_show', 'rescheduled')
+ * GROUP BY provider_id, starts_at HAVING COUNT(*) > 1;
+ * ```
+ */
+export const BOOKINGS_UNIQUE_SLOT_DDL = `
+CREATE UNIQUE INDEX IF NOT EXISTS bookings_provider_slot_unique
+  ON bookings (provider_id, starts_at)
+  WHERE status IS NULL OR status NOT IN ('cancelled', 'rejected', 'no_show', 'rescheduled');\n\nCREATE UNIQUE INDEX IF NOT EXISTS bookings_resource_slot_unique
+  ON bookings (resource_id, starts_at)
+  WHERE resource_id IS NOT NULL AND (status IS NULL OR status NOT IN ('cancelled', 'rejected', 'no_show', 'rescheduled'))
 `.trim();
 
 /**

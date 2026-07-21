@@ -45,13 +45,34 @@
  *
  * ## Double-booking prevention
  *
+ * `insertBookingIfFree()` is the authoritative guard: it performs the overlap
+ * check and the INSERT in one atomic SQL statement, so concurrent requests
+ * cannot interleave between them. It is the D1 equivalent of PostgreSQL's
+ * `EXCLUDE USING gist` constraint and needs no advisory lock.
+ *
+ * ```ts
+ * const { inserted } = await insertBookingIfFree(db, {
+ *   id: crypto.randomUUID(),
+ *   provider_id: barberId,
+ *   starts_at: slot.startTime,
+ *   ends_at: slot.endTime,
+ *   status: "confirmed",
+ *   ...rest,
+ * });
+ * if (!inserted) return conflictResponse();  // slot was taken mid-flight
+ * ```
+ *
+ * `D1BookingLock` remains useful on top of it to serialise expensive work and
+ * return friendlier errors, but it is advisory — the guard above is what makes
+ * double booking impossible:
+ *
  * ```ts
  * const lock = new D1BookingLock(rawDb);
  * await lock.withLock(`${barberId}:${dateStr}`, async () => {
  *   const existing = await fetchBookings(...);
  *   const ok = isSlotAvailable(rules, [], d1BookingRowsToInputs(existing), start, end);
  *   if (!ok.available) throw new BookingConflictError();
- *   await db.insert(bookings).values({ ... });
+ *   await insertBookingOrThrow(db, values);
  * });
  * ```
  */
@@ -88,12 +109,32 @@ export {
   type DayOfWeek,
 } from "./schedule-adapter.js";
 
-// Advisory lock (double-booking prevention)
+// Atomic overlap guard (authoritative double-booking prevention)
+export {
+  buildInsertIfFree,
+  insertBookingIfFree,
+  insertBookingOrThrow,
+  extractChanges,
+  GuardResultError,
+  D1_INACTIVE_STATUSES,
+  type BookingGuardColumns,
+  type InsertIfFreeOptions,
+  type InsertIfFreeResult,
+  type GuardedStatement,
+  type GuardDb,
+} from "./booking-guard.js";
+
+// Advisory lock (contention control + defence in depth)
 export {
   D1BookingLock,
   LockAcquisitionError,
+  LockLeaseExpiredError,
+  LockSchemaError,
+  LockDriverError,
+  isUniqueConstraintError,
   createD1BookingLock,
   type LockDb,
+  type LockHandle,
   type D1BookingLockOptions,
 } from "./lock.js";
 
@@ -103,6 +144,8 @@ export {
   migrateRowDates,
   buildMigrationSql,
   BOOKING_LOCKS_DDL,
+  BOOKING_LOCKS_HOLDER_MIGRATION_SQL,
+  BOOKINGS_UNIQUE_SLOT_DDL,
   RESOURCE_DDL,
   ORGANIZATIONS_DDL,
   TEAMS_DDL,
@@ -129,6 +172,7 @@ export {
   d1ResourceOverrideRowsToInputs,
   D1ResourceBookingLock,
   createD1ResourceBookingLock,
+  insertResourceBookingIfFree,
   type D1ResourceRow,
   type D1ResourceAvailabilityRuleRow,
   type D1ResourceAvailabilityOverrideRow,

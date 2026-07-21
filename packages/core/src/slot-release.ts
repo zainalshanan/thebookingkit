@@ -72,7 +72,7 @@ export interface SlotReleaseResult {
  * @param config - Discriminated union specifying which strategy to apply and its
  *   configuration parameters.
  * @param existingBookings - All bookings for the provider or resource pool. Active
- *   bookings (status != "cancelled" | "rejected") are used to compute window fill
+ *   bookings (see `INACTIVE_STATUSES`) are used to compute window fill
  *   rates for `fill_earlier_first` and `discount_incentive`. Ignored by
  *   `rolling_window`.
  * @param providerTimezone - IANA timezone string of the provider. Used to convert
@@ -277,8 +277,9 @@ function applyDiscountIncentive(
  *    has a fill rate of `1.0` (vacuously full) so the next window releases
  *    immediately.
  *
- * Active bookings are those whose `status` is neither `"cancelled"` nor
- * `"rejected"` — consistent with the slot-engine convention.
+ * Active bookings are those whose status is not in `INACTIVE_STATUSES`
+ * (`cancelled`, `rejected`, `no_show`, `rescheduled`) — the slot-engine
+ * convention, applied here via `getActiveBookings()`.
  *
  * Cross-window bookings (spanning a boundary) are counted in both windows
  * (conservative behaviour that prevents premature release on boundaries).
