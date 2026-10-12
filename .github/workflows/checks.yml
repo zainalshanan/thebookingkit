@@ -1,0 +1,40 @@
+name: Package Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  packages:
+    name: Build, typecheck, test, lint (published packages)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build packages
+        run: npx turbo build --filter='./packages/*'
+
+      - name: Packages load under plain Node ESM
+        run: npm run check:node-esm
+
+      - name: Typecheck, unit tests, lint
+        run: npx turbo typecheck test lint --filter='./packages/*'
+
+      # The stripe peer range is ">=17 <24"; the devDependency covers 23.
+      # Re-check that a stripe 17 client still satisfies StripeLike.
+      - name: StripeLike accepts a stripe 17 client
+        run: |
+          npm install --no-save stripe@17
+          npx tsc --noEmit -p packages/server/tsconfig.typetest.json

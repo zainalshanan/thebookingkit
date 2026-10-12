@@ -17,7 +17,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Start PostgreSQL container
         run: |
@@ -45,7 +45,7 @@ jobs:
           fi
 
       - name: Set up Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -55,9 +55,6 @@ jobs:
 
       - name: Build packages
         run: npx turbo build
-
-      - name: Packages load under plain Node ESM
-        run: npm run check:node-esm
 
       - name: Push Drizzle schema to database
         working-directory: packages/db
