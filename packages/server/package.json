@@ -31,7 +31,8 @@
   },
   "files": [
     "dist",
-    "!dist/__tests__"
+    "!dist/__tests__",
+    "!dist/__type-tests__"
   ],
   "scripts": {
     "build": "tsc",
