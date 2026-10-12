@@ -31,12 +31,12 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "commander": "^13.0.0"
+    "commander": "^15.0.0"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
-    "typescript": "^5.7.0",
-    "vitest": "^3.0.0"
+    "@types/node": "^24.19.2",
+    "typescript": "~7.0.2",
+    "vitest": "^5.0.4"
   },
   "files": [
     "dist",
@@ -47,5 +47,8 @@
     "booking",
     "scheduling",
     "cli"
-  ]
+  ],
+  "engines": {
+    "node": ">=22.12.0"
+  }
 }

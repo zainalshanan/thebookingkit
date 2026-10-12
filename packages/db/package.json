@@ -59,11 +59,11 @@
     "postgres": "^3.4.0"
   },
   "devDependencies": {
-    "@types/node": "^25.3.5",
-    "dotenv": "^16.4.0",
+    "@types/node": "^24.19.2",
+    "dotenv": "^18.0.7",
     "drizzle-kit": "^0.31.11",
-    "tsx": "^4.19.0",
-    "typescript": "^5.7.0",
-    "vitest": "^2.0.0"
+    "tsx": "^4.23.15",
+    "typescript": "~7.0.2",
+    "vitest": "^5.0.4"
   }
 }
