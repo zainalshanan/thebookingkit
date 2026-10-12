@@ -56,6 +56,9 @@ jobs:
       - name: Build packages
         run: npx turbo build
 
+      - name: Packages load under plain Node ESM
+        run: npm run check:node-esm
+
       - name: Push Drizzle schema to database
         working-directory: packages/db
         run: |

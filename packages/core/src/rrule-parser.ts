@@ -1,5 +1,15 @@
-import { RRule, RRuleSet } from "rrule";
+import * as rruleModule from "rrule";
+import type { RRuleSet as RRuleSetInstance } from "rrule";
 import type { DateOccurrence, DateRange } from "./types.js";
+
+// rrule ships an ESM build with named exports only (what bundlers resolve) and
+// a UMD main whose exports Node's ESM loader can't detect, so a plain
+// `import { RRule } from "rrule"` throws under bare Node. Take the named
+// exports when present and fall back to the CommonJS default otherwise.
+// (Reflect.get keeps bundlers from warning that ESM rrule has no default.)
+const rrule: typeof rruleModule =
+  "RRule" in rruleModule ? rruleModule : (Reflect.get(rruleModule, "default") as typeof rruleModule);
+const { RRule, RRuleSet } = rrule;
 
 /**
  * Thrown when an RRULE string is malformed or cannot be parsed.
@@ -37,7 +47,7 @@ export function parseRecurrence(
     throw new InvalidRRuleError(rruleString.slice(0, 100) + "...");
   }
 
-  let ruleSet: RRuleSet;
+  let ruleSet: RRuleSetInstance;
 
   try {
     ruleSet = new RRuleSet();
