@@ -1,5 +1,27 @@
 # @thebookingkit/core
 
+## 0.5.0
+
+### Minor Changes
+
+- Dependency and correctness release: Stripe 17–23 support, date-fns 4, drizzle-orm 0.45, plain-Node loading.
+  
+  **Fixes**
+  
+  - `@thebookingkit/server` — `withSerializableRetry` now finds the Postgres SQLSTATE anywhere down the error's `cause` chain. Drizzle ≥ 0.44 wraps driver errors in `DrizzleQueryError`, so on those versions an exclusion violation (23P01) used to escape as a raw "Failed query" error instead of `BookingConflictError`, and serialization failures (40001) were never retried.
+  - `@thebookingkit/server` — `StripePaymentAdapter.cancelPaymentIntent` passes request options in the third argument (`cancel(id, undefined, { stripeAccount })`). stripe-node ≥ 22 no longer reads options from the params slot, so Connect cancels were sent to the platform account with an invalid parameter.
+  - `@thebookingkit/server` — `createSetupIntent` no longer sends `receipt_email`, which is not a SetupIntent parameter (any call with `customerEmail` was rejected by Stripe). The option is still accepted and ignored.
+  - `@thebookingkit/core` (and therefore `d1` and `server`) — packages now import under plain Node ESM, not only inside a bundler. rrule's UMD build exposes no named exports to Node, so `import { RRule } from "rrule"` threw outside Vite/Next/esbuild.
+  
+  **Compatibility**
+  
+  - `stripe` peer range widened from `^17.0.0` to `>=17.0.0 <24.0.0` (still optional). `StripeLike` now accepts a real Stripe client from either end of the range without a cast; this is enforced by a type test.
+  - `@thebookingkit/core` and `@thebookingkit/d1` accept `date-fns` `^3.6.0 || ^4.0.0`, so projects on date-fns 4 no longer bundle a second copy. Slot output is identical under both.
+  - `@thebookingkit/db` requires `drizzle-orm` `^0.45.4` (was `^0.39.0`): 0.45.2 fixes an SQL-injection advisory for improperly escaped identifiers. If your app pins its own drizzle-orm, upgrade it too.
+  - `@thebookingkit/cli` uses commander 15 and requires Node ≥ 22.12 (Node 20 is end-of-life).
+  
+  **Tooling** — built with TypeScript 7 (emitted JavaScript is byte-identical to 5.9), tested with Vitest 5, and CI now runs build, plain-Node loading, typecheck, unit tests and lint for every published package.
+
 ## 0.4.0
 
 ### Minor Changes

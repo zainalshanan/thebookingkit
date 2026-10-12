@@ -1,6 +1,6 @@
 {
   "name": "@thebookingkit/cli",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "The Booking Kit CLI — scaffold projects, add 30+ booking UI components, and manage migrations",
   "license": "MIT",
   "repository": {
