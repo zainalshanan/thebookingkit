@@ -73,4 +73,38 @@ describe("withSerializableRetry", () => {
     expect(result).toBe("ok");
     expect(fn).toHaveBeenCalledTimes(2);
   });
+
+  describe("driver errors wrapped by Drizzle (≥ 0.44 DrizzleQueryError)", () => {
+    // Drizzle rethrows as `new DrizzleQueryError(query, params, cause)`:
+    // message "Failed query: …", no `code`, the postgres error as `cause`.
+    function wrapLikeDrizzle(cause: Error) {
+      return new Error("Failed query: insert into \"bookings\" …", { cause });
+    }
+
+    it("maps a wrapped exclusion violation to BookingConflictError", async () => {
+      const fn = vi.fn().mockRejectedValue(wrapLikeDrizzle(makePostgresError("23P01")));
+
+      await expect(withSerializableRetry(fn)).rejects.toThrow(BookingConflictError);
+      expect(fn).toHaveBeenCalledTimes(1);
+    });
+
+    it("retries a wrapped serialization failure", async () => {
+      const fn = vi
+        .fn()
+        .mockRejectedValueOnce(wrapLikeDrizzle(makePostgresError("40001")))
+        .mockResolvedValueOnce("ok");
+
+      expect(await withSerializableRetry(fn, { baseDelayMs: 1 })).toBe("ok");
+      expect(fn).toHaveBeenCalledTimes(2);
+    });
+
+    it("ignores a wrapper's non-SQLSTATE code in favour of the cause", async () => {
+      const wrapper = Object.assign(wrapLikeDrizzle(makePostgresError("23P01")), {
+        code: "ERR_QUERY_FAILED",
+      });
+      const fn = vi.fn().mockRejectedValue(wrapper);
+
+      await expect(withSerializableRetry(fn)).rejects.toThrow(BookingConflictError);
+    });
+  });
 });

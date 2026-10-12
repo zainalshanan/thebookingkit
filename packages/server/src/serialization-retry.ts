@@ -20,18 +20,18 @@ const SERIALIZATION_FAILURE = "40001";
 const EXCLUSION_VIOLATION = "23P01";
 
 /**
- * Check if an error is a Postgres error with a specific code.
+ * Find the Postgres SQLSTATE on an error or anywhere down its `cause` chain.
+ *
+ * Drizzle ≥ 0.44 wraps driver errors in `DrizzleQueryError` ("Failed query:
+ * …") with the original postgres error as `cause`, so the code is one level
+ * down. Only five-character SQLSTATE strings count, so a wrapper's own
+ * non-SQLSTATE `code` can't shadow the driver's.
  */
-function getPostgresErrorCode(error: unknown): string | undefined {
-  if (
-    error &&
-    typeof error === "object" &&
-    "code" in error &&
-    typeof (error as { code: unknown }).code === "string"
-  ) {
-    return (error as { code: string }).code;
-  }
-  return undefined;
+function getPostgresErrorCode(error: unknown, depth = 0): string | undefined {
+  if (depth > 8 || !error || typeof error !== "object") return undefined;
+  const code = (error as { code?: unknown }).code;
+  if (typeof code === "string" && /^[0-9A-Z]{5}$/.test(code)) return code;
+  return getPostgresErrorCode((error as { cause?: unknown }).cause, depth + 1);
 }
 
 /**

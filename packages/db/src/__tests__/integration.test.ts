@@ -34,6 +34,24 @@ import {
 const DATABASE_URL = process.env["DATABASE_URL"];
 const hasDb = Boolean(DATABASE_URL);
 
+/**
+ * Await a rejected query and return its SQLSTATE. Drizzle ≥ 0.44 wraps the
+ * driver error ("Failed query: …") with the postgres error as `cause`, so
+ * assert on the code down the chain rather than on message wording.
+ */
+async function rejectionCode(query: PromiseLike<unknown>): Promise<string | undefined> {
+  try {
+    await query;
+  } catch (err) {
+    for (let e: unknown = err; e && typeof e === "object"; e = (e as { cause?: unknown }).cause) {
+      const code = (e as { code?: unknown }).code;
+      if (typeof code === "string") return code;
+    }
+    return undefined;
+  }
+  throw new Error("expected the query to be rejected");
+}
+
 let db: Database;
 
 /**
@@ -539,22 +557,21 @@ describe.skipIf(!hasDb)("@thebookingkit/db — integration tests", () => {
       created.bookingIds.push(first!.id);
 
       // Second booking with identical provider + overlapping time — must fail.
-      await expect(
-        db.insert(bookings).values({
-          providerId, // same provider
-          eventTypeId,
-          customerEmail: "second@example.com",
-          customerName: "Second Customer",
-          startsAt, // same window — exact overlap
-          endsAt,
-          status: "confirmed",
-          source: "online",
-        }),
-      ).rejects.toThrow(
-        // PostgreSQL raises SQLSTATE 23P01 (exclusion_violation) — the message
-        // always contains "exclusion constraint" or the constraint name.
-        /exclusion|bookings_no_overlap/i,
-      );
+      // PostgreSQL raises SQLSTATE 23P01 (exclusion_violation).
+      expect(
+        await rejectionCode(
+          db.insert(bookings).values({
+            providerId, // same provider
+            eventTypeId,
+            customerEmail: "second@example.com",
+            customerName: "Second Customer",
+            startsAt, // same window — exact overlap
+            endsAt,
+            status: "confirmed",
+            source: "online",
+          }),
+        ),
+      ).toBe("23P01");
     });
 
     it("rejects a booking with a partially overlapping window", async () => {
@@ -577,18 +594,20 @@ describe.skipIf(!hasDb)("@thebookingkit/db — integration tests", () => {
       created.bookingIds.push(first!.id);
 
       // Partial overlap: 16:30 – 17:30 — must be rejected.
-      await expect(
-        db.insert(bookings).values({
-          providerId,
-          eventTypeId,
-          customerEmail: "overlap_partial@example.com",
-          customerName: "Overlap Partial",
-          startsAt: new Date("2026-07-02T16:30:00Z"),
-          endsAt: new Date("2026-07-02T17:30:00Z"),
-          status: "confirmed",
-          source: "online",
-        }),
-      ).rejects.toThrow(/exclusion|bookings_no_overlap/i);
+      expect(
+        await rejectionCode(
+          db.insert(bookings).values({
+            providerId,
+            eventTypeId,
+            customerEmail: "overlap_partial@example.com",
+            customerName: "Overlap Partial",
+            startsAt: new Date("2026-07-02T16:30:00Z"),
+            endsAt: new Date("2026-07-02T17:30:00Z"),
+            status: "confirmed",
+            source: "online",
+          }),
+        ),
+      ).toBe("23P01");
     });
 
     it("allows a booking for the same provider in a non-overlapping window", async () => {
