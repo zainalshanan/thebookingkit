@@ -5,14 +5,34 @@ description: How to install and configure The Booking Kit in your project.
 
 ## Prerequisites
 
-- **Node.js** 20+
-- **PostgreSQL** 15+ (local, Neon, Supabase, Railway, Vercel Postgres, AWS RDS)
+- **Node.js** 22+ (the `thebookingkit` CLI needs 22.12+). The runtime packages also run on Cloudflare Workers, Deno and in the browser.
+- **PostgreSQL** 15+ (local, Neon, Supabase, Railway, Vercel Postgres, AWS RDS) — or **Cloudflare D1** via `@thebookingkit/d1`.
 
 ## Install packages
 
 ```bash
 npm install @thebookingkit/core @thebookingkit/db
 ```
+
+Add the packages for the parts you use:
+
+| Package | Install when you… |
+|---|---|
+| `@thebookingkit/core` | always — slot engine, timezones, RRULEs, payments math |
+| `@thebookingkit/db` | store bookings in **PostgreSQL** (Drizzle schema + migrations) |
+| `@thebookingkit/d1` | store bookings in **Cloudflare D1 / SQLite** (atomic overlap guard, advisory lock) |
+| `@thebookingkit/server` | need API helpers, auth, webhooks, or the Stripe adapter |
+| `@thebookingkit/cli` | want to scaffold and add components (`npx thebookingkit`) |
+
+### Compatible versions
+
+| Dependency | Supported | Notes |
+|---|---|---|
+| `drizzle-orm` | `^0.45.4` | Required by `@thebookingkit/db`; 0.45.2+ fixes an SQL-injection advisory. |
+| `stripe` | `>=17 <24` | Optional peer of `@thebookingkit/server`, only for `StripePaymentAdapter`. |
+| `date-fns` | `^3.6.0 \|\| ^4.0.0` | Used by `core` and `d1`; on date-fns 4 your app and the kit share one copy. |
+
+The packages are ESM and load both in bundlers (Vite, Next.js, esbuild) and under plain Node.
 
 The UI components follow the shadcn/ui convention — you copy them into your project rather than installing via npm. See the [Components overview](/components/overview) for details.
 

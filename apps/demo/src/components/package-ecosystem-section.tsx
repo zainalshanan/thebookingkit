@@ -1,8 +1,10 @@
+import { KIT_VERSION } from "@/lib/kit-version";
+
 export function PackageEcosystemSection() {
   const packages = [
     {
       name: "@thebookingkit/core",
-      version: "0.2.0",
+      version: KIT_VERSION,
       env: "universal",
       envLabel: "Browser / Edge / Node",
       description:
@@ -30,7 +32,7 @@ const slots = getAvailableSlots(
     },
     {
       name: "@thebookingkit/server",
-      version: "0.2.0",
+      version: KIT_VERSION,
       env: "node",
       envLabel: "Node / Edge",
       description:
@@ -54,7 +56,7 @@ const booking = await withSerializableRetry(
     },
     {
       name: "@thebookingkit/db",
-      version: "0.2.0",
+      version: KIT_VERSION,
       env: "node",
       envLabel: "Node (Postgres)",
       description:
@@ -79,7 +81,7 @@ const upcoming = await db
     },
     {
       name: "@thebookingkit/d1",
-      version: "0.2.0",
+      version: KIT_VERSION,
       env: "edge",
       envLabel: "Cloudflare D1 / Edge",
       description:
@@ -100,7 +102,7 @@ if (!inserted) throw new BookingConflictError();`,
     },
     {
       name: "@thebookingkit/cli",
-      version: "0.2.0",
+      version: KIT_VERSION,
       env: "cli",
       envLabel: "CLI Tool",
       description:

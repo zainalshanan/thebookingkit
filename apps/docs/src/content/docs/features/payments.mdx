@@ -39,6 +39,10 @@ export const paymentAdapter = new StripePaymentAdapter({
 });
 ```
 
+**Supported Stripe SDK versions:** `stripe` 17 through 23. Pass the client straight in — since 0.5.0 a real `Stripe` instance satisfies the adapter's `StripeLike` type with no cast. The adapter never sets an API version: the client you construct (and your webhook endpoint's configured version) decide it. Keep the two aligned so webhook payloads match the SDK's types.
+
+**Cloudflare Workers / edge runtimes:** construct the client with the fetch-based HTTP client — `new Stripe(key, { httpClient: Stripe.createFetchHttpClient() })`. `handleStripeWebhook` already verifies signatures with the async SubtleCrypto API, so webhooks work on Workers out of the box.
+
 ## Deposits
 
 Configure a partial upfront charge per event type via `deposit_cents` (fixed) or `deposit_percentage` (variable). When both are set, percentage wins.

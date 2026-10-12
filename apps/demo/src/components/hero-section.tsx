@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { KIT_VERSION } from "@/lib/kit-version";
 
 export function HeroSection() {
   const [copiedInit, setCopiedInit] = useState(false);
@@ -22,7 +23,7 @@ export function HeroSection() {
     <section className="hero-section" id="hero">
       <div className="hero-inner">
         <div className="hero-left">
-          <span className="hero-eyebrow">Open Source &bull; MIT License &bull; v0.2.0</span>
+          <span className="hero-eyebrow">Open Source &bull; MIT License &bull; v{KIT_VERSION}</span>
 
           <h1 className="hero-title">
             Ship <span className="accent">Bookings</span>,{" "}

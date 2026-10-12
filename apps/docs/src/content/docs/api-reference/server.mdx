@@ -402,6 +402,8 @@ Wraps a database operation in retry logic for `SERIALIZABLE` transaction isolati
 - `40001` (`serialization_failure`): retries up to `maxRetries` times with jittered exponential backoff.
 - `23P01` (`exclusion_violation`): immediately throws `BookingConflictError` — the slot is taken, retry would not help.
 
+The SQLSTATE is read from the thrown error **or anywhere down its `cause` chain**, so it works whether your driver throws the Postgres error directly or Drizzle wraps it (drizzle-orm 0.44+ rethrows as `DrizzleQueryError` — "Failed query: …" — with the driver error as `cause`). Before 0.5.0 only the top-level error was checked, so on newer Drizzle a taken slot surfaced as a raw query error and serialization failures were not retried; upgrade if you're on drizzle-orm 0.44 or later.
+
 ```typescript
 import { withSerializableRetry } from "@thebookingkit/server";
 

@@ -31,6 +31,42 @@ Dependency and correctness release. All packages move to 0.5.0 together.
 - `@thebookingkit/db` requires `drizzle-orm` `^0.45.4` (SQL-injection advisory fixed in 0.45.2).
 - `@thebookingkit/cli` requires Node ≥ 22.12.
 
+## 0.4.0 (2026-07-21)
+
+### Atomic double-booking guard for D1 / SQLite
+
+- **New:** `insertBookingIfFree`, `insertBookingOrThrow`, `buildInsertIfFree` and `insertResourceBookingIfFree` check for overlap and insert in a single `INSERT … SELECT … WHERE NOT EXISTS` statement, so concurrent requests can't interleave. Supports buffers (`conflictWindow`), rescheduling (`excludeId`), custom schemas (`columns`) and resource scoping. Overlap is half-open, so back-to-back bookings don't conflict.
+- **New:** opt-in `BOOKINGS_UNIQUE_SLOT_DDL` as a schema-level backstop, plus `findLegacyRows()` / `migrateRowDates()` to make existing rows canonical UTC first.
+
+### Advisory lock fixes (`D1BookingLock`)
+
+- A holder whose lease had expired could release a lock another request now held. Every acquisition now writes a `holder` fencing token and release is scoped to it.
+- A lease expiring mid-callback is no longer silent: `withLock` throws `LockLeaseExpiredError`, carrying the callback's return value as `.result`.
+
+### Consistent slot occupancy across engine, Postgres and D1
+
+- `cancelled`, `rejected`, `no_show` and `rescheduled` now free a slot everywhere; `completed` still blocks. Previously the slot engine, Postgres and D1 disagreed on `no_show` and `rescheduled`.
+- **Postgres action required:** run `runCustomMigrations()` (or apply migration `0007`) — it only ever makes the overlap constraints more permissive.
+
+## 0.3.1 (2026-06-27)
+
+- Lockstep versioning: all published packages now share one version number.
+- Fixed the repository URL in package metadata.
+
+## 0.3.0 (2026-06-12)
+
+### Stripe deposits
+
+- **New:** per-event-type deposits (`deposit_cents` or `deposit_percentage`) with `computeDepositAmount()` / `requiresDeposit()` in core.
+- **New:** `StripePaymentAdapter` (with Stripe Connect), `handleStripeWebhook` (signature verification + idempotency on `event.id`), and `initiateDeposit` / `refundDeposit` in `@thebookingkit/server`.
+- **New:** card-on-file and off-session charging — `customerId`, `setupFutureUsage`, `paymentMethodId` + `offSession` + `confirm`, and `idempotencyKey` on `createPaymentIntent`; authorize-only deposits via `captureMethod: "manual"`.
+- **New:** edge-runtime webhooks — `handleStripeWebhook` uses `constructEventAsync`, so it works on Cloudflare Workers and Deno.
+- Schema: `"deposit"` payment type; Postgres migration `0006_deposits.sql`, D1 `MIGRATION_0002_DEPOSITS_DDL`.
+
+### Resource & capacity-based booking
+
+- **New:** `getResourceAvailableSlots`, `assignResource`, `isResourceSlotAvailable`, `getResourcePoolSummary` — tables, yoga mats, rooms, courts. See [Resource booking](/features/resource-booking).
+
 ## 0.2.0 (2026-03-25)
 
 ### Slot Release Strategies (E-23)
