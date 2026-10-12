@@ -43,40 +43,41 @@ import type {
 export interface StripeLike {
   paymentIntents: {
     create(
-      params: Record<string, unknown>,
+      params: object,
       options?: { stripeAccount?: string; idempotencyKey?: string },
     ): Promise<{ id: string; client_secret: string | null; status: string }>;
     capture(
       id: string,
-      params?: Record<string, unknown>,
+      params?: object,
       options?: { stripeAccount?: string },
     ): Promise<{ id: string; status: string }>;
     cancel(
       id: string,
+      params?: object,
       options?: { stripeAccount?: string },
     ): Promise<{ id: string; status: string }>;
   };
   setupIntents: {
     create(
-      params: Record<string, unknown>,
+      params: object,
       options?: { stripeAccount?: string },
     ): Promise<{ id: string; client_secret: string | null }>;
   };
   refunds: {
     create(
-      params: Record<string, unknown>,
+      params: object,
       options?: { stripeAccount?: string; idempotencyKey?: string },
     ): Promise<{ id: string; amount: number; status: string | null }>;
   };
   accounts: {
     create(
-      params: Record<string, unknown>,
+      params: object,
     ): Promise<{ id: string }>;
     del(id: string): Promise<{ id: string; deleted: boolean }>;
   };
   accountLinks: {
     create(
-      params: Record<string, unknown>,
+      params: object,
     ): Promise<{ url: string }>;
   };
 }
@@ -193,7 +194,7 @@ export class StripePaymentAdapter implements PaymentAdapter {
   ): Promise<CreateSetupIntentResult> {
     const params: Record<string, unknown> = { usage: "off_session" };
     if (options.metadata) params.metadata = options.metadata;
-    if (options.customerEmail) params.receipt_email = options.customerEmail;
+    // SetupIntents have no receipt_email; sending it is a 400.
     if (options.customerId) params.customer = options.customerId;
 
     const requestOpts = options.connectedAccountId
@@ -244,7 +245,8 @@ export class StripePaymentAdapter implements PaymentAdapter {
     const requestOpts = connectedAccountId
       ? { stripeAccount: connectedAccountId }
       : undefined;
-    await this.stripe.paymentIntents.cancel(paymentIntentId, requestOpts);
+    // stripe-node ≥ 22 never reads options from the params slot: pass both.
+    await this.stripe.paymentIntents.cancel(paymentIntentId, undefined, requestOpts);
   }
 
   async refund(

@@ -106,7 +106,7 @@ export interface CreatePaymentIntentOptions {
 export interface CreateSetupIntentOptions {
   /** Connected account ID (for Stripe Connect) */
   connectedAccountId?: string;
-  /** Customer email */
+  /** Unused: Stripe SetupIntents have no receipt email. Kept for compatibility. */
   customerEmail?: string;
   /**
    * Payment-provider customer to attach the saved payment method to

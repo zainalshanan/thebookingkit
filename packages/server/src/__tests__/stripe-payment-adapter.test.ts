@@ -106,7 +106,7 @@ describe("StripePaymentAdapter", () => {
       { amount_to_capture: 500 },
       { stripeAccount: "acct_1" },
     );
-    expect(stripe.paymentIntents.cancel).toHaveBeenCalledWith("pi_x", {
+    expect(stripe.paymentIntents.cancel).toHaveBeenCalledWith("pi_x", undefined, {
       stripeAccount: "acct_1",
     });
     expect(stripe.refunds.create).toHaveBeenCalledWith(
